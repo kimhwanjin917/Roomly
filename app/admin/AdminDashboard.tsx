@@ -155,19 +155,17 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     if (!selectedRoom) return
     setSaving(true)
     try {
-      const supabase = createClient()
-      const { error: roomErr } = await supabase.from('rooms').update({
-        status: modalStatus,
-        checkin_time: modalCheckinTime ? new Date(modalCheckinTime).toISOString() : null,
-      }).eq('id', selectedRoom.id)
-      if (roomErr) throw roomErr
-      const { error: logErr } = await supabase.from('room_logs').insert({
-        room_id: selectedRoom.id,
-        status: modalStatus,
-        changed_by: 'admin',
-        memo: modalMemo || null,
+      const res = await fetch('/api/admin/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: selectedRoom.id,
+          status: modalStatus,
+          checkinTime: modalCheckinTime || null,
+          memo: modalMemo || null,
+        }),
       })
-      if (logErr) throw logErr
+      if (!res.ok) throw new Error()
       await refetch()
       setSelectedRoom(null)
     } catch {
