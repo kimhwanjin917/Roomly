@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClientWithToken } from '@/lib/supabase/client'
 
 type Room = {
@@ -17,6 +17,8 @@ type Assignment = {
   assigned_at: string
   rooms: Room
 }
+
+type Toast = { msg: string; type: 'error' | 'success' }
 
 const TYPE_LABELS: Record<string, string> = {
   single: '싱글', double: '더블', suite: '스위트', other: '기타',
@@ -50,6 +52,14 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
+  const [toast, setToast] = useState<Toast | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string, type: Toast['type'] = 'error') {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000)
@@ -57,8 +67,12 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
   }, [])
 
   const refetch = useCallback(async () => {
-    const res = await fetch(`/api/worker/assignments?staffId=${staffId}`)
-    if (res.ok) setAssignments(await res.json())
+    try {
+      const res = await fetch(`/api/worker/assignments?staffId=${staffId}`)
+      if (res.ok) setAssignments(await res.json())
+    } catch {
+      // 네트워크 오류 시 기존 데이터 유지 (Realtime이 재연결 시 갱신)
+    }
   }, [staffId])
 
   // Realtime 구독 (rooms·assignments 변경 시 즉시 refetch)
@@ -74,18 +88,19 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id
     setLoading(l => ({ ...l, [roomId]: true }))
-    await fetch('/api/worker/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        roomId,
-        assignmentId: assignment.id,
-        status,
-        memo: memoText ?? null,
-      }),
-    })
-    await refetch()
-    setLoading(l => ({ ...l, [roomId]: false }))
+    try {
+      const res = await fetch('/api/worker/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, assignmentId: assignment.id, status, memo: memoText ?? null }),
+      })
+      if (!res.ok) throw new Error()
+      await refetch()
+    } catch {
+      showToast('저장에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setLoading(l => ({ ...l, [roomId]: false }))
+    }
   }
 
   function handleDone(assignment: Assignment) {
@@ -99,7 +114,6 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
     setMemoRoom(null)
   }
 
-  // 우선순위 정렬: 긴급 먼저, 그다음 체크인 시간순, 완료는 맨 아래
   const sorted = [...assignments].sort((a, b) => {
     const ra = a.rooms, rb = b.rooms
     const doneA = ra.status === 'done' || ra.status === 'inspect'
@@ -141,20 +155,13 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
                 urgent ? 'border-red-400' : finished ? 'border-transparent opacity-50' : 'border-transparent'
               }`}
             >
-              {/* 객실 정보 */}
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="text-xl font-bold text-gray-900">{room.number}호</span>
-                    {urgent && (
-                      <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">⚠ 긴급</span>
-                    )}
-                    {isDone && (
-                      <span className="bg-green-100 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full">완료</span>
-                    )}
-                    {isInspect && (
-                      <span className="bg-purple-100 text-purple-600 text-xs font-bold px-2 py-0.5 rounded-full">점검대기</span>
-                    )}
+                    {urgent && <span className="bg-red-100 text-red-600 text-xs font-bold px-2 py-0.5 rounded-full">⚠ 긴급</span>}
+                    {isDone && <span className="bg-green-100 text-green-600 text-xs font-bold px-2 py-0.5 rounded-full">완료</span>}
+                    {isInspect && <span className="bg-purple-100 text-purple-600 text-xs font-bold px-2 py-0.5 rounded-full">점검대기</span>}
                   </div>
                   <p className="text-xs text-gray-400 mt-0.5">{room.floor}층 · {TYPE_LABELS[room.type] ?? room.type}</p>
                 </div>
@@ -168,7 +175,6 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
                 )}
               </div>
 
-              {/* 상태 버튼 */}
               {!finished && (
                 <div className="flex gap-2 flex-wrap">
                   {room.status === 'dirty' && (
@@ -223,6 +229,15 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
               <button onClick={confirmDone} className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-semibold">완료 확인</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        }`}>
+          {toast.msg}
         </div>
       )}
     </div>

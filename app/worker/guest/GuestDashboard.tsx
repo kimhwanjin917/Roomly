@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClientWithToken } from '@/lib/supabase/client'
 
 type Room = {
@@ -13,6 +13,8 @@ type Room = {
 }
 
 type Assignment = { id: string; assigned_at: string; rooms: Room }
+
+type Toast = { msg: string; type: 'error' | 'success' }
 
 const TYPE_LABELS: Record<string, string> = {
   single: '싱글', double: '더블', suite: '스위트', other: '기타',
@@ -38,6 +40,14 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
+  const [toast, setToast] = useState<Toast | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string, type: Toast['type'] = 'error') {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000)
@@ -45,8 +55,12 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
   }, [])
 
   const refetch = useCallback(async () => {
-    const res = await fetch('/api/guest/assignments')
-    if (res.ok) setAssignments(await res.json())
+    try {
+      const res = await fetch('/api/guest/assignments')
+      if (res.ok) setAssignments(await res.json())
+    } catch {
+      // 네트워크 오류 시 기존 데이터 유지
+    }
   }, [])
 
   // Realtime 구독 (rooms·assignments 변경 시 즉시 refetch)
@@ -62,13 +76,19 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id
     setLoading(l => ({ ...l, [roomId]: true }))
-    await fetch('/api/guest/status', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ roomId, assignmentId: assignment.id, status, memo: memoText ?? null }),
-    })
-    await refetch()
-    setLoading(l => ({ ...l, [roomId]: false }))
+    try {
+      const res = await fetch('/api/guest/status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, assignmentId: assignment.id, status, memo: memoText ?? null }),
+      })
+      if (!res.ok) throw new Error()
+      await refetch()
+    } catch {
+      showToast('저장에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setLoading(l => ({ ...l, [roomId]: false }))
+    }
   }
 
   async function confirmDone() {
@@ -165,6 +185,15 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
               <button onClick={confirmDone} className="flex-1 py-3 bg-green-500 text-white rounded-xl text-sm font-semibold">완료 확인</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 토스트 */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        }`}>
+          {toast.msg}
         </div>
       )}
     </div>

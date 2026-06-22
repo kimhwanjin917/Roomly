@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -24,6 +24,7 @@ type Assignment = {
 }
 
 type Staff = { id: string; name: string }
+type Toast = { msg: string; type: 'error' | 'success' }
 
 const STATUS_CONFIG = {
   dirty:   { label: '더티',     bg: 'bg-gray-100',   text: 'text-gray-700'   },
@@ -76,6 +77,14 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   const [modalCheckinTime, setModalCheckinTime] = useState<string>('')
   const [modalMemo, setModalMemo] = useState('')
   const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState<Toast | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function showToast(msg: string, type: Toast['type'] = 'error') {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    setToast({ msg, type })
+    toastTimer.current = setTimeout(() => setToast(null), 3000)
+  }
 
   // 1분마다 시계 + 긴급 표시 갱신
   useEffect(() => {
@@ -121,38 +130,51 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   async function handleAssign() {
     if (!selectedRoom) return
     setSaving(true)
-    await fetch('/api/admin/assign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        roomId: selectedRoom.id,
-        staffId: modalAssign && modalAssign !== 'guest' ? modalAssign : undefined,
-        isGuest: modalAssign === 'guest',
-        unassign: !modalAssign,
-      }),
-    })
-    await refetch()
-    setSaving(false)
-    setSelectedRoom(null)
+    try {
+      const res = await fetch('/api/admin/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: selectedRoom.id,
+          staffId: modalAssign && modalAssign !== 'guest' ? modalAssign : undefined,
+          isGuest: modalAssign === 'guest',
+          unassign: !modalAssign,
+        }),
+      })
+      if (!res.ok) throw new Error()
+      await refetch()
+      setSelectedRoom(null)
+    } catch {
+      showToast('배정에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function handleStatusSave() {
     if (!selectedRoom) return
     setSaving(true)
-    const supabase = createClient()
-    await supabase.from('rooms').update({
-      status: modalStatus,
-      checkin_time: modalCheckinTime ? new Date(modalCheckinTime).toISOString() : null,
-    }).eq('id', selectedRoom.id)
-    await supabase.from('room_logs').insert({
-      room_id: selectedRoom.id,
-      status: modalStatus,
-      changed_by: 'admin',
-      memo: modalMemo || null,
-    })
-    await refetch()
-    setSaving(false)
-    setSelectedRoom(null)
+    try {
+      const supabase = createClient()
+      const { error: roomErr } = await supabase.from('rooms').update({
+        status: modalStatus,
+        checkin_time: modalCheckinTime ? new Date(modalCheckinTime).toISOString() : null,
+      }).eq('id', selectedRoom.id)
+      if (roomErr) throw roomErr
+      const { error: logErr } = await supabase.from('room_logs').insert({
+        room_id: selectedRoom.id,
+        status: modalStatus,
+        changed_by: 'admin',
+        memo: modalMemo || null,
+      })
+      if (logErr) throw logErr
+      await refetch()
+      setSelectedRoom(null)
+    } catch {
+      showToast('저장에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const floors = Array.from(new Set(rooms.map(r => r.floor))).sort((a, b) => a - b)
@@ -274,6 +296,15 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           )}
         </div>
       </main>
+
+      {/* 토스트 */}
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 ${
+          toast.type === 'error' ? 'bg-red-500' : 'bg-green-500'
+        }`}>
+          {toast.msg}
+        </div>
+      )}
 
       {/* 모달 */}
       {selectedRoom && (
