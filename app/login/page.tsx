@@ -8,6 +8,7 @@ function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
   const registered = params.get('registered') === '1'
+  const qrExpired = params.get('error') === 'qr_expired'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -41,6 +42,12 @@ function LoginForm() {
         {registered && (
           <div className="mb-5 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 text-center">
             호텔 등록이 완료됐습니다. 로그인해주세요.
+          </div>
+        )}
+
+        {qrExpired && (
+          <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 text-center">
+            QR 코드가 만료되었습니다. 관리자에게 새 QR을 요청해주세요.
           </div>
         )}
 
@@ -81,7 +88,7 @@ function LoginForm() {
 
         <div className="mt-6 text-center space-y-3">
           <a href="/signup" className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors">
-            호텔 등록하기 →
+            라이선스 키로 호텔 등록 →
           </a>
           <a href="/guest" className="block text-sm text-slate-400 hover:text-slate-600 transition-colors">
             일일 근무자 입장

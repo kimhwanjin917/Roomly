@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 
 export default function SignupPage() {
   const router = useRouter()
+  const [licenseKey, setLicenseKey] = useState('')
   const [hotelName, setHotelName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,7 +22,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hotelName, email, password }),
+        body: JSON.stringify({ licenseKey: licenseKey.trim(), hotelName, email, password }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? '가입에 실패했습니다.'); return }
@@ -47,6 +48,17 @@ export default function SignupPage() {
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-900">호텔 등록</h2>
 
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">라이선스 키</label>
+            <input
+              type="text"
+              value={licenseKey}
+              onChange={e => setLicenseKey(e.target.value)}
+              required
+              placeholder="발급받은 라이선스 키 입력"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">호텔명</label>
             <input

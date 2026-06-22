@@ -203,7 +203,7 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
 
               {/* 액션 버튼 */}
               {!finished && (
-                <div className={`px-3 pb-3 space-y-2 ${urgent ? '' : ''}`}>
+                <div className="px-3 pb-3 space-y-2">
                   {room.status === 'dirty' && (
                     <button
                       onClick={() => changeStatus(assignment, 'cleaning')}

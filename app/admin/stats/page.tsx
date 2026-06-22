@@ -38,6 +38,12 @@ export default function StatsPage() {
   const [staffStats, setStaffStats] = useState<StaffStat[]>([])
   const [incomplete, setIncomplete] = useState<IncompleteRoom[]>([])
 
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   useEffect(() => {
     async function init() {
       const supabase = createClient()
@@ -115,7 +121,8 @@ export default function StatsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center gap-6">
+        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-6">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
               <span className="text-white font-bold text-xs">R</span>
@@ -136,6 +143,8 @@ export default function StatsPage() {
               >{n.label}</a>
             ))}
           </nav>
+          </div>
+          <button onClick={handleLogout} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">로그아웃</button>
         </div>
       </header>
 

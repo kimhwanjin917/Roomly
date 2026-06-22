@@ -25,6 +25,7 @@ type Assignment = {
 
 type Staff = { id: string; name: string }
 type Toast = { msg: string; type: 'error' | 'success' }
+type ViewMode = 'grid' | 'table'
 
 const STATUS_CONFIG = {
   dirty:   { label: '더티',     bg: 'bg-slate-100',    text: 'text-slate-600',   dot: 'bg-slate-400'   },
@@ -71,6 +72,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   const [filterStatus, setFilterStatus] = useState<string | null>(null)
   const [filterStaff, setFilterStaff] = useState<string | null>(null)
 
+  const [viewMode, setViewMode] = useState<ViewMode>('table')
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
   const [modalAssign, setModalAssign] = useState<string>('')
   const [modalStatus, setModalStatus] = useState<string>('')
@@ -277,47 +279,134 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             <option value="guest">게스트</option>
             {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
-          <span className="text-xs text-slate-400 ml-auto">{filtered.length}개 객실</span>
-        </div>
-
-        {/* 객실 그리드 */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
-          {filtered.map(room => {
-            const a = assignments.find(a => a.room_id === room.id)
-            const urgent = isUrgent(room, now)
-            const cfg = STATUS_CONFIG[room.status]
-            const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
-
-            return (
+          <div className="flex items-center gap-2 ml-auto">
+            <span className="text-xs text-slate-400">{filtered.length}개 객실</span>
+            <div className="flex rounded-lg border border-slate-200 overflow-hidden bg-white">
               <button
-                key={room.id}
-                onClick={() => openModal(room)}
-                className={`bg-white rounded-xl p-3 text-left border transition-all hover:shadow-md active:scale-95 ${
-                  urgent ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200 hover:border-slate-300'
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <span className="font-bold text-slate-900 text-lg leading-none">{room.number}</span>
-                  {urgent && <span className="text-red-500 text-base leading-none">⚠</span>}
-                </div>
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                  <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
-                </div>
-                <div className="space-y-0.5 text-xs text-slate-400">
-                  <p>{room.floor}층</p>
-                  {assignedName && <p className="text-slate-600 font-medium truncate">{assignedName}</p>}
-                  {room.checkin_time && (
-                    <p className={urgent ? 'text-red-500 font-medium' : ''}>CI {fmtTime(room.checkin_time)}</p>
-                  )}
-                </div>
-              </button>
-            )
-          })}
-          {filtered.length === 0 && (
-            <p className="col-span-full text-center py-20 text-slate-400 text-sm">객실이 없습니다</p>
-          )}
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'table' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              >표</button>
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'grid' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
+              >카드</button>
+            </div>
+          </div>
         </div>
+
+        {/* 객실 없음 — 첫 설정 안내 */}
+        {rooms.length === 0 && (
+          <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center">
+            <p className="text-slate-800 font-semibold mb-1">등록된 객실이 없습니다</p>
+            <p className="text-sm text-slate-400 mb-6">객실을 먼저 등록하면 현황판을 사용할 수 있습니다.</p>
+            <a
+              href="/admin/onboarding"
+              className="inline-flex items-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >시작하기 →</a>
+          </div>
+        )}
+
+        {/* 테이블 뷰 */}
+        {rooms.length > 0 && viewMode === 'table' && (
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100 bg-slate-50">
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">호수</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">층</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">타입</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">상태</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">담당자</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">체크인</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map(room => {
+                  const a = assignments.find(a => a.room_id === room.id)
+                  const urgent = isUrgent(room, now)
+                  const cfg = STATUS_CONFIG[room.status]
+                  const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+                  return (
+                    <tr
+                      key={room.id}
+                      onClick={() => openModal(room)}
+                      className={`cursor-pointer transition-colors hover:bg-slate-50 ${urgent ? 'bg-red-50 hover:bg-red-50' : ''}`}
+                    >
+                      <td className="px-4 py-3 font-bold text-slate-900">
+                        <div className="flex items-center gap-1.5">
+                          {room.number}호
+                          {urgent && <span className="text-red-500 text-xs">⚠</span>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-slate-500">{room.floor}층</td>
+                      <td className="px-4 py-3 text-slate-500">{room.type}</td>
+                      <td className="px-4 py-3">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                          {cfg.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 font-medium">{assignedName ?? <span className="text-slate-300">—</span>}</td>
+                      <td className={`px-4 py-3 text-sm ${urgent ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
+                        {room.checkin_time ? fmtTime(room.checkin_time) : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-xs text-slate-400 hover:text-slate-700">수정 →</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center py-20 text-slate-400 text-sm">객실이 없습니다</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* 카드 그리드 뷰 */}
+        {rooms.length > 0 && viewMode === 'grid' && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+            {filtered.map(room => {
+              const a = assignments.find(a => a.room_id === room.id)
+              const urgent = isUrgent(room, now)
+              const cfg = STATUS_CONFIG[room.status]
+              const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+
+              return (
+                <button
+                  key={room.id}
+                  onClick={() => openModal(room)}
+                  className={`bg-white rounded-xl p-3 text-left border transition-all hover:shadow-md active:scale-95 ${
+                    urgent ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-start justify-between mb-2">
+                    <span className="font-bold text-slate-900 text-lg leading-none">{room.number}</span>
+                    {urgent && <span className="text-red-500 text-base leading-none">⚠</span>}
+                  </div>
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                    <span className={`text-xs font-medium ${cfg.text}`}>{cfg.label}</span>
+                  </div>
+                  <div className="space-y-0.5 text-xs text-slate-400">
+                    <p>{room.floor}층</p>
+                    {assignedName && <p className="text-slate-600 font-medium truncate">{assignedName}</p>}
+                    {room.checkin_time && (
+                      <p className={urgent ? 'text-red-500 font-medium' : ''}>CI {fmtTime(room.checkin_time)}</p>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
+            {filtered.length === 0 && (
+              <p className="col-span-full text-center py-20 text-slate-400 text-sm">객실이 없습니다</p>
+            )}
+          </div>
+        )}
       </main>
 
       {/* 토스트 */}

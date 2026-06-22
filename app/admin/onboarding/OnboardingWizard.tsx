@@ -170,12 +170,7 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
                 다음 단계 →
               </button>
               {addedRooms.length === 0 && (
-                <button
-                  onClick={() => setStep(2)}
-                  className="w-full py-2 text-sm text-slate-400 hover:text-slate-600 transition-colors"
-                >
-                  건너뛰기
-                </button>
+                <p className="text-center text-xs text-slate-400">객실을 1개 이상 추가해야 다음 단계로 넘어갈 수 있습니다</p>
               )}
             </div>
           </div>

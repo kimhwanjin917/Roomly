@@ -39,6 +39,12 @@ export default function RoomsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null)
   const [error, setError] = useState('')
 
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   useEffect(() => {
     async function load() {
       const supabase = createClient()
@@ -147,10 +153,13 @@ export default function RoomsPage() {
               ))}
             </nav>
           </div>
-          <button
-            onClick={openAdd}
-            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-          >+ 객실 추가</button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={openAdd}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+            >+ 객실 추가</button>
+            <button onClick={handleLogout} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">로그아웃</button>
+          </div>
         </div>
       </header>
 
