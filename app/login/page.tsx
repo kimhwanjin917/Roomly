@@ -17,84 +17,75 @@ function LoginForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithPassword({ email, password })
-
     if (error) {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+      setError('이메일 또는 비밀번호를 확인해주세요.')
       setLoading(false)
       return
     }
-
     router.push('/admin')
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* 로고 */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Roomly</h1>
-          <p className="text-sm text-gray-500 mt-1">호텔 하우스키핑 관리</p>
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl mb-4">
+            <span className="text-white font-bold text-xl">R</span>
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900">Roomly</h1>
+          <p className="text-sm text-slate-500 mt-1">하우스키핑 관리 시스템</p>
         </div>
 
         {registered && (
-          <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 text-center">
+          <div className="mb-5 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 text-center">
             호텔 등록이 완료됐습니다. 로그인해주세요.
           </div>
         )}
 
-        {/* 로그인 폼 */}
-        <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-4">
+        <form onSubmit={handleLogin} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">이메일</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">이메일</label>
             <input
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
               placeholder="admin@hotel.com"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
             />
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">비밀번호</label>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">비밀번호</label>
             <input
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent"
+              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow"
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-500">{error}</p>
-          )}
+          {error && <p className="text-sm text-red-500">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gray-900 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-gray-700 disabled:opacity-50 transition-colors"
+            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             {loading ? '로그인 중...' : '로그인'}
           </button>
         </form>
 
-        <div className="text-center mt-6 space-y-2">
-          <div>
-            <a href="/signup" className="text-sm text-gray-900 font-medium hover:underline">
-              호텔 등록하기 →
-            </a>
-          </div>
-          <div>
-            <a href="/guest" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-              일일 근무자 입장
-            </a>
-          </div>
+        <div className="mt-6 text-center space-y-3">
+          <a href="/signup" className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors">
+            호텔 등록하기 →
+          </a>
+          <a href="/guest" className="block text-sm text-slate-400 hover:text-slate-600 transition-colors">
+            일일 근무자 입장
+          </a>
         </div>
       </div>
     </div>
