@@ -18,6 +18,9 @@ export default async function AdminPage() {
     supabase.from('staff').select('id, name').eq('hotel_id', hotelId).order('name'),
   ])
 
+  // 신규 호텔 — 객실이 하나도 없으면 온보딩으로 이동
+  if ((roomsRes.data ?? []).length === 0) redirect('/admin/onboarding')
+
   return (
     <AdminDashboard
       hotelId={hotelId}
