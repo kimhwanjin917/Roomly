@@ -45,6 +45,7 @@ export default async function WorkerPage({ params }: { params: { staffId: string
       hotelId={hotelId}
       staffName={staffRes.data?.name ?? '직원'}
       initialAssignments={(assignRes.data ?? []) as any}
+      token={sessionCookie.value}
     />
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { createClientWithToken } from '@/lib/supabase/client'
 
 type Room = {
   id: string
@@ -40,9 +41,10 @@ interface Props {
   hotelId: string
   staffName: string
   initialAssignments: Assignment[]
+  token: string
 }
 
-export default function WorkerDashboard({ staffId, staffName, initialAssignments }: Props) {
+export default function WorkerDashboard({ staffId, staffName, initialAssignments, token }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
@@ -59,11 +61,15 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
     if (res.ok) setAssignments(await res.json())
   }, [staffId])
 
-  // 30초마다 폴링
+  // Realtime 구독 (rooms·assignments 변경 시 즉시 refetch)
   useEffect(() => {
-    const t = setInterval(refetch, 30_000)
-    return () => clearInterval(t)
-  }, [refetch])
+    const supabase = createClientWithToken(token)
+    const channel = supabase.channel('worker-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, refetch)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, refetch)
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [refetch, token])
 
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id

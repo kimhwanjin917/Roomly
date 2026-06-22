@@ -34,5 +34,5 @@ export default async function GuestWorkerPage() {
     .is('completed_at', null)
     .is('cancelled_at', null)
 
-  return <GuestDashboard hotelId={hotelId} initialAssignments={(assignments ?? []) as any} />
+  return <GuestDashboard hotelId={hotelId} initialAssignments={(assignments ?? []) as any} token={sessionCookie.value} />
 }
