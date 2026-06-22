@@ -1,11 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const params = useSearchParams()
+  const registered = params.get('registered') === '1'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -36,6 +38,12 @@ export default function LoginPage() {
           <h1 className="text-3xl font-bold text-gray-900">Roomly</h1>
           <p className="text-sm text-gray-500 mt-1">호텔 하우스키핑 관리</p>
         </div>
+
+        {registered && (
+          <div className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 text-center">
+            호텔 등록이 완료됐습니다. 로그인해주세요.
+          </div>
+        )}
 
         {/* 로그인 폼 */}
         <form onSubmit={handleLogin} className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 space-y-4">
@@ -76,16 +84,27 @@ export default function LoginPage() {
           </button>
         </form>
 
-        {/* 일일 근무자 링크 */}
-        <div className="text-center mt-6">
-          <a
-            href="/guest"
-            className="text-sm text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            일일 근무자 입장 →
-          </a>
+        <div className="text-center mt-6 space-y-2">
+          <div>
+            <a href="/signup" className="text-sm text-gray-900 font-medium hover:underline">
+              호텔 등록하기 →
+            </a>
+          </div>
+          <div>
+            <a href="/guest" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
+              일일 근무자 입장
+            </a>
+          </div>
         </div>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   )
 }
