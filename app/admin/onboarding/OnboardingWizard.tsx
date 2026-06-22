@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 type AddedRoom = { id: string; number: string; floor: number; type: string }
 type AddedStaff = { id: string; name: string }
@@ -35,14 +34,15 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
   async function handleAddRoom() {
     if (!roomForm.number.trim() || !roomForm.floor) { setRoomError('호수와 층을 입력해 주세요.'); return }
     setRoomSaving(true); setRoomError('')
-    const supabase = createClient()
-    const { data, error } = await supabase
-      .from('rooms')
-      .insert({ hotel_id: hotelId, number: roomForm.number.trim(), floor: Number(roomForm.floor), type: roomForm.type })
-      .select('id, number, floor, type')
-      .single()
-    if (error) {
-      setRoomError(error.code === '23505' ? '이미 존재하는 호수입니다.' : '저장 실패')
+    const res = await fetch('/api/admin/rooms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ number: roomForm.number.trim(), floor: Number(roomForm.floor), type: roomForm.type }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      if (res.status === 409) { setRoomError('이미 존재하는 호수입니다.'); setRoomSaving(false); return }
+      setRoomError(`저장 실패 (${res.status}: ${data.detail ?? data.error ?? ''})`)
       setRoomSaving(false); return
     }
     setAddedRooms(r => [...r, data])
