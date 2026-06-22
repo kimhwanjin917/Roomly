@@ -40,6 +40,7 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
   const [toast, setToast] = useState<Toast | null>(null)
+  const [isOnline, setIsOnline] = useState(true)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   function showToast(msg: string, type: Toast['type'] = 'error') {
@@ -61,6 +62,17 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
       // 네트워크 오류 시 기존 데이터 유지
     }
   }, [])
+
+  useEffect(() => {
+    const handleOnline = () => { setIsOnline(true); refetch() }
+    const handleOffline = () => setIsOnline(false)
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [refetch])
 
   useEffect(() => {
     const supabase = createClientWithToken(token)
@@ -134,6 +146,13 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
           </div>
         )}
       </div>
+
+      {/* 오프라인 배너 */}
+      {!isOnline && (
+        <div className="bg-amber-500 text-white text-sm font-medium text-center py-2 px-4">
+          오프라인 상태입니다. 마지막 데이터를 표시 중입니다.
+        </div>
+      )}
 
       {/* 배정 목록 */}
       <div className="px-4 pt-4 space-y-2.5">

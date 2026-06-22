@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import AdminNav from '@/components/AdminNav'
 
 type Room = {
   id: string
@@ -38,12 +39,6 @@ export default function RoomsPage() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Room | null>(null)
   const [error, setError] = useState('')
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
 
   useEffect(() => {
     async function load() {
@@ -129,43 +124,15 @@ export default function RoomsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                <span className="text-white font-bold text-xs">R</span>
-              </div>
-              <span className="font-semibold text-slate-800 text-sm hidden sm:block">{hotelName}</span>
-            </div>
-            <nav className="flex gap-1">
-              {[
-                { href: '/admin', label: '현황판', active: false },
-                { href: '/admin/rooms', label: '객실관리', active: true },
-                { href: '/admin/staff', label: '직원관리', active: false },
-                { href: '/admin/stats', label: '통계', active: false },
-              ].map(n => (
-                <a key={n.href} href={n.href}
-                  className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                    n.active ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  }`}
-                >{n.label}</a>
-              ))}
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={openAdd}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >+ 객실 추가</button>
-            <button onClick={handleLogout} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">로그아웃</button>
-          </div>
-        </div>
-      </header>
+      <AdminNav />
 
-      <main className="max-w-4xl mx-auto px-4 py-6">
+      <main className="max-w-4xl mx-auto px-4 py-6 pb-16 md:pb-6">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-base font-semibold text-slate-900">객실 목록 <span className="text-slate-400 font-normal ml-1">{rooms.length}개</span></h1>
+          <button
+            onClick={openAdd}
+            className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+          >+ 객실 추가</button>
         </div>
 
         {rooms.length === 0 ? (

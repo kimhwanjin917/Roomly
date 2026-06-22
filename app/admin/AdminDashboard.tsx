@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import AdminNav from '@/components/AdminNav'
 
 type Room = {
   id: string
@@ -63,7 +63,6 @@ interface Props {
 }
 
 export default function AdminDashboard({ hotelId, hotelName, initialRooms, initialAssignments, staffList }: Props) {
-  const router = useRouter()
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
@@ -111,12 +110,6 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [refetch])
-
-  async function handleLogout() {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
 
   function openModal(room: Room) {
     const a = assignments.find(a => a.room_id === room.id)
@@ -198,39 +191,9 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* 헤더 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
-                <span className="text-white font-bold text-xs">R</span>
-              </div>
-              <span className="font-semibold text-slate-800 text-sm">{hotelName}</span>
-            </div>
-            <nav className="hidden md:flex gap-1">
-              {[
-                { href: '/admin', label: '현황판', active: true },
-                { href: '/admin/rooms', label: '객실관리', active: false },
-                { href: '/admin/staff', label: '직원관리', active: false },
-                { href: '/admin/stats', label: '통계', active: false },
-              ].map(n => (
-                <a key={n.href} href={n.href}
-                  className={`px-3 py-1.5 rounded-md text-sm transition-colors ${
-                    n.active ? 'bg-slate-100 text-slate-900 font-medium' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'
-                  }`}
-                >{n.label}</a>
-              ))}
-            </nav>
-          </div>
-          <div className="flex items-center gap-3">
-            <span className="hidden sm:block text-xs text-slate-400">{now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</span>
-            <button onClick={handleLogout} className="text-xs text-slate-400 hover:text-slate-700 transition-colors">로그아웃</button>
-          </div>
-        </div>
-      </header>
+      <AdminNav />
 
-      <main className="max-w-7xl mx-auto px-4 py-5">
+      <main className="max-w-7xl mx-auto px-4 py-5 pb-16 md:pb-5">
         {/* 상태 카운터 */}
         <div className="grid grid-cols-4 gap-2 mb-5">
           {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => {
