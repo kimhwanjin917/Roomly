@@ -30,6 +30,7 @@ const PLANS = [
 function BillingContent() {
   const searchParams = useSearchParams()
   const success = searchParams.get('success') === 'true'
+  const expired = searchParams.get('expired') === 'true'
   const [loading, setLoading] = useState<string | null>(null)
 
   async function handleCheckout(planId: string) {
@@ -64,6 +65,14 @@ function BillingContent() {
             </svg>
             <p className="text-green-800 font-medium">구독이 시작되었습니다! Roomly 프로 기능을 이용해보세요.</p>
           </div>
+        </div>
+      )}
+
+      {/* 플랜 만료 알림 */}
+      {expired && (
+        <div className="max-w-4xl mx-auto mb-6 rounded-lg bg-red-50 border border-red-200 p-4 text-red-800">
+          <p className="font-semibold">플랜이 만료되었습니다</p>
+          <p className="text-sm mt-1">서비스 이용을 계속하려면 플랜을 갱신해주세요.</p>
         </div>
       )}
 

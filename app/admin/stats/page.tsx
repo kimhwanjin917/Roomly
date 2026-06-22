@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
 
+type Period = 'daily' | 'weekly' | 'monthly'
+
 type StaffStat = {
   staffId: string
   name: string
@@ -18,6 +20,8 @@ type IncompleteRoom = {
   status: string
 }
 
+type ChartPoint = { label: string; value: number }
+
 const STATUS_LABELS: Record<string, string> = {
   dirty: '더티', cleaning: '청소중', inspect: '점검대기',
 }
@@ -26,10 +30,31 @@ const STATUS_DOTS: Record<string, string> = {
   dirty: 'bg-slate-400', cleaning: 'bg-amber-400', inspect: 'bg-violet-500',
 }
 
+function BarChart({ data }: { data: { label: string; value: number; max: number }[] }) {
+  const maxVal = Math.max(...data.map(d => d.value), 1)
+  return (
+    <div className="flex items-end gap-2 h-32 mt-4">
+      {data.map((d, i) => (
+        <div key={i} className="flex-1 flex flex-col items-center gap-1">
+          <span className="text-xs text-slate-500">{d.value}</span>
+          <div className="w-full bg-slate-100 rounded-t relative" style={{ height: '80px' }}>
+            <div
+              className="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t transition-all"
+              style={{ height: `${(d.value / maxVal) * 80}px` }}
+            />
+          </div>
+          <span className="text-xs text-slate-600 truncate w-full text-center">{d.label}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function StatsPage() {
   const router = useRouter()
   const today = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(today)
+  const [period, setPeriod] = useState<Period>('daily')
   const [hotelId, setHotelId] = useState('')
   const [hotelName, setHotelName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -38,6 +63,7 @@ export default function StatsPage() {
   const [totalCompleted, setTotalCompleted] = useState(0)
   const [staffStats, setStaffStats] = useState<StaffStat[]>([])
   const [incomplete, setIncomplete] = useState<IncompleteRoom[]>([])
+  const [chartData, setChartData] = useState<ChartPoint[]>([])
 
   useEffect(() => {
     async function init() {
@@ -54,9 +80,13 @@ export default function StatsPage() {
 
   useEffect(() => {
     if (!hotelId) return
-    loadStats()
+    if (period === 'daily') {
+      loadStats()
+    } else {
+      loadChartData(period)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotelId, date])
+  }, [hotelId, date, period])
 
   async function loadStats() {
     setLoading(true)
@@ -110,33 +140,124 @@ export default function StatsPage() {
     setLoading(false)
   }
 
+  async function loadChartData(p: Period) {
+    setLoading(true)
+    const supabase = createClient()
+
+    const days = p === 'weekly' ? 7 : 30
+    const startDate = new Date()
+    startDate.setDate(startDate.getDate() - days + 1)
+    startDate.setHours(0, 0, 0, 0)
+
+    const { data: completions } = await supabase
+      .from('assignments')
+      .select('completed_at, rooms!inner(hotel_id)')
+      .eq('rooms.hotel_id', hotelId)
+      .gte('completed_at', startDate.toISOString())
+      .not('completed_at', 'is', null)
+
+    // Group by date
+    const countMap: Record<string, number> = {}
+    for (let i = 0; i < days; i++) {
+      const d = new Date()
+      d.setDate(d.getDate() - days + 1 + i)
+      const key = d.toISOString().slice(0, 10)
+      countMap[key] = 0
+    }
+
+    for (const row of completions ?? []) {
+      if (!row.completed_at) continue
+      const key = new Date(row.completed_at).toISOString().slice(0, 10)
+      if (key in countMap) countMap[key]++
+    }
+
+    const points: ChartPoint[] = Object.entries(countMap).map(([dateKey, value]) => {
+      const d = new Date(dateKey)
+      const label = p === 'weekly'
+        ? d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
+        : d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
+      return { label, value }
+    })
+
+    setChartData(points)
+    setLoading(false)
+  }
+
   const completionRate = totalRooms > 0 ? Math.round((totalCompleted / totalRooms) * 100) : 0
   const maxCompleted = staffStats[0]?.completed ?? 1
+
+  const PERIOD_TABS: { key: Period; label: string }[] = [
+    { key: 'daily', label: '일간' },
+    { key: 'weekly', label: '주간' },
+    { key: 'monthly', label: '월간' },
+  ]
 
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminNav />
 
       <main className="max-w-4xl mx-auto px-4 py-6 pb-16 md:pb-6 space-y-5">
-        {/* 날짜 선택 */}
-        <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={date}
-            max={today}
-            onChange={e => setDate(e.target.value)}
-            className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          />
-          {date !== today && (
-            <button onClick={() => setDate(today)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">오늘로</button>
-          )}
-          <span className="text-sm text-slate-500 ml-auto">
-            {new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
-          </span>
+        {/* 기간 탭 */}
+        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+          {PERIOD_TABS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setPeriod(tab.key)}
+              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                period === tab.key
+                  ? 'bg-white text-slate-900 shadow-sm'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
+
+        {/* 날짜 선택 (일간만) */}
+        {period === 'daily' && (
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={date}
+              max={today}
+              onChange={e => setDate(e.target.value)}
+              className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+            {date !== today && (
+              <button onClick={() => setDate(today)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">오늘로</button>
+            )}
+            <span className="text-sm text-slate-500">
+              {new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+            </span>
+            <button
+              onClick={() => window.open(`/api/admin/stats/export?date=${date}`, '_blank')}
+              className="ml-auto px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1"
+            >
+              <span>↓</span> CSV
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center text-slate-400 text-sm">불러오는 중...</div>
+        ) : period !== 'daily' ? (
+          /* 주간 / 월간 차트 */
+          <div className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className="flex justify-between items-center mb-1">
+              <h2 className="text-sm font-semibold text-slate-900">
+                {period === 'weekly' ? '최근 7일 완료 현황' : '최근 30일 완료 현황'}
+              </h2>
+              <span className="text-xs text-slate-400">
+                총 {chartData.reduce((s, d) => s + d.value, 0)}건
+              </span>
+            </div>
+            {chartData.length > 0 ? (
+              <BarChart data={chartData.map(d => ({ ...d, max: Math.max(...chartData.map(x => x.value), 1) }))} />
+            ) : (
+              <p className="text-center text-slate-400 text-sm py-10">데이터가 없습니다</p>
+            )}
+          </div>
         ) : (
           <>
             {/* 요약 */}

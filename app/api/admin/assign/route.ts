@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   // 해당 방이 내 호텔 소속인지 확인
   const { data: room } = await service
-    .from('rooms').select('id').eq('id', roomId).eq('hotel_id', hotelId).single()
+    .from('rooms').select('id, number').eq('id', roomId).eq('hotel_id', hotelId).single()
   if (!room) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   // 기존 활성 배정 취소

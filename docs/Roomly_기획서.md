@@ -1,8 +1,8 @@
 # Roomly 🏨
 > 텔레그램 단톡방을 대체하는, 호텔 하우스키핑 실시간 관리 툴
 
-**버전**: v2.1  
-**작성일**: 2026-06-16  
+**버전**: v2.2  
+**작성일**: 2026-06-22  
 **기술 스택**: Next.js + Supabase + Vercel
 
 ---
@@ -92,7 +92,8 @@
 
 ```sql
 -- 호텔 정보
-hotels (id, name, subscription_plan, created_at)
+hotels (id, name, subscription_plan, created_at,
+        stripe_customer_id, stripe_subscription_id, plan_expires_at)
 -- total_rooms 제거: rooms 테이블 COUNT로 대체 (동기화 문제 방지)
 -- subscription_plan: 'starter' | 'standard' | 'pro'
 
@@ -122,6 +123,12 @@ guest_codes (id, hotel_id, code, date, expires_at, created_at)
 -- code: 6자리 랜덤 코드, 당일 자정 만료
 -- date: 코드가 유효한 날짜 (KST). UPSERT ON CONFLICT (hotel_id, date) 기준 컬럼
 
+-- 라이선스 키 (가입 시 검증)
+licenses (id, key, created_at, used_at, hotel_id)
+
+-- 브라우저 푸시 알림 구독
+push_subscriptions (id, staff_id, hotel_id, is_admin, endpoint, p256dh, auth, created_at)
+
 -- 상태 변경 이력
 room_logs (id, room_id, status, changed_by, changed_at, memo, alert_type)
 -- changed_by: staff.id (고정 직원/관리자) 또는 'guest' 문자열 (게스트 변경 시)
@@ -139,20 +146,28 @@ room_logs (id, room_id, status, changed_by, changed_at, memo, alert_type)
 
 ## 7. 개발 로드맵
 
-### 호텔 가입 방식 (MVP → 정식)
-- **MVP**: 초대 기반 — 운영자가 Supabase에서 직접 호텔 생성 + 관리자에게 초대 이메일 발송
-- **정식 서비스**: 셀프 가입 (`/signup`) 페이지 추가 후 자동화
+### 호텔 가입 방식
+- **현재 (라이선스 기반 셀프 가입)**: 운영자가 `/super-admin`에서 라이선스 키 발급 → 호텔이 `/signup`에서 키 입력 후 셀프 가입
+- **추후**: 라이선스 없이 카드 등록만으로 즉시 가입 (Stripe 완전 자동화 후)
 
-### 1단계 — 프로토타입 (2~3주) ← 지금 시작
-- 객실 현황판 UI (층별 뷰 포함)
-- 상태 변경 + 실시간 반영
-- QR 기반 직원 인증
-- 알바 호텔에 무료로 써보게 해서 피드백 수집
+### 1단계 — 프로토타입 ✅ 완료 (2026-06-22)
+- 객실 현황판 UI (층별 뷰, 실시간 반영)
+- 상태 변경 + 실시간 반영 (Supabase Realtime)
+- QR 기반 직원 인증 + 게스트 코드 인증
+- PWA (홈 화면 설치, 오프라인 캐시)
+- 온보딩 마법사, 라이선스 기반 가입
+- 슈퍼어드민 대시보드 (`/super-admin`)
+- 랜딩 페이지 (`/`)
 
-### 2단계 — MVP 출시 (1~2개월)
-- 배정 기능 + 브라우저 푸시 알림 + 다중 호텔
-- 소규모 호텔 3~5곳 베타 (무료 제공 → 서비스 안정화 후 과금 전환)
-- 월 1~2만원 파일럿 과금 시작
+### 2단계 — MVP 출시 🚧 진행 중
+- ✅ 푸시 알림 인프라 (VAPID, push_subscriptions)
+- ✅ Stripe 결제 기반 세팅 (checkout, webhook)
+- ✅ Resend 이메일 (가입 환영 메일)
+- 🔲 푸시 알림 구독 UI + 배정 시 자동 발송
+- 🔲 결제 플랜 만료 잠금
+- 🔲 일일 리포트 이메일 크론
+- 🔲 통계 주간/월간 차트
+- 🔲 Rate Limiting
 
 ### 3단계 — 정식 서비스
 - PMS 연동 + 다국어(영어·베트남어) + 체인 호텔 관리

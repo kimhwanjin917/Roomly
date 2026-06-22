@@ -46,7 +46,9 @@ interface Props {
   token: string
 }
 
-export default function WorkerDashboard({ staffId, staffName, initialAssignments, token }: Props) {
+type PushState = 'idle' | 'subscribed' | 'denied' | 'unsupported'
+
+export default function WorkerDashboard({ staffId, hotelId, staffName, initialAssignments, token }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
@@ -54,7 +56,52 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
   const [memo, setMemo] = useState('')
   const [toast, setToast] = useState<Toast | null>(null)
   const [isOnline, setIsOnline] = useState(true)
+  const [pushState, setPushState] = useState<PushState>('unsupported')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
+      setPushState('unsupported')
+      return
+    }
+    if (Notification.permission === 'granted') {
+      setPushState('subscribed')
+    } else if (Notification.permission === 'denied') {
+      setPushState('denied')
+    } else {
+      setPushState('idle')
+    }
+  }, [])
+
+  async function subscribePush() {
+    const permission = await Notification.requestPermission()
+    if (permission !== 'granted') { setPushState('denied'); return }
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    })
+    await fetch('/api/push/subscribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ subscription: sub.toJSON(), staffId, hotelId, isAdmin: false }),
+    })
+    setPushState('subscribed')
+  }
+
+  async function unsubscribePush() {
+    const reg = await navigator.serviceWorker.ready
+    const sub = await reg.pushManager.getSubscription()
+    if (sub) {
+      await fetch('/api/push/subscribe', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: sub.endpoint }),
+      })
+      await sub.unsubscribe()
+    }
+    setPushState('idle')
+  }
 
   function showToast(msg: string, type: Toast['type'] = 'error') {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -135,9 +182,43 @@ export default function WorkerDashboard({ staffId, staffName, initialAssignments
       {/* 헤더 */}
       <div className="bg-white border-b border-slate-200 px-4 pt-10 pb-5">
         <div className="flex items-start justify-between">
-          <div>
-            <p className="text-xs text-slate-400 mb-1">{now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</p>
-            <p className="text-xl font-bold text-slate-900">안녕하세요, {staffName}님</p>
+          <div className="flex items-start gap-2">
+            <div>
+              <p className="text-xs text-slate-400 mb-1">{now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</p>
+              <p className="text-xl font-bold text-slate-900">안녕하세요, {staffName}님</p>
+            </div>
+            {pushState !== 'unsupported' && (
+              <div className="relative mt-1">
+                <button
+                  onClick={pushState === 'idle' ? subscribePush : pushState === 'subscribed' ? unsubscribePush : undefined}
+                  disabled={pushState === 'denied'}
+                  title={pushState === 'denied' ? '브라우저 알림이 차단됨' : undefined}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
+                    pushState === 'idle' ? 'text-slate-400 hover:bg-slate-100' :
+                    pushState === 'subscribed' ? 'text-slate-700 hover:bg-slate-100' :
+                    'text-red-400 cursor-default'
+                  }`}
+                >
+                  {pushState === 'subscribed' ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                      <path d="M5.85 3.5a.75.75 0 0 0-1.117-1 9.719 9.719 0 0 0-2.348 4.876.75.75 0 0 0 1.479.248A8.219 8.219 0 0 1 5.85 3.5ZM19.267 2.5a.75.75 0 1 0-1.118 1 8.22 8.22 0 0 1 1.987 4.124.75.75 0 0 0 1.48-.248A9.72 9.72 0 0 0 19.266 2.5Z" />
+                      <path fillRule="evenodd" d="M12 2.25A6.75 6.75 0 0 0 5.25 9v.75a8.217 8.217 0 0 1-2.119 5.52.75.75 0 0 0 .298 1.206c1.544.57 3.16.99 4.831 1.243a3.75 3.75 0 1 0 7.48 0 24.583 24.583 0 0 0 4.83-1.244.75.75 0 0 0 .298-1.205 8.217 8.217 0 0 1-2.118-5.52V9A6.75 6.75 0 0 0 12 2.25ZM9.75 18c0-.034 0-.067.002-.1a25.05 25.05 0 0 0 4.496 0l.002.1a2.25 2.25 0 1 1-4.5 0Z" clipRule="evenodd" />
+                    </svg>
+                  ) : pushState === 'denied' ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0M6 6l12 12" />
+                    </svg>
+                  ) : (
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                    </svg>
+                  )}
+                </button>
+                {pushState === 'subscribed' && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-500 rounded-full" />
+                )}
+              </div>
+            )}
           </div>
           {totalCount > 0 && (
             <div className="text-right">

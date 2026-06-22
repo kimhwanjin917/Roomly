@@ -17,6 +17,40 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
+
+    // 플랜 만료 체크 — 페이지 라우트에만 적용 (API 라우트 및 /admin/billing 제외)
+    if (
+      pathname.startsWith('/admin') &&
+      !pathname.startsWith('/api/admin') &&
+      pathname !== '/admin/billing'
+    ) {
+      const hotelId = user.app_metadata?.hotel_id
+      if (hotelId) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
+        try {
+          const res = await fetch(
+            `${supabaseUrl}/rest/v1/hotels?id=eq.${hotelId}&select=plan_expires_at`,
+            {
+              headers: {
+                apikey: serviceKey,
+                Authorization: `Bearer ${serviceKey}`,
+              },
+            }
+          )
+          const [hotel] = await res.json()
+          if (hotel?.plan_expires_at && new Date(hotel.plan_expires_at) < new Date()) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/admin/billing'
+            url.searchParams.set('expired', 'true')
+            return NextResponse.redirect(url)
+          }
+        } catch {
+          // 만료 체크 실패 시 접근 허용 (가용성 우선)
+        }
+      }
+    }
+
     return supabaseResponse
   }
 
