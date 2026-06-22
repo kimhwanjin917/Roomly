@@ -51,6 +51,9 @@ const withPWA = require('next-pwa')({
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  experimental: {
+    serverComponentsExternalPackages: ['web-push', 'resend', '@react-email/components'],
+  },
 }
 
 module.exports = withPWA(nextConfig)

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { sendEmail } from '@/lib/email'
+import WelcomeEmail from '@/emails/WelcomeEmail'
 
 export async function POST(request: NextRequest) {
   const { licenseKey, hotelName, email, password } = await request.json()
@@ -67,6 +69,13 @@ export async function POST(request: NextRequest) {
     .from('licenses')
     .update({ used_at: new Date().toISOString(), hotel_id: hotel.id })
     .eq('id', license.id)
+
+  // 비차단 환영 이메일 발송
+  sendEmail({
+    to: email,
+    subject: 'Roomly에 오신 것을 환영합니다',
+    react: WelcomeEmail({ hotelName: hotelName }),
+  }).catch(() => {})
 
   return NextResponse.json({ ok: true })
 }
