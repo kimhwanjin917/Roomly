@@ -17,11 +17,23 @@ export async function POST(request: NextRequest) {
   const hotelId = payload.app_metadata?.hotel_id as string
   const { roomId, assignmentId, status, memo } = await request.json()
 
+  const VALID_STATUSES = ['dirty', 'cleaning', 'done', 'inspect']
   if (!roomId || !status) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!VALID_STATUSES.includes(status)) return NextResponse.json({ error: 'invalid_status' }, { status: 400 })
 
   const service = createServiceClient()
 
-  // 내 호텔 객실인지 확인
+  // 내 호텔 객실이면서 나에게 배정된 방인지 확인
+  const { data: assignment } = await service
+    .from('assignments')
+    .select('id')
+    .eq('room_id', roomId)
+    .eq('staff_id', staffId)
+    .is('completed_at', null)
+    .is('cancelled_at', null)
+    .single()
+  if (!assignment) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+
   const { data: room } = await service.from('rooms').select('id').eq('id', roomId).eq('hotel_id', hotelId).single()
   if (!room) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 

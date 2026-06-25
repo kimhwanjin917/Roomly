@@ -26,24 +26,26 @@ const STATUS_LABELS: Record<string, string> = {
   dirty: '더티', cleaning: '청소중', inspect: '점검대기',
 }
 
-const STATUS_DOTS: Record<string, string> = {
+const STATUS_DOT: Record<string, string> = {
   dirty: 'bg-slate-400', cleaning: 'bg-amber-400', inspect: 'bg-violet-500',
 }
 
-function BarChart({ data }: { data: { label: string; value: number; max: number }[] }) {
+function BarChart({ data }: { data: ChartPoint[] }) {
   const maxVal = Math.max(...data.map(d => d.value), 1)
   return (
-    <div className="flex items-end gap-2 h-32 mt-4">
+    <div className="flex items-end gap-1.5 h-36 mt-4">
       {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1">
-          <span className="text-xs text-slate-500">{d.value}</span>
-          <div className="w-full bg-slate-100 rounded-t relative" style={{ height: '80px' }}>
+        <div key={i} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
+          {d.value > 0 && (
+            <span className="text-[10px] font-bold text-[#6B7684]">{d.value}</span>
+          )}
+          <div className="w-full bg-[#F2F4F6] rounded-t-lg relative" style={{ height: '80px' }}>
             <div
-              className="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t transition-all"
-              style={{ height: `${(d.value / maxVal) * 80}px` }}
+              className="absolute bottom-0 left-0 right-0 bg-toss-blue rounded-t-lg transition-all duration-500"
+              style={{ height: `${Math.max((d.value / maxVal) * 80, d.value > 0 ? 4 : 0)}px` }}
             />
           </div>
-          <span className="text-xs text-slate-600 truncate w-full text-center">{d.label}</span>
+          <span className="text-[9px] text-[#B0B8C1] font-medium truncate w-full text-center leading-tight">{d.label}</span>
         </div>
       ))}
     </div>
@@ -56,7 +58,6 @@ export default function StatsPage() {
   const [date, setDate] = useState(today)
   const [period, setPeriod] = useState<Period>('daily')
   const [hotelId, setHotelId] = useState('')
-  const [hotelName, setHotelName] = useState('')
   const [loading, setLoading] = useState(true)
 
   const [totalRooms, setTotalRooms] = useState(0)
@@ -72,26 +73,20 @@ export default function StatsPage() {
       if (!user) { router.push('/login'); return }
       const hid = user.app_metadata?.hotel_id as string
       setHotelId(hid)
-      const hotelRes = await supabase.from('hotels').select('name').eq('id', hid).single()
-      setHotelName(hotelRes.data?.name ?? '')
     }
     init()
   }, [router])
 
   useEffect(() => {
     if (!hotelId) return
-    if (period === 'daily') {
-      loadStats()
-    } else {
-      loadChartData(period)
-    }
+    if (period === 'daily') loadStats()
+    else loadChartData(period)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hotelId, date, period])
 
   async function loadStats() {
     setLoading(true)
     const supabase = createClient()
-
     const dateStart = `${date}T00:00:00+09:00`
     const dateEnd = `${date}T23:59:59+09:00`
 
@@ -111,9 +106,10 @@ export default function StatsPage() {
 
     setTotalRooms(rooms.length)
     setTotalCompleted(completed.length)
-    setIncomplete(rooms.filter(r => r.status !== 'done' && r.status !== 'inspect').map(r => ({
-      number: r.number, floor: r.floor, status: r.status,
-    })))
+    setIncomplete(rooms
+      .filter(r => r.status !== 'done' && r.status !== 'inspect')
+      .map(r => ({ number: r.number, floor: r.floor, status: r.status }))
+    )
 
     const statMap: Record<string, { name: string; count: number; totalMin: number }> = {}
     for (const s of staffList) statMap[s.id] = { name: s.name, count: 0, totalMin: 0 }
@@ -143,7 +139,6 @@ export default function StatsPage() {
   async function loadChartData(p: Period) {
     setLoading(true)
     const supabase = createClient()
-
     const days = p === 'weekly' ? 7 : 30
     const startDate = new Date()
     startDate.setDate(startDate.getDate() - days + 1)
@@ -156,30 +151,22 @@ export default function StatsPage() {
       .gte('completed_at', startDate.toISOString())
       .not('completed_at', 'is', null)
 
-    // Group by date
     const countMap: Record<string, number> = {}
     for (let i = 0; i < days; i++) {
       const d = new Date()
       d.setDate(d.getDate() - days + 1 + i)
-      const key = d.toISOString().slice(0, 10)
-      countMap[key] = 0
+      countMap[d.toISOString().slice(0, 10)] = 0
     }
-
     for (const row of completions ?? []) {
       if (!row.completed_at) continue
       const key = new Date(row.completed_at).toISOString().slice(0, 10)
       if (key in countMap) countMap[key]++
     }
 
-    const points: ChartPoint[] = Object.entries(countMap).map(([dateKey, value]) => {
-      const d = new Date(dateKey)
-      const label = p === 'weekly'
-        ? d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
-        : d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' })
-      return { label, value }
-    })
-
-    setChartData(points)
+    setChartData(Object.entries(countMap).map(([dateKey, value]) => ({
+      label: new Date(dateKey).toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }),
+      value,
+    })))
     setLoading(false)
   }
 
@@ -193,20 +180,25 @@ export default function StatsPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-toss-bg">
       <AdminNav />
 
-      <main className="max-w-4xl mx-auto px-4 py-6 pb-16 md:pb-6 space-y-5">
+      <main className="max-w-3xl mx-auto px-4 py-6 pb-20 md:pb-6 space-y-4">
+        {/* 헤더 */}
+        <div>
+          <h1 className="text-xl font-bold text-[#191919]">통계</h1>
+        </div>
+
         {/* 기간 탭 */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-fit">
+        <div className="flex gap-1 bg-white rounded-2xl p-1 shadow-card w-fit">
           {PERIOD_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setPeriod(tab.key)}
-              className={`px-4 py-1.5 text-sm font-medium rounded-lg transition-all ${
+              className={`px-5 py-2 text-sm font-bold rounded-xl transition-all ${
                 period === tab.key
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-700'
+                  ? 'bg-[#191919] text-white shadow-sm'
+                  : 'text-[#B0B8C1] hover:text-[#6B7684]'
               }`}
             >
               {tab.label}
@@ -214,7 +206,7 @@ export default function StatsPage() {
           ))}
         </div>
 
-        {/* 날짜 선택 (일간만) */}
+        {/* 날짜 선택 (일간) */}
         {period === 'daily' && (
           <div className="flex items-center gap-3">
             <input
@@ -222,72 +214,81 @@ export default function StatsPage() {
               value={date}
               max={today}
               onChange={e => setDate(e.target.value)}
-              className="px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2.5 bg-white rounded-xl text-sm text-[#191919] shadow-card focus:outline-none focus:ring-2 focus:ring-toss-blue transition-all"
             />
             {date !== today && (
-              <button onClick={() => setDate(today)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">오늘로</button>
+              <button
+                onClick={() => setDate(today)}
+                className="text-sm font-bold text-toss-blue hover:text-toss-blue-hover transition-colors"
+              >오늘로</button>
             )}
-            <span className="text-sm text-slate-500">
-              {new Date(date).toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })}
+            <span className="text-sm text-[#6B7684] font-medium">
+              {new Date(date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
             </span>
             <button
               onClick={() => window.open(`/api/admin/stats/export?date=${date}`, '_blank')}
-              className="ml-auto px-3 py-1.5 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 flex items-center gap-1"
+              className="ml-auto flex items-center gap-1.5 px-3.5 py-2 bg-white rounded-xl text-sm font-semibold text-[#6B7684] shadow-card hover:bg-[#F8F9FB] transition-colors"
             >
-              <span>↓</span> CSV
+              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
+                <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
+              </svg>
+              CSV
             </button>
           </div>
         )}
 
         {loading ? (
-          <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center text-slate-400 text-sm">불러오는 중...</div>
+          <div className="bg-white rounded-2xl shadow-card py-20 flex items-center justify-center">
+            <div className="w-6 h-6 border-2 border-toss-blue border-t-transparent rounded-full animate-spin" />
+          </div>
         ) : period !== 'daily' ? (
           /* 주간 / 월간 차트 */
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <div className="flex justify-between items-center mb-1">
-              <h2 className="text-sm font-semibold text-slate-900">
+          <div className="bg-white rounded-2xl shadow-card p-5">
+            <div className="flex justify-between items-center">
+              <h2 className="font-bold text-[#191919]">
                 {period === 'weekly' ? '최근 7일 완료 현황' : '최근 30일 완료 현황'}
               </h2>
-              <span className="text-xs text-slate-400">
+              <span className="text-sm font-bold text-toss-blue">
                 총 {chartData.reduce((s, d) => s + d.value, 0)}건
               </span>
             </div>
             {chartData.length > 0 ? (
-              <BarChart data={chartData.map(d => ({ ...d, max: Math.max(...chartData.map(x => x.value), 1) }))} />
+              <BarChart data={chartData} />
             ) : (
-              <p className="text-center text-slate-400 text-sm py-10">데이터가 없습니다</p>
+              <p className="text-center text-[#B0B8C1] text-sm py-10">데이터가 없습니다</p>
             )}
           </div>
         ) : (
           <>
-            {/* 요약 */}
+            {/* 요약 카드 3개 */}
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
-                <p className="text-3xl font-bold text-slate-900">{totalCompleted}</p>
-                <p className="text-xs text-slate-400 mt-1">완료</p>
+              <div className="bg-white rounded-2xl shadow-card p-4 text-center">
+                <p className="text-3xl font-bold text-[#191919] leading-none">{totalCompleted}</p>
+                <p className="text-xs text-[#B0B8C1] font-medium mt-1.5">완료</p>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
-                <p className="text-3xl font-bold text-slate-900">{totalRooms}</p>
-                <p className="text-xs text-slate-400 mt-1">전체 객실</p>
+              <div className="bg-white rounded-2xl shadow-card p-4 text-center">
+                <p className="text-3xl font-bold text-[#191919] leading-none">{totalRooms}</p>
+                <p className="text-xs text-[#B0B8C1] font-medium mt-1.5">전체 객실</p>
               </div>
-              <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
-                <p className={`text-3xl font-bold ${completionRate === 100 ? 'text-emerald-600' : 'text-slate-900'}`}>
+              <div className="bg-white rounded-2xl shadow-card p-4 text-center">
+                <p className={`text-3xl font-bold leading-none ${completionRate === 100 ? 'text-toss-success' : 'text-[#191919]'}`}>
                   {completionRate}<span className="text-lg">%</span>
                 </p>
-                <p className="text-xs text-slate-400 mt-1">완료율</p>
+                <p className="text-xs text-[#B0B8C1] font-medium mt-1.5">완료율</p>
               </div>
             </div>
 
-            {/* 완료율 바 */}
+            {/* 진행률 바 */}
             {totalRooms > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 p-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">금일 진행률</span>
-                  <span className="text-xs text-slate-500">{totalCompleted} / {totalRooms}</span>
+              <div className="bg-white rounded-2xl shadow-card p-5">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-sm font-bold text-[#191919]">금일 진행률</span>
+                  <span className="text-sm font-bold text-[#6B7684]">{totalCompleted} / {totalRooms}</span>
                 </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-2 bg-[#F2F4F6] rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full transition-all duration-700 ${completionRate === 100 ? 'bg-emerald-500' : 'bg-blue-500'}`}
+                    className={`h-full rounded-full transition-all duration-700 ${completionRate === 100 ? 'bg-toss-success' : 'bg-toss-blue'}`}
                     style={{ width: `${completionRate}%` }}
                   />
                 </div>
@@ -296,57 +297,80 @@ export default function StatsPage() {
 
             {/* 직원별 통계 */}
             {staffStats.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100">
-                  <h2 className="text-sm font-semibold text-slate-900">직원별 처리 현황</h2>
+              <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+                <div className="px-5 py-4" style={{ borderBottom: '1px solid #F2F4F6' }}>
+                  <h2 className="font-bold text-[#191919]">직원별 처리 현황</h2>
                 </div>
-                <div className="divide-y divide-slate-100">
-                  {staffStats.map(s => (
-                    <div key={s.staffId} className="px-4 py-3">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-sm font-medium text-slate-900">{s.name}</span>
-                        <div className="flex items-center gap-3 text-xs text-slate-500">
-                          {s.avgMinutes != null && <span>평균 {s.avgMinutes}분</span>}
-                          <span className="font-semibold text-slate-700">{s.completed}개</span>
+                <div>
+                  {staffStats.map((s, idx) => {
+                    const isLast = idx === staffStats.length - 1
+                    return (
+                      <div
+                        key={s.staffId}
+                        className="px-5 py-4"
+                        style={!isLast ? { borderBottom: '1px solid #F2F4F6' } : undefined}
+                      >
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-[#EBF3FF] rounded-xl flex items-center justify-center shrink-0">
+                              <span className="text-xs font-bold text-toss-blue">{s.name.charAt(0)}</span>
+                            </div>
+                            <span className="font-bold text-[#191919] text-sm">{s.name}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {s.avgMinutes != null && (
+                              <span className="text-xs text-[#B0B8C1] font-medium">평균 {s.avgMinutes}분</span>
+                            )}
+                            <span className="text-sm font-bold text-[#191919]">{s.completed}개</span>
+                          </div>
+                        </div>
+                        <div className="h-1.5 bg-[#F2F4F6] rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-toss-blue rounded-full transition-all duration-500"
+                            style={{ width: `${Math.round((s.completed / maxCompleted) * 100)}%` }}
+                          />
                         </div>
                       </div>
-                      <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                          style={{ width: `${Math.round((s.completed / maxCompleted) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
 
             {/* 미완료 객실 */}
             {incomplete.length > 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold text-slate-900">미완료 객실</h2>
-                  <span className="text-xs text-slate-400">{incomplete.length}개</span>
+              <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+                <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F2F4F6' }}>
+                  <h2 className="font-bold text-[#191919]">미완료 객실</h2>
+                  <span className="text-sm font-bold text-toss-error">{incomplete.length}개</span>
                 </div>
-                <div className="divide-y divide-slate-100">
-                  {incomplete.map((r, i) => (
-                    <div key={i} className="px-4 py-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOTS[r.status] ?? 'bg-slate-300'}`} />
-                        <span className="font-medium text-slate-900 text-sm">{r.number}호</span>
-                        <span className="text-xs text-slate-400">{r.floor}층</span>
+                <div>
+                  {incomplete.map((r, i) => {
+                    const isLast = i === incomplete.length - 1
+                    return (
+                      <div
+                        key={i}
+                        className="px-5 py-3.5 flex items-center justify-between"
+                        style={!isLast ? { borderBottom: '1px solid #F2F4F6' } : undefined}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className={`w-2 h-2 rounded-full ${STATUS_DOT[r.status] ?? 'bg-slate-300'}`} />
+                          <span className="font-bold text-[#191919] text-sm">{r.number}호</span>
+                          <span className="text-xs text-[#B0B8C1]">{r.floor}층</span>
+                        </div>
+                        <span className="text-xs font-semibold text-[#6B7684]">
+                          {STATUS_LABELS[r.status] ?? r.status}
+                        </span>
                       </div>
-                      <span className="text-xs text-slate-500">{STATUS_LABELS[r.status] ?? r.status}</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               </div>
             )}
 
             {staffStats.length === 0 && incomplete.length === 0 && (
-              <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center text-slate-400 text-sm">
-                해당 날짜의 처리 데이터가 없습니다
+              <div className="bg-white rounded-2xl shadow-card py-20 text-center">
+                <p className="text-[#B0B8C1] text-sm font-medium">해당 날짜의 처리 데이터가 없습니다</p>
               </div>
             )}
           </>

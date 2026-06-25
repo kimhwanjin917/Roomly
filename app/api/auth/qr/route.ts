@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=qr_expired', request.url))
     }
 
-    const response = NextResponse.redirect(new URL(`/worker/${staffId}`, request.url))
+    const workerRole = payload.app_metadata?.worker_role
+    const dest = workerRole === 'dirty' ? `/worker/dirty/${staffId}` : `/worker/${staffId}`
+    const response = NextResponse.redirect(new URL(dest, request.url))
     response.cookies.set('roomly_worker_session', token, {
       httpOnly: true,
       path: '/',

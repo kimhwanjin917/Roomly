@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
-  const { name, phone_number } = await request.json()
+  const { name, phone_number, role } = await request.json()
   if (!name?.trim()) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
 
   const authId = randomUUID()
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
 
   const { data: staff, error } = await service
     .from('staff')
-    .insert({ hotel_id: hotelId, name: name.trim(), phone_number: phone_number ?? null, auth_id: authId, qr_version: 1 })
+    .insert({ hotel_id: hotelId, name: name.trim(), phone_number: phone_number ?? null, auth_id: authId, qr_version: 1, role: role === 'dirty' ? 'dirty' : 'housekeeping' })
     .select('id')
     .single()
 
@@ -32,12 +32,13 @@ export async function POST(request: NextRequest) {
       app_metadata: {
         hotel_id: hotelId,
         role: 'worker',
+        worker_role: role === 'dirty' ? 'dirty' : 'housekeeping',
         staff_id: staff.id,
         qr_version: 1,
       },
     },
     process.env.JWT_SECRET!,
-    { algorithm: 'HS256' }
+    { algorithm: 'HS256', expiresIn: '30d' }
   )
 
   const qrUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/qr?token=${token}`

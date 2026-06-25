@@ -59,8 +59,23 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
-  // /worker/[staffId] — roomly_worker_session 쿠키 검증
-  if (pathname.match(/^\/worker\/(?!guest)[^/]+/)) {
+  // /worker/dirty/[staffId] — dirty 역할 전용
+  if (pathname.match(/^\/worker\/dirty\/[^/]+/)) {
+    const workerSession = request.cookies.get('roomly_worker_session')
+    if (!workerSession) return NextResponse.redirect(new URL('/login', request.url))
+    try {
+      const { payload } = await jwtVerify(workerSession.value, getJwtSecret())
+      const staffIdInUrl = pathname.split('/')[3]
+      const staffIdInToken = (payload.app_metadata as any)?.staff_id
+      if (staffIdInToken !== staffIdInUrl) return NextResponse.redirect(new URL('/login', request.url))
+    } catch {
+      return NextResponse.redirect(new URL('/login?error=session_expired', request.url))
+    }
+    return NextResponse.next()
+  }
+
+  // /worker/[staffId] — housekeeping 세션 검증
+  if (pathname.match(/^\/worker\/(?!guest|dirty)[^/]+/)) {
     const workerSession = request.cookies.get('roomly_worker_session')
     if (!workerSession) {
       return NextResponse.redirect(new URL('/login', request.url))
@@ -73,7 +88,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
       }
     } catch {
-      return NextResponse.redirect(new URL('/login', request.url))
+      return NextResponse.redirect(new URL('/login?error=session_expired', request.url))
     }
     return NextResponse.next()
   }
@@ -93,7 +108,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // /api/worker/* — roomly_worker_session 필요
-  if (pathname.startsWith('/api/worker')) {
+  if (pathname.startsWith('/api/worker/dirty') || pathname.startsWith('/api/worker')) {
     const workerSession = request.cookies.get('roomly_worker_session')
     if (!workerSession) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -119,6 +134,7 @@ export const config = {
     '/worker/:path*',
     '/api/admin/:path*',
     '/api/worker/:path*',
+    '/api/worker/dirty/:path*',
     '/api/guest/:path*',
     '/api/auth/:path*',
   ],

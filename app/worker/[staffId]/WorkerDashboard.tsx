@@ -176,61 +176,65 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
 
   const doneCount = assignments.filter(a => a.rooms.status === 'done' || a.rooms.status === 'inspect').length
   const totalCount = assignments.length
+  const allDone = totalCount > 0 && doneCount === totalCount
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-10">
+    <div className="min-h-screen bg-toss-bg pb-10">
+
       {/* 헤더 */}
-      <div className="bg-white border-b border-slate-200 px-4 pt-10 pb-5">
-        <div className="flex items-start justify-between">
-          <div className="flex items-start gap-2">
-            <div>
-              <p className="text-xs text-slate-400 mb-1">{now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</p>
-              <p className="text-xl font-bold text-slate-900">안녕하세요, {staffName}님</p>
-            </div>
+      <div className="bg-white px-5 pt-12 pb-6">
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <p className="text-xs text-[#B0B8C1] font-medium mb-1.5">
+              {now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
+            </p>
+            <h1 className="text-[22px] font-bold text-[#191919] leading-tight">
+              안녕하세요,<br />{staffName}님 👋
+            </h1>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {/* 알림 버튼 */}
             {pushState !== 'unsupported' && (
-              <div className="relative mt-1">
-                <button
-                  onClick={pushState === 'idle' ? subscribePush : pushState === 'subscribed' ? unsubscribePush : undefined}
-                  disabled={pushState === 'denied'}
-                  title={pushState === 'denied' ? '브라우저 알림이 차단됨' : undefined}
-                  className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
-                    pushState === 'idle' ? 'text-slate-400 hover:bg-slate-100' :
-                    pushState === 'subscribed' ? 'text-slate-700 hover:bg-slate-100' :
-                    'text-red-400 cursor-default'
-                  }`}
-                >
-                  {pushState === 'subscribed' ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-                      <path d="M5.85 3.5a.75.75 0 0 0-1.117-1 9.719 9.719 0 0 0-2.348 4.876.75.75 0 0 0 1.479.248A8.219 8.219 0 0 1 5.85 3.5ZM19.267 2.5a.75.75 0 1 0-1.118 1 8.22 8.22 0 0 1 1.987 4.124.75.75 0 0 0 1.48-.248A9.72 9.72 0 0 0 19.266 2.5Z" />
-                      <path fillRule="evenodd" d="M12 2.25A6.75 6.75 0 0 0 5.25 9v.75a8.217 8.217 0 0 1-2.119 5.52.75.75 0 0 0 .298 1.206c1.544.57 3.16.99 4.831 1.243a3.75 3.75 0 1 0 7.48 0 24.583 24.583 0 0 0 4.83-1.244.75.75 0 0 0 .298-1.205 8.217 8.217 0 0 1-2.118-5.52V9A6.75 6.75 0 0 0 12 2.25ZM9.75 18c0-.034 0-.067.002-.1a25.05 25.05 0 0 0 4.496 0l.002.1a2.25 2.25 0 1 1-4.5 0Z" clipRule="evenodd" />
-                    </svg>
-                  ) : pushState === 'denied' ? (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0M6 6l12 12" />
-                    </svg>
-                  ) : (
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                    </svg>
-                  )}
-                </button>
-                {pushState === 'subscribed' && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-500 rounded-full" />
+              <button
+                onClick={pushState === 'idle' ? subscribePush : pushState === 'subscribed' ? unsubscribePush : undefined}
+                disabled={pushState === 'denied'}
+                title={pushState === 'denied' ? '브라우저 알림이 차단됨' : undefined}
+                className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors relative ${
+                  pushState === 'idle' ? 'bg-[#F2F4F6] text-[#B0B8C1]' :
+                  pushState === 'subscribed' ? 'bg-[#EBF3FF] text-toss-blue' :
+                  'bg-[#FFF0F0] text-toss-error cursor-default'
+                }`}
+              >
+                {pushState === 'subscribed' ? (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path fillRule="evenodd" d="M12 2.25A6.75 6.75 0 0 0 5.25 9v.75a8.217 8.217 0 0 1-2.119 5.52.75.75 0 0 0 .298 1.206c1.544.57 3.16.99 4.831 1.243a3.75 3.75 0 1 0 7.48 0 24.583 24.583 0 0 0 4.83-1.244.75.75 0 0 0 .298-1.205 8.217 8.217 0 0 1-2.118-5.52V9A6.75 6.75 0 0 0 12 2.25Z" clipRule="evenodd" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                  </svg>
                 )}
+              </button>
+            )}
+
+            {/* 완료 카운터 */}
+            {totalCount > 0 && (
+              <div className={`px-4 py-2 rounded-2xl text-center ${allDone ? 'bg-[#E6FBF1]' : 'bg-[#F2F4F6]'}`}>
+                <p className={`text-lg font-bold leading-none ${allDone ? 'text-toss-success' : 'text-[#191919]'}`}>
+                  {doneCount}<span className="text-sm font-normal text-[#B0B8C1]">/{totalCount}</span>
+                </p>
+                <p className="text-[10px] font-medium text-[#B0B8C1] mt-0.5">완료</p>
               </div>
             )}
           </div>
-          {totalCount > 0 && (
-            <div className="text-right">
-              <p className="text-2xl font-bold text-slate-900">{doneCount}<span className="text-base text-slate-400 font-normal">/{totalCount}</span></p>
-              <p className="text-xs text-slate-400">완료</p>
-            </div>
-          )}
         </div>
+
+        {/* 진행률 바 */}
         {totalCount > 0 && (
-          <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-1.5 bg-[#F2F4F6] rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all duration-700 ${doneCount === totalCount ? 'bg-emerald-500' : 'bg-blue-500'}`}
+              className={`h-full rounded-full transition-all duration-700 ${allDone ? 'bg-toss-success' : 'bg-toss-blue'}`}
               style={{ width: `${Math.round((doneCount / totalCount) * 100)}%` }}
             />
           </div>
@@ -239,15 +243,31 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
 
       {/* 오프라인 배너 */}
       {!isOnline && (
-        <div className="bg-amber-500 text-white text-sm font-medium text-center py-2 px-4">
-          오프라인 상태입니다. 마지막 데이터를 표시 중입니다.
+        <div className="bg-toss-warn/10 px-5 py-3 flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-toss-warn" />
+          <p className="text-sm font-semibold text-[#B07800]">오프라인 상태입니다. 마지막 데이터를 표시 중입니다.</p>
+        </div>
+      )}
+
+      {/* 모두 완료 상태 */}
+      {allDone && (
+        <div className="mx-4 mt-4 bg-white rounded-2xl shadow-card p-6 text-center">
+          <div className="w-12 h-12 bg-[#E6FBF1] rounded-2xl flex items-center justify-center mx-auto mb-3">
+            <svg viewBox="0 0 24 24" fill="#05C072" className="w-6 h-6">
+              <path fillRule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clipRule="evenodd" />
+            </svg>
+          </div>
+          <p className="text-base font-bold text-[#191919]">모든 객실 완료!</p>
+          <p className="text-sm text-[#B0B8C1] mt-1">오늘 수고하셨습니다 🎉</p>
         </div>
       )}
 
       {/* 배정 목록 */}
-      <div className="px-4 pt-4 space-y-2.5">
-        {sorted.length === 0 && (
-          <div className="text-center py-24 text-slate-400 text-sm">배정된 객실이 없습니다</div>
+      <div className="px-4 pt-4 space-y-3">
+        {sorted.length === 0 && !allDone && (
+          <div className="text-center py-24">
+            <p className="text-[#B0B8C1] text-sm font-medium">배정된 객실이 없습니다</p>
+          </div>
         )}
 
         {sorted.map(assignment => {
@@ -261,54 +281,60 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
           return (
             <div
               key={assignment.id}
-              className={`bg-white rounded-2xl border transition-all ${
-                urgent
-                  ? 'border-red-300 ring-1 ring-red-200'
-                  : finished
-                  ? 'border-slate-100 opacity-60'
-                  : 'border-slate-200'
-              }`}
+              className={`bg-white rounded-2xl shadow-card overflow-hidden transition-all ${
+                urgent ? 'ring-1.5 ring-toss-error' : ''
+              } ${finished ? 'opacity-50' : ''}`}
             >
-              {/* 카드 상단: 방 정보 */}
-              <div className="px-4 pt-4 pb-3">
+              <div className="px-5 pt-5 pb-4">
                 <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <span className="text-2xl font-bold text-slate-900">{room.number}호</span>
-                    <div className="flex flex-col">
-                      {urgent && (
-                        <span className="text-xs font-semibold text-red-500 leading-tight">긴급</span>
-                      )}
-                      {isDone && (
-                        <span className="text-xs font-semibold text-emerald-600 leading-tight">완료</span>
-                      )}
-                      {isInspect && (
-                        <span className="text-xs font-semibold text-violet-600 leading-tight">점검대기</span>
-                      )}
-                      {!finished && !urgent && (
-                        <span className="text-xs text-slate-400 leading-tight">{room.status === 'cleaning' ? '청소중' : '대기'}</span>
-                      )}
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-sm ${
+                      urgent ? 'bg-[#FFF0F0] text-toss-error' :
+                      isDone ? 'bg-[#E6FBF1] text-toss-success' :
+                      isInspect ? 'bg-violet-50 text-violet-600' :
+                      room.status === 'cleaning' ? 'bg-amber-50 text-amber-600' :
+                      'bg-[#F2F4F6] text-[#6B7684]'
+                    }`}>
+                      {room.number}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-bold text-[#191919] leading-none">{room.number}호</span>
+                        {urgent && (
+                          <span className="px-2 py-0.5 bg-[#FFF0F0] text-toss-error text-[10px] font-bold rounded-full">긴급</span>
+                        )}
+                        {isDone && (
+                          <span className="px-2 py-0.5 bg-[#E6FBF1] text-toss-success text-[10px] font-bold rounded-full">완료</span>
+                        )}
+                        {isInspect && (
+                          <span className="px-2 py-0.5 bg-violet-50 text-violet-600 text-[10px] font-bold rounded-full">점검대기</span>
+                        )}
+                        {!finished && !urgent && room.status === 'cleaning' && (
+                          <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded-full">청소중</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-[#B0B8C1] mt-0.5">{room.floor}층 · {TYPE_LABELS[room.type] ?? room.type}</p>
                     </div>
                   </div>
                   {room.checkin_time && (
                     <div className="text-right">
-                      <p className="text-xs text-slate-400">체크인</p>
-                      <p className={`text-sm font-bold leading-tight ${urgent ? 'text-red-500' : 'text-slate-700'}`}>
+                      <p className="text-[10px] text-[#B0B8C1] font-medium">체크인</p>
+                      <p className={`text-base font-bold leading-tight mt-0.5 ${urgent ? 'text-toss-error' : 'text-[#191919]'}`}>
                         {fmtTime(room.checkin_time)}
                       </p>
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-1">{room.floor}층 · {TYPE_LABELS[room.type] ?? room.type}</p>
               </div>
 
               {/* 액션 버튼 */}
               {!finished && (
-                <div className="px-3 pb-3 space-y-2">
+                <div className="px-4 pb-4 space-y-2">
                   {room.status === 'dirty' && (
                     <button
                       onClick={() => changeStatus(assignment, 'cleaning')}
                       disabled={isLoading}
-                      className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
+                      className="w-full py-3.5 bg-toss-blue hover:bg-toss-blue-hover active:bg-toss-blue-hover text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
                     >
                       {isLoading ? '처리 중...' : '청소 시작'}
                     </button>
@@ -319,18 +345,18 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                         <button
                           onClick={() => { setMemoRoom(assignment); setMemo('') }}
                           disabled={isLoading}
-                          className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
+                          className="flex-1 py-3.5 bg-toss-success hover:bg-[#04AD65] text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
                         >완료</button>
                         <button
                           onClick={() => changeStatus(assignment, 'inspect')}
                           disabled={isLoading}
-                          className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
+                          className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
                         >점검 필요</button>
                       </div>
                       <button
                         onClick={() => changeStatus(assignment, 'dirty')}
                         disabled={isLoading}
-                        className="w-full py-2.5 border border-slate-200 text-slate-500 rounded-xl text-xs hover:bg-slate-50 disabled:opacity-40 transition-colors"
+                        className="w-full py-3 bg-[#F2F4F6] hover:bg-[#E8EAED] text-[#6B7684] rounded-xl text-xs font-semibold disabled:opacity-40 transition-colors"
                       >대기중으로 되돌리기</button>
                     </>
                   )}
@@ -341,27 +367,45 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         })}
       </div>
 
-      {/* 완료 메모 모달 */}
+      {/* 완료 메모 바텀시트 */}
       {memoRoom && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-20" onClick={() => setMemoRoom(null)}>
-          <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-10" onClick={e => e.stopPropagation()}>
-            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-            <h2 className="font-bold text-slate-900 text-base mb-0.5">{memoRoom.rooms.number}호 완료 처리</h2>
-            <p className="text-xs text-slate-400 mb-4">특이사항이 있으면 메모를 남겨주세요 (선택)</p>
-            <textarea
-              value={memo}
-              onChange={e => setMemo(e.target.value)}
-              placeholder="예: 욕실 수건 추가 요청, 미니바 비어있음..."
-              rows={3}
-              autoFocus
-              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setMemoRoom(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">취소</button>
-              <button
-                onClick={async () => { if (!memoRoom) return; await changeStatus(memoRoom, 'done', memo); setMemoRoom(null) }}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors"
-              >완료 확인</button>
+        <div
+          className="fixed inset-0 bg-black/40 flex items-end justify-center z-20"
+          onClick={() => setMemoRoom(null)}
+        >
+          <div
+            className="bg-white rounded-t-3xl w-full max-w-lg"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-[#E8EAED] rounded-full" />
+            </div>
+            <div className="px-6 pt-4 pb-6">
+              <h2 className="font-bold text-[#191919] text-lg mb-1">{memoRoom.rooms.number}호 완료 처리</h2>
+              <p className="text-sm text-[#B0B8C1] mb-5">특이사항이 있으면 메모를 남겨주세요</p>
+              <textarea
+                value={memo}
+                onChange={e => setMemo(e.target.value)}
+                placeholder="예: 욕실 수건 추가 요청, 미니바 비어있음..."
+                rows={3}
+                autoFocus
+                className="w-full px-4 py-3.5 bg-[#F2F4F6] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white mb-4 transition-all placeholder:text-[#B0B8C1]"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setMemoRoom(null)}
+                  className="flex-1 py-3.5 bg-[#F2F4F6] hover:bg-[#E8EAED] rounded-xl text-sm font-bold text-[#191919] transition-colors"
+                >취소</button>
+                <button
+                  onClick={async () => {
+                    if (!memoRoom) return
+                    await changeStatus(memoRoom, 'done', memo)
+                    setMemoRoom(null)
+                  }}
+                  className="flex-1 py-3.5 bg-toss-success hover:bg-[#04AD65] text-white rounded-xl text-sm font-bold transition-colors"
+                >완료 확인</button>
+              </div>
             </div>
           </div>
         </div>
@@ -369,8 +413,8 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
 
       {/* 토스트 */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 ${
-          toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-5 py-3.5 rounded-2xl text-sm font-bold text-white shadow-modal z-50 whitespace-nowrap ${
+          toast.type === 'error' ? 'bg-toss-error' : 'bg-toss-success'
         }`}>
           {toast.msg}
         </div>

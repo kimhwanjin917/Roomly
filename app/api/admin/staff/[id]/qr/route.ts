@@ -6,14 +6,17 @@ async function getStaff(staffId: string, hotelId: string) {
   const service = createServiceClient()
   const { data } = await service
     .from('staff')
-    .select('id, auth_id, qr_version')
+    .select('id, auth_id, qr_version, role')
     .eq('id', staffId)
     .eq('hotel_id', hotelId)
     .single()
   return data
 }
 
-function makeToken(staff: { auth_id: string; qr_version: number; id: string }, hotelId: string) {
+function makeToken(
+  staff: { auth_id: string; qr_version: number; id: string; role: string },
+  hotelId: string
+) {
   return jwt.sign(
     {
       sub: staff.auth_id,
@@ -23,12 +26,13 @@ function makeToken(staff: { auth_id: string; qr_version: number; id: string }, h
       app_metadata: {
         hotel_id: hotelId,
         role: 'worker',
+        worker_role: staff.role ?? 'housekeeping',
         staff_id: staff.id,
         qr_version: staff.qr_version,
       },
     },
     process.env.JWT_SECRET!,
-    { algorithm: 'HS256' }
+    { algorithm: 'HS256', expiresIn: '30d' }
   )
 }
 

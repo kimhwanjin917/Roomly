@@ -119,7 +119,7 @@ EMAIL_FROM=Roomly <noreply@roomly.app>
 # 브라우저 푸시 알림 (VAPID 키 쌍 — npx web-push generate-vapid-keys 로 생성)
 NEXT_PUBLIC_VAPID_PUBLIC_KEY=Bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 VAPID_PRIVATE_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-VAPID_SUBJECT=mailto:admin@roomly.app
+VAPID_EMAIL=admin@roomly.app
 
 # 슈퍼어드민 (SHA-256 해시 — node -e "const c=require('crypto'); console.log(c.createHash('sha256').update('YOUR_PASSWORD').digest('hex'))")
 SUPER_ADMIN_PASSWORD_HASH=<해시값>

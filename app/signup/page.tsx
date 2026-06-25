@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 
 export default function SignupPage() {
   const router = useRouter()
-  const [licenseKey, setLicenseKey] = useState('')
   const [hotelName, setHotelName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -22,7 +21,7 @@ export default function SignupPage() {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ licenseKey: licenseKey.trim(), hotelName, email, password }),
+        body: JSON.stringify({ hotelName, email, password }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? '가입에 실패했습니다.'); return }
@@ -45,20 +44,14 @@ export default function SignupPage() {
           <p className="text-sm text-slate-500 mt-1">호텔 하우스키핑 관리 시스템</p>
         </div>
 
+        <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 text-center">
+          <p className="text-sm font-semibold text-blue-700">14일 무료체험 — 신용카드 불필요</p>
+          <p className="text-xs text-blue-500 mt-0.5">체험 후 유료 전환 시 최대 객실 10개 → 50개+</p>
+        </div>
+
         <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
           <h2 className="text-base font-semibold text-slate-900">호텔 등록</h2>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1.5">라이선스 키</label>
-            <input
-              type="text"
-              value={licenseKey}
-              onChange={e => setLicenseKey(e.target.value)}
-              required
-              placeholder="발급받은 라이선스 키 입력"
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
-            />
-          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1.5">호텔명</label>
             <input
@@ -112,14 +105,17 @@ export default function SignupPage() {
             disabled={loading}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
-            {loading ? '등록 중...' : '호텔 등록하기'}
+            {loading ? '등록 중...' : '무료로 시작하기'}
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <a href="/login" className="text-sm text-slate-500 hover:text-slate-700 transition-colors">
+        <div className="mt-6 text-center space-y-2">
+          <a href="/login" className="block text-sm text-slate-500 hover:text-slate-700 transition-colors">
             이미 계정이 있으신가요? 로그인
           </a>
+          <p className="text-xs text-slate-400">
+            가입 시 <a href="/terms" className="underline">이용약관</a> 및 <a href="/privacy" className="underline">개인정보처리방침</a>에 동의합니다.
+          </p>
         </div>
       </div>
     </div>

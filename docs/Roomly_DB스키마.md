@@ -46,7 +46,10 @@ CREATE TABLE staff (
   id           UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
   hotel_id     UUID    NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
   name         TEXT    NOT NULL,
-  -- role 컬럼 없음: staff 테이블은 worker 전용.
+  role         TEXT    NOT NULL DEFAULT 'housekeeping'
+                       CHECK (role IN ('housekeeping', 'dirty')),
+  -- 'housekeeping': 일반 하우스키핑 직원 → /worker/[staffId] 화면
+  -- 'dirty': Dirty Worker (체크아웃 후 더티 처리 전담) → /worker/dirty/[staffId] 화면
   -- 관리자는 Supabase Auth app_metadata.role = 'admin' 으로만 관리하며 staff row를 갖지 않음.
   auth_id      UUID    NOT NULL UNIQUE,  -- 직원 등록 시 서버가 생성한 UUID. QR JWT의 sub 클레임 = auth.uid()
   phone_number TEXT,                     -- 추후 외부 알림 연동 시 사용, NULL 허용
@@ -155,7 +158,7 @@ CREATE INDEX idx_push_staff_id         ON push_subscriptions (staff_id) WHERE st
 | hotels | subscription_plan | `starter` \| `standard` \| `pro` |
 | rooms | type | `single` \| `double` \| `suite` \| `other` |
 | rooms | status | `dirty` \| `cleaning` \| `done` \| `inspect` |
-| staff | role | 컬럼 없음 — worker 전용 테이블. 관리자는 app_metadata로만 구분 |
+| staff | role | `housekeeping` \| `dirty` |
 | room_logs | status | `dirty` \| `cleaning` \| `done` \| `inspect` |
 | room_logs | alert_type | `urgent_2h` \| `overdue` \| NULL |
 

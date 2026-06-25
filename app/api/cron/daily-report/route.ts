@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     const staffMap = new Map<string, { name: string; count: number; totalMinutes: number }>()
     for (const a of assignments ?? []) {
       const staffId = a.staff_id ?? 'guest'
-      const staffName = (a.staff as { name: string } | null)?.name ?? '게스트'
+      const staffName = (a.staff as unknown as { name: string } | null)?.name ?? '게스트'
       if (!staffMap.has(staffId)) {
         staffMap.set(staffId, { name: staffName, count: 0, totalMinutes: 0 })
       }

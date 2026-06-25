@@ -19,23 +19,25 @@
 ## middleware.ts 보호 규칙
 
 ```
-/admin/*        → Supabase Auth 세션 없으면 /login 리다이렉트
-/worker/[id]    → roomly_worker_session 없거나 JWT의 staff_id ≠ URL [id] → /login 리다이렉트
-/worker/guest   → roomly_guest_session 없거나 만료 → /guest 리다이렉트
-/api/admin/*    → Supabase Auth 세션 없으면 401
-/api/worker/*   → roomly_worker_session 없으면 401
-/api/guest/*    → roomly_guest_session 없으면 401
+/admin/*              → Supabase Auth 세션 없으면 /login 리다이렉트
+/worker/[id]          → roomly_worker_session 없거나 JWT의 staff_id ≠ URL [id] → /login 리다이렉트
+/worker/dirty/[id]    → roomly_worker_session 없거나 worker_role ≠ 'dirty' → /login 리다이렉트
+/worker/guest         → roomly_guest_session 없거나 만료 → /guest 리다이렉트
+/api/admin/*          → Supabase Auth 세션 없으면 401
+/api/worker/*         → roomly_worker_session 없으면 401
+/api/guest/*          → roomly_guest_session 없으면 401
 ```
 
 ---
 
-## 인증 — `/api/auth`
+## 인증 — `/api/auth` / `/auth`
 
 | 메서드 | 경로 | 설명 | 인증 | 키 |
 |--------|------|------|------|----|
-| POST | `/api/auth/qr` | QR URL의 JWT 토큰 검증 → 세션 쿠키 발급 | 없음 | service_role |
+| GET | `/api/auth/qr` | QR URL의 JWT 토큰 검증 → 세션 쿠키 발급 | 없음 | service_role |
 | POST | `/api/auth/guest` | 6자리 코드 검증 → 게스트 JWT 발급 + 세션 쿠키 | 없음 | service_role |
 | POST | `/api/auth/logout` | 세션 종료 후 /login 리다이렉트 | 세션 쿠키 | — |
+| GET | `/auth/callback` | Supabase OAuth/이메일 콜백 처리 | Supabase 코드 | — |
 
 ### POST `/api/auth/logout`
 
@@ -55,16 +57,31 @@ Response 302 Location: /login
 > 관리자는 쿠키 삭제만으로는 부족함. `supabase.auth.signOut()`을 반드시 호출해야  
 > Supabase 서버의 refresh_token이 무효화됨.
 
-### POST `/api/auth/qr`
+### GET `/api/auth/qr`
 
 ```
-Request  { token: string }           -- QR URL의 ?token= 값
+Request  ?token=JWT                  -- QR URL의 ?token= 파라미터
 Process  1. JWT 서명 검증 (JWT_SECRET)
          2. staff.qr_version 조회 → JWT의 qr_version 클레임과 비교
-         3. 일치하면 HttpOnly 세션 쿠키 저장 (staffId, hotelId, role)
-Response 200 { staffId, hotelId }
-         401 { error: "invalid_token" | "qr_expired" }
+         3. 불일치 → /login?error=qr_expired 리다이렉트
+         4. 일치하면 HttpOnly 세션 쿠키 저장 (roomly_worker_session)
+         5. worker_role 확인:
+            - 'dirty'        → /worker/dirty/{staffId} 리다이렉트
+            - 'housekeeping' → /worker/{staffId} 리다이렉트
+Response 302 리다이렉트 (성공 또는 실패 모두)
 ```
+
+### GET `/auth/callback`
+
+```
+Process  1. ?code 파라미터로 Supabase 세션 교환 (exchangeCodeForSession)
+         2. ?type=recovery → /reset-password 리다이렉트
+         3. 기타 → /login?verified=1 리다이렉트
+Response 302 리다이렉트
+```
+
+> 비밀번호 재설정 이메일 링크가 이 경로를 경유함.  
+> Supabase Dashboard에서 Site URL과 redirect URL 허용 목록에 `/auth/callback` 등록 필요.
 
 ### POST `/api/auth/guest`
 
@@ -90,29 +107,38 @@ Response 200 { ok: true }
 | 메서드 | 경로 | 설명 | 인증 |
 |--------|------|------|------|
 | POST | `/api/admin/staff` | 직원 추가 (auth_id 생성 + QR JWT URL 반환) | 관리자 세션 |
-| GET | `/api/admin/staff/[id]/qr` | QR 재발급 (qr_version+1 후 새 JWT URL 반환) | 관리자 세션 |
+| GET | `/api/admin/staff/[id]/qr` | 현재 QR URL 조회 (버전 변경 없음) | 관리자 세션 |
+| POST | `/api/admin/staff/[id]/qr` | QR 재발급 (qr_version+1 후 새 JWT URL 반환) | 관리자 세션 |
 | DELETE | `/api/admin/staff/[id]` | 직원 삭제 (미완료 배정 취소 + auth 삭제) | 관리자 세션 |
 
 ### POST `/api/admin/staff`
 
 ```
-Request  { name: string, phone_number?: string }
+Request  { name: string, phone_number?: string, role?: 'housekeeping' | 'dirty' }
+         role 기본값: 'housekeeping'
 Process  1. UUID 생성 → auth_id로 사용
-         2. staff 테이블에 INSERT (service_role)
-         3. 커스텀 JWT 발급
+         2. staff 테이블에 INSERT (role 포함, service_role)
+         3. 커스텀 JWT 발급 (30일 만료)
             - sub: auth_id
-            - app_metadata: { hotel_id, role: "worker", staff_id, qr_version: 1 }
-            - exp 클레임 없음 (무기한) — qr_version 불일치로만 무효화 제어
-              (jsonwebtoken 발급 시 expiresIn 옵션 생략)
-         4. QR URL 생성: NEXT_PUBLIC_APP_URL/worker/[staffId]?token=JWT
+            - app_metadata: { hotel_id, role: "worker", worker_role: role, staff_id, qr_version: 1 }
+         4. QR URL 생성: NEXT_PUBLIC_APP_URL/api/auth/qr?token=JWT
 Response 200 { staffId, qrUrl }
 ```
 
 ### GET `/api/admin/staff/[id]/qr`
 
 ```
+Process  1. staff 테이블에서 현재 qr_version + role 조회
+         2. 현재 버전으로 JWT 재생성 (qr_version 변경 없음)
+         3. QR URL 반환
+Response 200 { qrUrl }
+```
+
+### POST `/api/admin/staff/[id]/qr`
+
+```
 Process  1. staff.qr_version += 1 업데이트
-         2. 새 JWT 발급 (qr_version 갱신 포함)
+         2. 새 JWT 발급 (qr_version + worker_role 포함)
          3. 새 QR URL 반환 (구 QR은 qr_version 불일치로 자동 무효화)
 Response 200 { qrUrl }
 ```
@@ -176,6 +202,44 @@ Process  1. 6자리 랜덤 숫자 코드 생성
          2. guest_codes UPSERT ON CONFLICT (hotel_id, date) DO UPDATE SET code = EXCLUDED.code
             date = 오늘 날짜 (KST), expires_at = 당일 자정 (UTC+9 → UTC 변환: 당일 15:00Z)
 Response 200 { code: "123456", expiresAt: "2026-06-16T15:00:00Z" }
+```
+
+---
+
+## Dirty Worker — `/api/worker/dirty`
+
+> `roomly_worker_session` 쿠키가 필요하며 JWT의 `worker_role`이 `'dirty'`인 경우만 허용.
+
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| GET | `/api/worker/dirty/rooms` | 호텔 전체 활성 객실 목록 조회 | 직원 세션 (dirty role) |
+| POST | `/api/worker/dirty/status` | 객실 상태를 dirty로 변경 | 직원 세션 (dirty role) |
+
+### GET `/api/worker/dirty/rooms`
+
+```
+Process  1. roomly_worker_session 쿠키 JWT 검증
+         2. worker_role ≠ 'dirty' → 403
+         3. hotel_id 추출 → rooms 테이블 전체 조회 (deleted_at IS NULL)
+         4. 층·호수 순 정렬 반환
+Response 200 Room[]  -- { id, number, floor, type, status }
+         401 { error: "unauthorized" }
+         403 { error: "forbidden" }
+```
+
+### POST `/api/worker/dirty/status`
+
+```
+Request  { roomId: string }
+Process  1. roomly_worker_session 쿠키 JWT 검증
+         2. worker_role ≠ 'dirty' → 403
+         3. roomId가 자기 호텔 소속인지 확인
+         4. rooms.status = 'dirty' 업데이트
+         5. room_logs INSERT (changed_by: staffId, status: 'dirty')
+Response 200 { ok: true }
+         400 { error: "invalid_request" }   -- roomId 누락
+         401 { error: "unauthorized" }
+         403 { error: "forbidden" }         -- 다른 호텔 객실 또는 역할 불일치
 ```
 
 ---
@@ -255,6 +319,8 @@ supabase.channel('guest-assignments')
 | 작업 | 방법 |
 |------|------|
 | 관리자 로그인 | `supabase.auth.signInWithPassword()` |
+| 비밀번호 재설정 이메일 요청 | `supabase.auth.resetPasswordForEmail()` |
+| 비밀번호 변경 | `supabase.auth.updateUser({ password })` |
 | 전체 객실 현황 조회 | `supabase.from('rooms').select()` |
 | 객실 추가/수정 | `supabase.from('rooms').insert/update()` |
 | 객실 삭제 | `supabase.from('rooms').update({ deleted_at: new Date().toISOString() })` — 물리 삭제 금지, 소프트 삭제로 처리 |
