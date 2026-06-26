@@ -11,8 +11,21 @@
 | 역할 | 세션 처리 방식 |
 |------|---------------|
 | 관리자 | Supabase Auth (`@supabase/ssr` 패키지). `supabase.auth.getUser()`로 검증. 쿠키명: `sb-<project>-auth-token` |
-| 고정 직원 | 커스텀 HttpOnly 쿠키 (`roomly_worker_session`). 값: 커스텀 JWT. 미들웨어에서 직접 파싱·검증 |
+| 고정 직원 | 커스텀 HttpOnly 쿠키 (`roomly_worker_session`). 값: 커스텀 JWT. 미들웨어에서 직접 파싱·검증. **maxAge: 30일** (QR JWT 만료와 동일) |
 | 게스트 | 커스텀 HttpOnly 쿠키 (`roomly_guest_session`). 값: 커스텀 JWT. 만료 = 당일 자정 |
+
+### roomly_worker_session 쿠키 만료 정책
+
+```
+발급: QR 스캔(/api/auth/qr) 성공 시
+maxAge: 2,592,000초 (30일) — QR JWT 유효기간과 동일하게 설정
+만료 시: 미들웨어가 /login?error=session_expired 리다이렉트
+재발급: QR 재스캔 시 새 쿠키 발급 (기존 쿠키 덮어쓰기)
+```
+
+> **⚠️ 중요**: maxAge를 명시하지 않으면 session cookie가 되어 브라우저 종료 시 만료됨.
+> 모바일 PWA에서 백그라운드 프로세스로 브라우저가 살아있으면 영구 세션처럼 작동하다가
+> 앱 재시작 시 갑자기 로그아웃되는 현상 발생. 반드시 maxAge 명시.
 
 ---
 
@@ -244,6 +257,46 @@ Response 200 { ok: true }
 
 ---
 
+## 결제 — `/api/billing`
+
+> Stripe(글로벌 카드) + 토스페이먼츠(한국 법인카드·계좌이체) 듀얼 게이트웨이.
+> 한국 법인 고객은 토스페이먼츠를 통해 세금계산서 발행 가능 → 전환율 15~25% 향상 예상.
+
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| POST | `/api/billing/create-session` | Stripe 결제 세션 생성 | 관리자 세션 |
+| POST | `/api/billing/webhook` | Stripe 웹훅 처리 | 없음 (Stripe 서명 검증) |
+| POST | `/api/billing/toss/confirm` | 토스페이먼츠 결제 승인 | 관리자 세션 |
+| POST | `/api/billing/toss/webhook` | 토스페이먼츠 웹훅 처리 | 없음 (토스 시크릿 검증) |
+
+### POST `/api/billing/toss/confirm`
+
+```
+Request  { paymentKey: string, orderId: string, amount: number }
+         (토스페이먼츠 결제창이 성공 후 /admin/billing/toss-success 로 리다이렉트 시 쿼리파라미터로 전달)
+
+Process  1. 관리자 세션에서 hotelId 추출
+         2. amount가 플랜 가격과 일치하는지 서버 사이드 검증
+         3. 토스페이먼츠 승인 API 호출
+            POST https://api.tosspayments.com/v1/payments/confirm
+            { paymentKey, orderId, amount }
+         4. 성공 시 hotels.subscription_plan + plan_expires_at 업데이트
+         5. 세금계산서 발행: 사업자번호 있으면 자동 요청
+
+Response 200 { ok: true, plan: string, expiresAt: string }
+         400 { error: "amount_mismatch" }
+         402 { error: "payment_failed", message: 토스 에러 메시지 }
+```
+
+### 환경변수 추가 (토스페이먼츠)
+
+```bash
+TOSS_SECRET_KEY=test_sk_...        # 토스페이먼츠 시크릿 키 (서버 전용)
+NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_...  # 토스페이먼츠 클라이언트 키
+```
+
+---
+
 ## 브라우저 푸시 알림 — `/api/push`
 
 | 메서드 | 경로 | 설명 | 인증 |
@@ -312,6 +365,67 @@ supabase.channel('guest-assignments')
 
 ---
 
+## 직원/게스트 상태 변경 API
+
+> **⚠️ 설계 핵심**: 상태 변경은 반드시 서버 API로만 처리. 클라이언트 직접 Supabase 호출 금지.
+> 이유: (1) 배정 소유권 확인 필요, (2) assignments.completed_at 원자적 업데이트 필요
+
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| POST | `/api/worker/status` | 직원 배정 방 상태 변경 (rooms + assignments 원자적 처리) | 직원 세션 |
+| POST | `/api/guest/status` | 게스트 풀 방 상태 변경 (rooms + assignments 원자적 처리) | 게스트 세션 |
+
+### POST `/api/worker/status`
+
+```
+Request  { roomId: string, status: 'dirty' | 'cleaning' | 'done' | 'inspect', memo?: string }
+
+Validation
+  1. status가 VALID_STATUSES 중 하나인지 확인 → 아니면 400
+  2. roomly_worker_session 쿠키 JWT 검증 → staffId, hotelId 추출
+  3. roomId가 자기 호텔 소속인지 확인 (hotel_id 검증) → 아니면 403
+  4. assignments 테이블에서 "나에게 배정된 활성 배정"인지 확인
+     (staff_id = staffId AND completed_at IS NULL AND cancelled_at IS NULL)
+     → 없으면 403 "배정된 방이 아닙니다"
+
+Process  [status = 'done'인 경우 — atomic 처리 필수]
+           BEGIN (Supabase RPC 또는 service_role으로 직접 처리)
+           1. rooms.status = 'done' 업데이트
+           2. assignments.completed_at = now() 업데이트 (같은 배정 row)
+           3. room_logs INSERT (changed_by: staffId, status: 'done', memo)
+           COMMIT
+
+         [status = 'cleaning' | 'dirty' | 'inspect'인 경우]
+           1. rooms.status 업데이트
+           2. room_logs INSERT
+           (assignments.completed_at 업데이트 불필요)
+
+Response 200 { ok: true }
+         400 { error: "invalid_status" }
+         403 { error: "forbidden" }   -- 배정 소유권 미확인 또는 다른 호텔
+         401 { error: "unauthorized" }
+```
+
+> **⚠️ 설계 원칙**: rooms.status='done' 업데이트와 assignments.completed_at 업데이트는
+> 반드시 같은 DB 작업에서 처리해야 한다. 두 작업이 분리되면:
+> - rooms.status='done'인데 completed_at=NULL인 불일치 상태 발생
+> - 직원별 평균 처리 시간 통계 쿼리 전체가 오염됨
+> Supabase RPC 함수 또는 service_role로 두 UPDATE를 연속 실행.
+
+### POST `/api/guest/status`
+
+```
+Request  { roomId: string, status: 'dirty' | 'cleaning' | 'done' | 'inspect' }
+
+Validation (worker와 동일하나 배정 소유권 조건 다름)
+  4. assignments에서 is_guest=true AND completed_at IS NULL AND cancelled_at IS NULL AND room_id=roomId 확인
+     → 없으면 403
+
+Process  동일 (status='done' 시 completed_at 원자적 업데이트)
+```
+
+---
+
 ## 클라이언트 직접 처리 (API 라우트 없음)
 
 아래 작업은 Supabase anon 키 + RLS로 클라이언트에서 직접 처리:
@@ -319,6 +433,7 @@ supabase.channel('guest-assignments')
 | 작업 | 방법 |
 |------|------|
 | 관리자 로그인 | `supabase.auth.signInWithPassword()` |
+| 로그인 후 last_active_at 업데이트 | `supabase.from('hotels').update({ last_active_at: new Date() }).eq('id', hotelId)` — 로그인 성공 후 서버 컴포넌트에서 처리 |
 | 비밀번호 재설정 이메일 요청 | `supabase.auth.resetPasswordForEmail()` |
 | 비밀번호 변경 | `supabase.auth.updateUser({ password })` |
 | 전체 객실 현황 조회 | `supabase.from('rooms').select()` |
@@ -326,11 +441,11 @@ supabase.channel('guest-assignments')
 | 객실 삭제 | `supabase.from('rooms').update({ deleted_at: new Date().toISOString() })` — 물리 삭제 금지, 소프트 삭제로 처리 |
 | 객실 조회 (전체) | `supabase.from('rooms').select().is('deleted_at', null)` — 반드시 deleted_at IS NULL 조건 포함 |
 | 객실 배정 | `POST /api/admin/assign` (서버 처리 — 재배정 atomic 처리 + 푸시 알림 필요) |
-| 직원 배정 목록 조회 | `supabase.from('assignments').select()` |
-| 객실 상태 변경 (직원/게스트) | `supabase.from('rooms').update({ status })` |
+| 직원 배정 목록 조회 | `supabase.from('assignments').select()` (RLS로 본인 배정만 반환) |
+| 객실 상태 변경 (직원/게스트) | `POST /api/worker/status` 또는 `POST /api/guest/status` — **클라이언트 직접 Supabase 호출 금지** |
 | room_logs INSERT | `supabase.from('room_logs').insert()` |
 | 실시간 현황 구독 | `supabase.channel().on('postgres_changes', ...)` |
-| 일일 통계 조회 | `supabase.from('assignments').select()` (날짜 필터) |
+| 일일 통계 조회 | `supabase.from('assignments').select()` (날짜 필터, completed_at IS NOT NULL 조건 필수) |
 
 ---
 

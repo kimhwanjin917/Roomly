@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
+import OnboardingChecklist from '@/components/OnboardingChecklist'
 
 type Room = {
   id: string
@@ -194,6 +195,12 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
       <AdminNav />
 
       <main className="max-w-7xl mx-auto px-4 py-5 pb-20 md:pb-6">
+
+        <OnboardingChecklist
+          roomCount={rooms.length}
+          staffCount={staffList.length}
+          hasAssignment={assignments.length > 0}
+        />
 
         {/* 상태 카운터 카드 */}
         <div className="grid grid-cols-4 gap-2.5 mb-5">

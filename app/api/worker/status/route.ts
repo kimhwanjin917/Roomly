@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
   const staffId = payload.app_metadata?.staff_id as string
   const hotelId = payload.app_metadata?.hotel_id as string
-  const { roomId, assignmentId, status, memo } = await request.json()
+  const { roomId, status, memo } = await request.json()
 
   const VALID_STATUSES = ['dirty', 'cleaning', 'done', 'inspect']
   if (!roomId || !status) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
@@ -23,19 +23,17 @@ export async function POST(request: NextRequest) {
 
   const service = createServiceClient()
 
-  // 내 호텔 객실이면서 나에게 배정된 방인지 확인
+  // 내 호텔 객실이면서 나에게 배정된 방인지 확인 (hotel_id까지 join으로 검증)
   const { data: assignment } = await service
     .from('assignments')
-    .select('id')
+    .select('id, rooms!inner(hotel_id)')
     .eq('room_id', roomId)
     .eq('staff_id', staffId)
+    .eq('rooms.hotel_id', hotelId)
     .is('completed_at', null)
     .is('cancelled_at', null)
     .single()
   if (!assignment) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-
-  const { data: room } = await service.from('rooms').select('id').eq('id', roomId).eq('hotel_id', hotelId).single()
-  if (!room) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   // 방 상태 업데이트
   await service.from('rooms').update({ status }).eq('id', roomId)
@@ -48,11 +46,11 @@ export async function POST(request: NextRequest) {
     memo: memo ?? null,
   })
 
-  // 완료 처리 시 assignment.completed_at 기록
-  if (status === 'done' && assignmentId) {
+  // 완료 처리 시 assignment.completed_at 원자적 기록 (쿼리한 assignment.id 직접 사용)
+  if (status === 'done') {
     await service.from('assignments')
       .update({ completed_at: new Date().toISOString() })
-      .eq('id', assignmentId)
+      .eq('id', assignment.id)
   }
 
   return NextResponse.json({ ok: true })

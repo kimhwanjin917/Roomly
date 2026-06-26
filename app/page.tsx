@@ -2,9 +2,9 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Roomly — 호텔 하우스키핑 실시간 관리',
+  title: 'Roomly — 체크인 지연 없는 호텔 하우스키핑 관리',
   description:
-    '텔레그램 단톡방을 졸업하세요. QR 접속, 실시간 현황판, 배정 알림으로 하우스키핑을 스마트하게 관리하세요.',
+    '객실 배정부터 완료 확인까지, 관리자 폰에서 실시간으로 보입니다. QR 스캔 한 번으로 직원이 접속하고, 카카오톡 단톡방 없이 하우스키핑을 운영하세요.',
 }
 
 export default function LandingPage() {
@@ -37,11 +37,11 @@ export default function LandingPage() {
             Hotel Housekeeping SaaS
           </div>
           <h1 className="text-[42px] sm:text-[56px] font-extrabold text-[#191919] leading-[1.1] tracking-tight mb-6">
-            텔레그램 단톡방을<br />졸업하세요
+            체크인 지연,<br />이제 없앨 수 있습니다
           </h1>
           <p className="text-lg text-[#6B7684] mb-10 leading-relaxed">
-            QR 접속, 실시간 현황판, 배정 알림으로<br className="hidden sm:block" />
-            하우스키핑을 스마트하게 관리하세요.
+            객실 배정부터 완료 확인까지, 관리자 폰에서 실시간으로 보입니다.<br className="hidden sm:block" />
+            카카오톡 단톡방 없이.
           </p>
           <Link
             href="/signup"
@@ -53,7 +53,7 @@ export default function LandingPage() {
               <path fillRule="evenodd" d="M3 10a.75.75 0 0 1 .75-.75h10.638L10.23 5.29a.75.75 0 1 1 1.04-1.08l5.5 5.25a.75.75 0 0 1 0 1.08l-5.5 5.25a.75.75 0 1 1-1.04-1.08l4.158-3.96H3.75A.75.75 0 0 1 3 10Z" clipRule="evenodd" />
             </svg>
           </Link>
-          <p className="mt-4 text-sm text-[#B0B8C1]">신용카드 없이 30일 무료 체험</p>
+          <p className="mt-4 text-sm text-[#B0B8C1]">신용카드 없이 3개월 무료 체험</p>
         </div>
       </section>
 
@@ -150,7 +150,7 @@ export default function LandingPage() {
             <h2 className="text-[28px] sm:text-[36px] font-extrabold text-[#191919] tracking-tight mb-3">
               투명한 요금제
             </h2>
-            <p className="text-[#B0B8C1] font-medium">30일 무료 체험 후 결정하세요. 언제든 취소 가능합니다.</p>
+            <p className="text-[#B0B8C1] font-medium">3개월 무료 체험 후 결정하세요. 언제든 취소 가능합니다.</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {/* 스타터 */}
@@ -246,7 +246,7 @@ export default function LandingPage() {
             지금 무료로 시작하세요
           </h2>
           <p className="text-[#6B7684] mb-10 font-medium">
-            30일 무료 체험 · 신용카드 불필요 · 언제든 취소
+            3개월 무료 체험 · 신용카드 불필요 · 언제든 취소
           </p>
           <Link
             href="/signup"

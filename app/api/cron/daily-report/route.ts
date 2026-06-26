@@ -5,7 +5,7 @@ import { DailyReportEmail } from '@/emails/DailyReportEmail'
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
@@ -21,29 +21,19 @@ export async function GET(request: NextRequest) {
   const dayStart = `${dateStr}T00:00:00+09:00`
   const dayEnd = `${dateStr}T23:59:59+09:00`
 
-  // Get all hotels
-  const { data: hotels } = await service.from('hotels').select('id, name')
+  const { data: hotels } = await service.from('hotels').select('id, name, admin_email')
   if (!hotels?.length) return NextResponse.json({ sent: 0 })
-
-  // Fetch all auth users once to avoid repeated calls
-  const {
-    data: { users },
-  } = await service.auth.admin.listUsers()
 
   let sent = 0
   for (const hotel of hotels) {
-    // Find the admin user for this hotel
-    const adminUser = users.find((u) => u.app_metadata?.hotel_id === hotel.id)
-    if (!adminUser?.email) continue
+    if (!hotel.admin_email) continue
 
-    // Total active rooms for this hotel
     const { count: totalRooms } = await service
       .from('rooms')
       .select('*', { count: 'exact', head: true })
       .eq('hotel_id', hotel.id)
       .is('deleted_at', null)
 
-    // Completed assignments yesterday, joined with rooms to filter by hotel
     const { data: assignments } = await service
       .from('assignments')
       .select('staff_id, assigned_at, completed_at, staff:staff_id(name), rooms!inner(hotel_id)')
@@ -55,7 +45,6 @@ export async function GET(request: NextRequest) {
     const completed = assignments?.length ?? 0
     const completionRate = totalRooms ? Math.round((completed / totalRooms) * 100) : 0
 
-    // Aggregate per-staff stats
     const staffMap = new Map<string, { name: string; count: number; totalMinutes: number }>()
     for (const a of assignments ?? []) {
       const staffId = a.staff_id ?? 'guest'
@@ -78,7 +67,7 @@ export async function GET(request: NextRequest) {
     }))
 
     await sendEmail({
-      to: adminUser.email,
+      to: hotel.admin_email,
       subject: `[Roomly] ${hotel.name} 일일 리포트 — ${dateStr}`,
       react: DailyReportEmail({
         hotelName: hotel.name,
@@ -88,7 +77,7 @@ export async function GET(request: NextRequest) {
         completionRate,
         staffStats,
       }),
-    })
+    }).catch(() => {})
     sent++
   }
 

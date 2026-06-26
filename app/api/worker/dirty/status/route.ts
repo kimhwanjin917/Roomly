@@ -28,6 +28,11 @@ export async function POST(request: NextRequest) {
     .from('rooms').select('id, status').eq('id', roomId).eq('hotel_id', hotelId).single()
   if (!room) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
+  // dirty 전환은 done/inspect 상태에서만 허용 (cleaning 중이거나 이미 dirty면 거부)
+  if (room.status === 'cleaning' || room.status === 'dirty') {
+    return NextResponse.json({ error: 'invalid_state_transition' }, { status: 409 })
+  }
+
   await service.from('rooms').update({ status: 'dirty' }).eq('id', roomId)
 
   await service.from('room_logs').insert({

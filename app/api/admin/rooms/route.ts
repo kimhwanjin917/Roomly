@@ -13,6 +13,19 @@ export async function POST(request: NextRequest) {
   if (!number?.trim() || !floor) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
 
   const service = createServiceClient()
+
+  const ROOM_LIMITS: Record<string, number> = { trial: 50, starter: 50, standard: 150, pro: 9999 }
+
+  const [{ data: hotel }, { count: currentCount }] = await Promise.all([
+    service.from('hotels').select('subscription_plan').eq('id', hotelId).single(),
+    service.from('rooms').select('*', { count: 'exact', head: true }).eq('hotel_id', hotelId).is('deleted_at', null),
+  ])
+
+  const limit = ROOM_LIMITS[hotel?.subscription_plan ?? 'trial'] ?? 50
+  if ((currentCount ?? 0) >= limit) {
+    return NextResponse.json({ error: 'room_limit_exceeded', limit }, { status: 403 })
+  }
+
   const { data, error } = await service
     .from('rooms')
     .insert({ hotel_id: hotelId, number: number.trim(), floor: Number(floor), type })

@@ -232,17 +232,17 @@ const expiresAt = new Date(subscription.current_period_end * 1000).toISOString()
 ### [10위] Stripe 이중 트라이얼 — `app/api/billing/create-session/route.ts:38`
 
 **문제 설명**  
-가입 시 14일 트라이얼을 이미 설정했음에도, Stripe checkout에서 `trial_period_days: 30`을 추가한다.
+가입 시 3개월 트라이얼을 이미 설정했음에도, Stripe checkout에서 `trial_period_days: 90`을 추가한다.
 
 **심각도**: Low
 
 **근거**  
-- 사용자가 14일 무료 체험 후 결제로 전환하면, Stripe에서 다시 30일 트라이얼이 시작된다.  
-- 결제 없이 최대 44일 무료 사용 가능.  
+- 사용자가 3개월 무료 체험 후 결제로 전환하면, Stripe에서 다시 90일 트라이얼이 시작된다.  
+- 결제 없이 최대 6개월 무료 사용 가능.  
 - 의도하지 않은 경우 수익 손실.
 
 **해결 방법**  
-`trial_period_days: 30` 제거하거나 `hotels.plan_expires_at`을 기반으로 남은 일수를 계산해 전달.
+`trial_period_days: 90` 제거하거나 `hotels.plan_expires_at`을 기반으로 남은 일수를 계산해 전달.
 
 ---
 

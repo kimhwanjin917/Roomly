@@ -19,8 +19,10 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
   const router = useRouter()
   const [step, setStep] = useState<1 | 2>(1)
 
-  // Step 1: 객실
+  // Step 1: 객실 (개별 / 일괄 탭)
+  const [roomTab, setRoomTab] = useState<'single' | 'bulk'>('single')
   const [roomForm, setRoomForm] = useState({ number: '', floor: '', type: 'double' })
+  const [bulkForm, setBulkForm] = useState({ startNumber: '', endNumber: '', floor: '', type: 'double' })
   const [addedRooms, setAddedRooms] = useState<AddedRoom[]>([])
   const [roomSaving, setRoomSaving] = useState(false)
   const [roomError, setRoomError] = useState('')
@@ -42,11 +44,41 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
     const data = await res.json()
     if (!res.ok) {
       if (res.status === 409) { setRoomError('이미 존재하는 호수입니다.'); setRoomSaving(false); return }
+      if (res.status === 403) { setRoomError(`객실 등록 한도(${data.limit}개)에 도달했습니다. 플랜을 업그레이드하세요.`); setRoomSaving(false); return }
       setRoomError(`저장 실패 (${res.status}: ${data.detail ?? data.error ?? ''})`)
       setRoomSaving(false); return
     }
     setAddedRooms(r => [...r, data])
     setRoomForm({ number: '', floor: roomForm.floor, type: roomForm.type })
+    setRoomSaving(false)
+  }
+
+  async function handleBulkAdd() {
+    if (!bulkForm.startNumber || !bulkForm.endNumber || !bulkForm.floor) {
+      setRoomError('시작 호수, 끝 호수, 층을 모두 입력해 주세요.'); return
+    }
+    setRoomSaving(true); setRoomError('')
+    const res = await fetch('/api/admin/rooms/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        startNumber: Number(bulkForm.startNumber),
+        endNumber: Number(bulkForm.endNumber),
+        floor: Number(bulkForm.floor),
+        type: bulkForm.type,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      if (res.status === 403) {
+        setRoomError(`객실 등록 한도(${data.limit}개)에 도달했습니다. 현재 ${data.current}개, 추가 요청 ${data.requested}개.`)
+      } else {
+        setRoomError(data.error ?? `저장 실패 (${res.status})`)
+      }
+      setRoomSaving(false); return
+    }
+    setAddedRooms(r => [...r, ...data.rooms])
+    setBulkForm(f => ({ ...f, startNumber: '', endNumber: '' }))
     setRoomSaving(false)
   }
 
@@ -96,52 +128,138 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
               <p className="text-sm text-slate-500 mt-1.5">나중에 언제든 추가하거나 삭제할 수 있습니다.</p>
             </div>
 
-            {/* 객실 추가 폼 */}
-            <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4">
-              <div className="flex gap-2 mb-3">
-                <div className="flex-1">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">호수</label>
-                  <input
-                    value={roomForm.number}
-                    onChange={e => setRoomForm(f => ({ ...f, number: e.target.value }))}
-                    onKeyDown={e => e.key === 'Enter' && handleAddRoom()}
-                    placeholder="101"
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="w-20">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">층</label>
-                  <input
-                    type="number"
-                    value={roomForm.floor}
-                    onChange={e => setRoomForm(f => ({ ...f, floor: e.target.value }))}
-                    placeholder="1"
-                    className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <div className="w-24">
-                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">타입</label>
-                  <select
-                    value={roomForm.type}
-                    onChange={e => setRoomForm(f => ({ ...f, type: e.target.value }))}
-                    className="w-full px-2 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="single">싱글</option>
-                    <option value="double">더블</option>
-                    <option value="suite">스위트</option>
-                    <option value="other">기타</option>
-                  </select>
-                </div>
-              </div>
-              {roomError && <p className="text-xs text-red-500 mb-2">{roomError}</p>}
+            {/* 탭 */}
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-4">
               <button
-                onClick={handleAddRoom}
-                disabled={roomSaving}
-                className="w-full py-2.5 border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl text-sm text-slate-500 hover:text-blue-600 font-medium disabled:opacity-40 transition-colors"
+                onClick={() => { setRoomTab('single'); setRoomError('') }}
+                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${roomTab === 'single' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
               >
-                {roomSaving ? '추가 중...' : '+ 객실 추가'}
+                개별 등록
+              </button>
+              <button
+                onClick={() => { setRoomTab('bulk'); setRoomError('') }}
+                className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-colors ${roomTab === 'bulk' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500'}`}
+              >
+                일괄 등록
               </button>
             </div>
+
+            {/* 개별 등록 폼 */}
+            {roomTab === 'single' && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4">
+                <div className="flex gap-2 mb-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">호수</label>
+                    <input
+                      value={roomForm.number}
+                      onChange={e => setRoomForm(f => ({ ...f, number: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && handleAddRoom()}
+                      placeholder="101"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="w-20">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">층</label>
+                    <input
+                      type="number"
+                      value={roomForm.floor}
+                      onChange={e => setRoomForm(f => ({ ...f, floor: e.target.value }))}
+                      placeholder="1"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="w-24">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">타입</label>
+                    <select
+                      value={roomForm.type}
+                      onChange={e => setRoomForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full px-2 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="single">싱글</option>
+                      <option value="double">더블</option>
+                      <option value="suite">스위트</option>
+                      <option value="other">기타</option>
+                    </select>
+                  </div>
+                </div>
+                {roomError && <p className="text-xs text-red-500 mb-2">{roomError}</p>}
+                <button
+                  onClick={handleAddRoom}
+                  disabled={roomSaving}
+                  className="w-full py-2.5 border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl text-sm text-slate-500 hover:text-blue-600 font-medium disabled:opacity-40 transition-colors"
+                >
+                  {roomSaving ? '추가 중...' : '+ 객실 추가'}
+                </button>
+              </div>
+            )}
+
+            {/* 일괄 등록 폼 */}
+            {roomTab === 'bulk' && (
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4">
+                <p className="text-xs text-slate-400 mb-3">시작~끝 호수를 입력하면 사이 번호를 모두 등록합니다. (최대 100개)</p>
+                <div className="flex items-end gap-2 mb-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">시작 호수</label>
+                    <input
+                      type="number"
+                      value={bulkForm.startNumber}
+                      onChange={e => setBulkForm(f => ({ ...f, startNumber: e.target.value }))}
+                      placeholder="101"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <span className="text-slate-400 pb-2.5">~</span>
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">끝 호수</label>
+                    <input
+                      type="number"
+                      value={bulkForm.endNumber}
+                      onChange={e => setBulkForm(f => ({ ...f, endNumber: e.target.value }))}
+                      placeholder="110"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 mb-3">
+                  <div className="w-20">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">층</label>
+                    <input
+                      type="number"
+                      value={bulkForm.floor}
+                      onChange={e => setBulkForm(f => ({ ...f, floor: e.target.value }))}
+                      placeholder="1"
+                      className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">타입</label>
+                    <select
+                      value={bulkForm.type}
+                      onChange={e => setBulkForm(f => ({ ...f, type: e.target.value }))}
+                      className="w-full px-2 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="single">싱글</option>
+                      <option value="double">더블</option>
+                      <option value="suite">스위트</option>
+                      <option value="other">기타</option>
+                    </select>
+                  </div>
+                </div>
+                {bulkForm.startNumber && bulkForm.endNumber && Number(bulkForm.endNumber) >= Number(bulkForm.startNumber) && (
+                  <p className="text-xs text-blue-500 mb-2">
+                    {Number(bulkForm.endNumber) - Number(bulkForm.startNumber) + 1}개 객실 등록 예정
+                  </p>
+                )}
+                {roomError && <p className="text-xs text-red-500 mb-2">{roomError}</p>}
+                <button
+                  onClick={handleBulkAdd}
+                  disabled={roomSaving}
+                  className="w-full py-2.5 border-2 border-dashed border-slate-200 hover:border-blue-400 hover:bg-blue-50 rounded-xl text-sm text-slate-500 hover:text-blue-600 font-medium disabled:opacity-40 transition-colors"
+                >
+                  {roomSaving ? '등록 중...' : '+ 일괄 등록'}
+                </button>
+              </div>
+            )}
 
             {/* 추가된 객실 목록 */}
             {addedRooms.length > 0 && (

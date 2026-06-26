@@ -15,16 +15,9 @@ export async function POST(request: NextRequest) {
 
   const service = createServiceClient()
 
-  // 이메일 중복 확인
-  const { data: existing } = await service.auth.admin.listUsers()
-  const duplicate = existing?.users.find(u => u.email === email.trim())
-  if (duplicate) {
-    return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 409 })
-  }
-
-  // 14일 무료체험 만료일 계산
-  const trialExpiresAt = new Date()
-  trialExpiresAt.setDate(trialExpiresAt.getDate() + 14)
+  // 3개월 무료체험 만료일 계산
+  const trialEndsAt = new Date()
+  trialEndsAt.setMonth(trialEndsAt.getMonth() + 3)
 
   // 호텔 생성 (무료체험 세팅)
   const { data: hotel, error: hotelErr } = await service
@@ -32,9 +25,8 @@ export async function POST(request: NextRequest) {
     .insert({
       name: hotelName.trim(),
       subscription_plan: 'trial',
-      plan_type: 'trial',
-      plan_expires_at: trialExpiresAt.toISOString(),
-      room_limit: 10,
+      trial_ends_at: trialEndsAt.toISOString(),
+      admin_email: email.trim(),
     })
     .select('id')
     .single()
@@ -42,7 +34,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '호텔 생성에 실패했습니다.' }, { status: 500 })
   }
 
-  // 관리자 계정 생성
+  // 관리자 계정 생성 — 이메일 중복은 Supabase 에러로 처리 (listUsers는 1000명 한계)
   const { data: authUser, error: authErr } = await service.auth.admin.createUser({
     email: email.trim(),
     password,
@@ -51,6 +43,11 @@ export async function POST(request: NextRequest) {
   })
   if (authErr || !authUser) {
     await service.from('hotels').delete().eq('id', hotel.id)
+    const isDuplicate = authErr?.message?.toLowerCase().includes('already registered')
+      || authErr?.message?.toLowerCase().includes('already exists')
+    if (isDuplicate) {
+      return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 409 })
+    }
     return NextResponse.json({ error: '계정 생성에 실패했습니다.' }, { status: 500 })
   }
 

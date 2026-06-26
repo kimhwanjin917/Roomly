@@ -11,35 +11,34 @@ export async function middleware(request: NextRequest) {
 
   // /admin/* — Supabase Auth 세션 필요
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-    const { supabaseResponse, user } = await updateSession(request)
+    const { supabaseResponse, user, supabase } = await updateSession(request)
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
 
-    // 플랜 만료 체크 — 페이지 라우트에만 적용 (API 라우트 및 /admin/billing 제외)
+    // 플랜 만료 체크 — 페이지 라우트에만 적용 (API 라우트 및 /admin/billing/* 제외)
     if (
       pathname.startsWith('/admin') &&
       !pathname.startsWith('/api/admin') &&
-      pathname !== '/admin/billing'
+      !pathname.startsWith('/admin/billing')
     ) {
       const hotelId = user.app_metadata?.hotel_id
       if (hotelId) {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
         try {
-          const res = await fetch(
-            `${supabaseUrl}/rest/v1/hotels?id=eq.${hotelId}&select=plan_expires_at`,
-            {
-              headers: {
-                apikey: serviceKey,
-                Authorization: `Bearer ${serviceKey}`,
-              },
-            }
-          )
-          const [hotel] = await res.json()
-          if (hotel?.plan_expires_at && new Date(hotel.plan_expires_at) < new Date()) {
+          const { data: hotel } = await supabase
+            .from('hotels')
+            .select('plan_expires_at, trial_ends_at')
+            .eq('id', hotelId)
+            .single()
+          const now = new Date()
+          const planExpired = hotel?.plan_expires_at && new Date(hotel.plan_expires_at) < now
+          // plan_expires_at이 NULL(체험 중)이면 trial_ends_at으로 만료 체크
+          const trialExpired = !hotel?.plan_expires_at
+            && hotel?.trial_ends_at
+            && new Date(hotel.trial_ends_at) < now
+          if (planExpired || trialExpired) {
             const url = request.nextUrl.clone()
             url.pathname = '/admin/billing'
             url.searchParams.set('expired', 'true')

@@ -45,7 +45,7 @@ export default function SignupPage() {
         </div>
 
         <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 mb-4 text-center">
-          <p className="text-sm font-semibold text-blue-700">14일 무료체험 — 신용카드 불필요</p>
+          <p className="text-sm font-semibold text-blue-700">3개월 무료체험 — 신용카드 불필요</p>
           <p className="text-xs text-blue-500 mt-0.5">체험 후 유료 전환 시 최대 객실 10개 → 50개+</p>
         </div>
 

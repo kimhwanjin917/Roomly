@@ -18,6 +18,84 @@
 
 ---
 
+## [긴급] 출시 전 버그 수정 (개발 시작 전 반드시 확인)
+
+> 엔지니어링 감사 + 설계 시뮬레이션에서 발견. 이 중 하나라도 방치하면 출시 후 즉각 장애 발생.
+
+| # | 문제 | 파일 | 심각도 | 예상 시간 |
+|---|------|------|--------|----------|
+| BUG-01 | `hotels` 테이블에 `stripe_customer_id`, `stripe_subscription_id`, `plan_expires_at`, `last_active_at` 컬럼 없음 → 빌링 전체 500 | Supabase SQL | Critical | 10분 |
+| BUG-02 | `push_subscriptions.auth_key` → `auth`로 컬럼명 통일 필요 → 푸시 알림 전체 500 | Supabase SQL + `api/push/subscribe/route.ts` | Critical | 15분 |
+| BUG-03 | `signup/route.ts`가 `plan_type`, `room_limit` 컬럼에 INSERT → 없는 컬럼이라 가입 자체가 500 | `api/auth/signup/route.ts` | Critical | 30분 |
+| BUG-04 | 직원 방 상태 변경 시 배정 소유권 미확인 → 동일 호텔 직원이 남의 방 조작 가능 | `api/worker/status/route.ts` | High | 1시간 |
+| BUG-05 | 게스트 방 상태 변경 시 배정 소유권 미확인 → 게스트 코드만 있으면 호텔 전체 방 조작 가능 | `api/guest/status/route.ts` | High | 1시간 |
+| BUG-06 | rooms.status='done' 업데이트 시 assignments.completed_at 미업데이트 → 통계 전체 0 | `api/worker/status/route.ts`, `api/guest/status/route.ts` | High | 1시간 |
+| BUG-07 | `CRON_SECRET` 미설정 시 `'Bearer undefined' === 'Bearer undefined'` → 모든 크론 API 무인증 접근 가능 | `api/cron/*/route.ts` 전체 | High | 30분 |
+| BUG-08 | Dirty Worker가 cleaning 상태 방도 dirty로 변경 가능 → 진행 중인 청소 무효화 | `api/worker/dirty/status/route.ts` | High | 30분 |
+| BUG-09 | Stripe checkout.session.completed에서 plan_expires_at = now()+30일 하드코딩 → 연간 플랜도 30일로 저장 | `api/billing/webhook/route.ts` | High | 1시간 |
+| BUG-10 | `signup/route.ts`에서 `listUsers()` 전체 조회로 이메일 중복 체크 → 1,000명 초과 시 중복 가입 허용 | `api/auth/signup/route.ts` | High | 2시간 |
+| BUG-11 | `roomly_worker_session` 쿠키에 `maxAge` 없음 → 세션 쿠키로 발급되어 PWA 재시작 시 갑자기 로그아웃 | `api/auth/qr/route.ts` | Medium | 30분 |
+| BUG-12 | `worker/guest status` API에 `VALID_STATUSES` 검증 없음 → 잘못된 값 입력 시 DB CHECK 에러로 5xx 노출 | 두 route.ts | Low | 30분 |
+| BUG-13 | ✅ `hotels.admin_email` 컬럼 누락 → 모든 가입 500, 온보딩/결제 크론 이메일 0건 | `005_patch.sql` | Critical | 10분 (수정됨) |
+| BUG-14 | ✅ `hotels.room_limit` 없는 컬럼 참조 → 모든 호텔 10개 객실 한도로 잠김 | `rooms/route.ts`, `rooms/bulk/route.ts` | Critical | 20분 (수정됨) |
+| BUG-15 | ✅ `middleware.ts` `/admin/billing/toss-success` 미제외 → 결제 후 만료 화면 루프 | `middleware.ts` | High | 5분 (수정됨) |
+| BUG-16 | ✅ `billing/webhook.ts` `setMonth()` 오버플로우 → 1/31 결제 시 만료일 3/3 | `billing/webhook/route.ts` | High | 10분 (수정됨) |
+| BUG-17 | ✅ `billing-charge` 크론 결제 실패 시 플랜 다운그레이드 없음 → 미결제 호텔 접근 유지 | `cron/billing-charge/route.ts` | Medium | 15분 (수정됨) |
+
+### BUG-01 수정 SQL (Supabase SQL Editor에서 실행)
+
+```sql
+-- hotels 테이블: 토스페이먼츠 + 온보딩 추적 컬럼 추가
+ALTER TABLE hotels
+  ADD COLUMN IF NOT EXISTS toss_customer_key  TEXT UNIQUE,
+  ADD COLUMN IF NOT EXISTS toss_billing_key   TEXT,
+  ADD COLUMN IF NOT EXISTS trial_ends_at      TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS plan_expires_at    TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS last_active_at     TIMESTAMPTZ;
+
+-- subscription_plan CHECK 제약 수정: 'trial' 값 추가
+ALTER TABLE hotels DROP CONSTRAINT IF EXISTS hotels_subscription_plan_check;
+ALTER TABLE hotels ADD CONSTRAINT hotels_subscription_plan_check
+  CHECK (subscription_plan IN ('trial', 'starter', 'standard', 'pro'));
+
+-- 기존 hotels의 subscription_plan 기본값도 'trial'로 변경
+ALTER TABLE hotels ALTER COLUMN subscription_plan SET DEFAULT 'trial';
+```
+
+### BUG-02 수정 SQL
+
+```sql
+-- push_subscriptions 테이블이 이미 생성된 경우
+ALTER TABLE push_subscriptions RENAME COLUMN auth_key TO auth;
+-- 새로 만드는 경우: DDL에서 이미 auth로 정의됨
+```
+
+### BUG-03 수정 코드 (`api/auth/signup/route.ts`)
+
+```ts
+// ❌ 잘못된 코드
+await service.from('hotels').insert({ name, plan_type: 'starter', room_limit: 50 })
+
+// ✅ 올바른 코드
+await service.from('hotels').insert({ name, subscription_plan: 'starter' })
+// room_limit은 컬럼 없음. 플랜별 제한은 애플리케이션에서 도출
+```
+
+### BUG-07 수정 코드 (모든 크론 route.ts)
+
+```ts
+// ❌ 취약한 코드
+if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) { ... }
+// process.env.CRON_SECRET이 undefined → 'Bearer undefined' === 'Bearer undefined' → 인증 통과
+
+// ✅ 올바른 코드
+if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+}
+```
+
+---
+
 ## Phase 2 — 남은 작업 (우선순위 순)
 
 ### [P0] T-011: 푸시 알림 구독 API
@@ -357,13 +435,66 @@ tag: `assign-{staffId}`
 
 ---
 
+### [P0] T-025: 토스페이먼츠 결제 연동
+**파일**: `app/api/billing/toss/confirm/route.ts`, `app/admin/billing/toss-success/page.tsx`, `lib/toss.ts`  
+**이유**: 한국 법인 고객은 Stripe 신용카드 결제 + 세금계산서 발행이 불편. 토스페이먼츠 미연동 시 법인 고객 전환율 15~25% 손실
+
+**구현할 것:**
+- `lib/toss.ts`: 토스페이먼츠 결제 승인 API 래퍼
+- `POST /api/billing/toss/confirm`: 결제 승인 + plan_expires_at 업데이트
+- `/admin/billing/page.tsx`에 결제 수단 선택 UI (카드 vs 계좌이체/법인카드)
+- `/admin/billing/toss-success/page.tsx`: 결제 완료 콜백 페이지
+
+**환경변수 추가:**
+```bash
+TOSS_SECRET_KEY=test_sk_...
+NEXT_PUBLIC_TOSS_CLIENT_KEY=test_ck_...
+```
+
+---
+
+### [P1] T-032: 온보딩 이메일 시퀀스 (D+1, D+3, D+7, D+83)
+**파일**: `app/api/cron/onboarding-d1/route.ts`, `app/api/cron/onboarding-d3/route.ts`, `app/api/cron/onboarding-d7/route.ts`, `app/api/cron/trial-ending/route.ts`  
+**의존**: T-030 완료됨, BUG-01 (last_active_at, staff.first_accessed_at 컬럼 필요)
+
+**구현할 것:**
+
+| 크론 | 스케줄 (UTC) | 조건 | 이메일 내용 |
+|------|------------|------|------------|
+| onboarding-d1 | `0 10 * * *` (KST 19:00) | 가입 24~48h + `rooms` COUNT = 0 | 객실 미등록 리마인더 + 일괄 등록 가이드 |
+| onboarding-d3 | `0 10 * * *` | 가입 72~96h + 직원 있음 + `assignments` COUNT = 0 (first_accessed_at IS NULL) | QR 공유 확인 + iOS 가이드 |
+| onboarding-d7 | `0 10 * * *` | 가입 7~8일 + completed_at 있는 배정 1건 이상 | 첫 주 완료 통계 리포트 |
+| trial-ending | `0 9 * * *` (KST 18:00) | `plan_expires_at` 7일 이내 | 체험 종료 통계 + 요금제 선택 CTA |
+
+**vercel.json 크론 전체 목록 (통합):**
+```json
+{
+  "crons": [
+    { "path": "/api/cron/onboarding-d1",  "schedule": "0 10 * * *" },
+    { "path": "/api/cron/onboarding-d3",  "schedule": "0 10 * * *" },
+    { "path": "/api/cron/onboarding-d7",  "schedule": "0 10 * * *" },
+    { "path": "/api/cron/trial-ending",   "schedule": "0 9  * * *" },
+    { "path": "/api/cron/daily-report",   "schedule": "0 23 * * *" },
+    { "path": "/api/cron/billing-charge", "schedule": "0 0  * * *" },
+    { "path": "/api/cron/weekly-report",  "schedule": "0 0  * * 1" },
+    { "path": "/api/cron/churn-feedback", "schedule": "0 10 * * *" }
+  ]
+}
+```
+
+---
+
 ## 구현 순서 (추천)
 
 ```
+0주차 (지금 당장): BUG-01~12 전체 수정 (DB 마이그레이션 + 코드 수정)
+                  → 이거 안 하면 개발 시작할 수 없음
+
 1주차: T-011 → T-013 → T-012 → T-014  (푸시 알림 완성)
-2주차: T-023 → T-031 → T-040          (결제 잠금 + 이메일 + 차트)
-3주차: AI-01 → AI-02 → AI-03          (AI 기능 — 차별화)
-4주차: T-070 → T-071 → T-041 → T-080  (보안 + UX 마무리)
+2주차: T-023 → T-025 → T-031           (결제 잠금 + 토스 + 이메일)
+3주차: T-032 → T-040                   (온보딩 크론 + 차트)
+4주차: AI-01 → AI-02 → AI-03          (AI 기능 — 차별화)
+5주차: T-070 → T-071 → T-041 → T-080  (보안 + UX 마무리)
 이후: Phase 3 순차 진행
 ```
 

@@ -83,12 +83,16 @@ export default function RoomsPage() {
         .eq('id', editRoom.id)
       if (err) { setError('저장 실패: ' + err.message); setSaving(false); return }
     } else {
-      const { error: err } = await supabase
-        .from('rooms')
-        .insert({ hotel_id: hotelId, number: form.number.trim(), floor: Number(form.floor), type: form.type })
-      if (err) {
-        setError(err.code === '23505' ? '이미 존재하는 호수입니다.' : '저장 실패: ' + err.message)
-        setSaving(false); return
+      const res = await fetch('/api/admin/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: form.number.trim(), floor: Number(form.floor), type: form.type }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (res.status === 409) { setError('이미 존재하는 호수입니다.'); setSaving(false); return }
+        if (res.status === 403) { setError(`객실 등록 한도(${data.limit}개)에 도달했습니다. 플랜을 업그레이드하세요.`); setSaving(false); return }
+        setError('저장 실패: ' + (data.detail ?? data.error ?? '')); setSaving(false); return
       }
     }
 

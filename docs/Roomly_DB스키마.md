@@ -12,12 +12,26 @@
 -- 1. hotels
 -- ───────────────────────────────────────────
 CREATE TABLE hotels (
-  id                UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-  name              TEXT        NOT NULL,
-  subscription_plan TEXT        NOT NULL DEFAULT 'starter'
-                                CHECK (subscription_plan IN ('starter', 'standard', 'pro')),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                  UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                TEXT        NOT NULL,
+  subscription_plan   TEXT        NOT NULL DEFAULT 'trial'
+                                  CHECK (subscription_plan IN ('trial', 'starter', 'standard', 'pro')),
+  -- 'trial': 무료 체험 중 (기본값). 결제 완료 시 starter/standard/pro로 변경
+  toss_customer_key   TEXT        UNIQUE,             -- 토스페이먼츠 고객 키 (호텔별 고유. "hotel_{id}" 패턴)
+  toss_billing_key    TEXT,                           -- 토스페이먼츠 자동결제 빌링키 (발급 후 저장)
+  trial_ends_at       TIMESTAMPTZ,                    -- 무료 체험 종료일. NULL = 기간 미설정
+  plan_expires_at     TIMESTAMPTZ,                    -- 유료 플랜 만료일. NULL = trial 중이거나 미설정
+  last_active_at      TIMESTAMPTZ,                    -- 온보딩 추적: 마지막 관리자 로그인 시각 (D7 Retention 계산용)
+  admin_email         TEXT,                           -- 가입 시 저장. 온보딩/결제 크론 이메일 발송 대상
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- ⚠️ room_limit / plan_type 컬럼 없음: 코드에서 절대 이 이름으로 UPDATE하지 말 것 (500 에러)
+--    객실 수 제한은 subscription_plan으로 애플리케이션에서 도출: starter:50, standard:150, pro:무제한
+-- ⚠️ plan_expires_at NULL 처리: middleware에서 NULL이면 "만료 없음"으로 처리
+--    토스페이먼츠 authorize 이벤트: now()+1개월로 설정
+-- ⚠️ trial_ends_at vs plan_expires_at 구분:
+--    trial_ends_at: 체험 기간 종료일 (체험 중 결제 시 이 날짜까지는 무료로 사용)
+--    plan_expires_at: 결제 완료된 플랜의 만료일 (다음 결제일)
 
 -- ───────────────────────────────────────────
 -- 2. rooms
@@ -43,17 +57,18 @@ CREATE TABLE rooms (
 -- 3. staff
 -- ───────────────────────────────────────────
 CREATE TABLE staff (
-  id           UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  hotel_id     UUID    NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
-  name         TEXT    NOT NULL,
-  role         TEXT    NOT NULL DEFAULT 'housekeeping'
-                       CHECK (role IN ('housekeeping', 'dirty')),
+  id                UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
+  hotel_id          UUID    NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
+  name              TEXT    NOT NULL,
+  role              TEXT    NOT NULL DEFAULT 'housekeeping'
+                            CHECK (role IN ('housekeeping', 'dirty')),
   -- 'housekeeping': 일반 하우스키핑 직원 → /worker/[staffId] 화면
   -- 'dirty': Dirty Worker (체크아웃 후 더티 처리 전담) → /worker/dirty/[staffId] 화면
   -- 관리자는 Supabase Auth app_metadata.role = 'admin' 으로만 관리하며 staff row를 갖지 않음.
-  auth_id      UUID    NOT NULL UNIQUE,  -- 직원 등록 시 서버가 생성한 UUID. QR JWT의 sub 클레임 = auth.uid()
-  phone_number TEXT,                     -- 추후 외부 알림 연동 시 사용, NULL 허용
-  qr_version   INTEGER NOT NULL DEFAULT 1
+  auth_id           UUID    NOT NULL UNIQUE,  -- 직원 등록 시 서버가 생성한 UUID. QR JWT의 sub 클레임 = auth.uid()
+  phone_number      TEXT,                     -- 추후 외부 알림 연동 시 사용, NULL 허용
+  qr_version        INTEGER NOT NULL DEFAULT 1,
+  first_accessed_at TIMESTAMPTZ              -- QR 첫 스캔 시각. NULL = 아직 미접속. 온보딩 D+3 이메일 트리거 기준
 );
 
 -- ───────────────────────────────────────────
@@ -114,8 +129,10 @@ CREATE TABLE push_subscriptions (
   staff_id   UUID        REFERENCES staff(id) ON DELETE CASCADE,  -- NULL이면 관리자 구독
   is_admin   BOOLEAN     NOT NULL DEFAULT false,
   endpoint   TEXT        NOT NULL UNIQUE,   -- Web Push 구독 endpoint URL
-  p256dh     TEXT        NOT NULL,          -- 암호화 공개키
-  auth_key   TEXT        NOT NULL,          -- 인증 시크릿
+  p256dh     TEXT        NOT NULL,          -- 암호화 공개키 (Web Push API: subscription.keys.p256dh)
+  auth       TEXT        NOT NULL,          -- 인증 시크릿 (Web Push API: subscription.keys.auth)
+  -- ⚠️ 컬럼명 주의: auth_key가 아닌 auth. Web Push API의 subscription.keys.auth와 이름 맞춤.
+  -- PostgreSQL에서 auth는 예약어 아님. INSERT 시: { p256dh: keys.p256dh, auth: keys.auth }
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
@@ -170,8 +187,18 @@ CREATE INDEX idx_push_staff_id         ON push_subscriptions (staff_id) WHERE st
 - `rooms.number`는 TEXT: "302", "B1" 등 문자 포함 호수 대응
 - `rooms.priority` 컬럼 없음: `ORDER BY checkin_time ASC NULLS LAST`로 대체
 - `hotels.total_rooms` 없음: `SELECT COUNT(*) FROM rooms WHERE hotel_id = ?`로 대체 (동기화 문제 방지)
+- `hotels.room_limit` 없음: subscription_plan으로 애플리케이션에서 도출 (starter:50, standard:150, pro:무제한)
+- `hotels.plan_type` 컬럼 없음: `subscription_plan` 사용. 코드에서 `plan_type` 컬럼명 사용 시 500 에러 발생
+- `hotels.plan_expires_at` NULL: 무료 체험 중 또는 수동 라이선스 부여 상태. NULL이면 만료 없음으로 처리
+- `hotels.stripe_*` 컬럼: 결제 연동 전에는 NULL. Stripe checkout.session.completed 웹훅에서 설정
+- `hotels.last_active_at`: 관리자 로그인 시마다 서버 사이드에서 업데이트. D7 Retention 지표 계산 기준
+- `hotels.admin_email`: 가입 시 `/api/auth/signup`에서 저장. Supabase Auth에서 매번 조회하지 않고 hotels에 캐시. 온보딩 크론(D+1/D+3/D+7)과 billing-charge 크론에서 이메일 발송 대상으로 사용
+- `hotels.room_limit` 컬럼 없음: 객실 수 제한은 `subscription_plan`으로 도출 — trial:50, starter:50, standard:150, pro:9999. `room_limit` 컬럼명 사용 시 undefined 반환 → 10개 기본값으로 잘못 잠김
+- `staff.first_accessed_at`: /api/auth/qr 에서 최초 QR 스캔 감지 시 설정. NULL이면 아직 미접속. 온보딩 D+3 크론이 "직원 등록 됐는데 first_accessed_at IS NULL"을 조건으로 이메일 발송
 - `assignments.staff_id`는 ON DELETE RESTRICT: 직원 삭제 전 API에서 반드시 cancelled_at 처리 완료 후 삭제. SET NULL 대신 RESTRICT를 쓰는 이유는 SET NULL 시 is_guest=false + staff_id=NULL 조합이 CHECK 위반을 일으키기 때문
 - `assignments` CHECK: `cancelled_at IS NOT NULL` 조건을 첫 번째에 배치해 취소된 배정은 staff_id 값과 무관하게 허용
+- `assignments.completed_at` 업데이트 책임: rooms.status를 'done'으로 바꾸는 API(/api/worker/status, /api/guest/status)에서 반드시 같은 트랜잭션으로 처리. 두 업데이트가 분리되면 rooms.status='done'인데 completed_at=NULL인 불일치 상태 발생 → 통계 쿼리 전체 오염
 - `guest_codes.date`: UPSERT ON CONFLICT (hotel_id, date)로 당일 코드를 덮어쓰기 위해 필요. 날짜 없이 UNIQUE (hotel_id, code)만 두면 새 코드 발급 시 ON CONFLICT 조건이 불명확해 중복 row 생성됨
 - `room_logs`는 UPDATE/DELETE 정책 없음 (감사 추적 목적, 불변)
 - `push_subscriptions.endpoint`는 UNIQUE: 동일 브라우저 중복 구독 방지
+- `push_subscriptions.auth`: Web Push API의 subscription.keys.auth 필드명과 동일하게 맞춤. auth_key로 혼용하면 INSERT 실패

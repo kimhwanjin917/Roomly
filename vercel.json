@@ -1,0 +1,40 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/checkin-alert",
+      "schedule": "*/30 * * * *"
+    },
+    {
+      "path": "/api/cron/daily-report",
+      "schedule": "0 23 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/cron/churn-feedback",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/billing-charge",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-d1",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-d3",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/onboarding-d7",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/trial-ending",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

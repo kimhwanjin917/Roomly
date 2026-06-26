@@ -245,6 +245,27 @@ Stripe Dashboard에서 생성할 상품:
 
 ---
 
+## 토스페이먼츠 (한국 법인 결제)
+
+| 변수명 | 용도 | 노출 범위 |
+|--------|------|-----------|
+| `TOSS_PAYMENTS_SECRET_KEY` | 토스페이먼츠 시크릿 키 (`lib/toss.ts`에서 사용) | 서버만 (**절대 클라이언트 노출 금지**) |
+| `TOSS_PAYMENTS_CLIENT_KEY` | 토스페이먼츠 클라이언트 키 (`/api/billing/toss/prepare`에서 반환) | 서버 → 클라이언트 전달 (API 응답으로만) |
+| `TOSS_PAYMENTS_WEBHOOK_SECRET` | 토스 웹훅 서명 검증 (`/api/billing/webhook`에서 사용) | 서버만 |
+
+```bash
+TOSS_PAYMENTS_SECRET_KEY=test_sk_...       # 테스트: test_sk_ 으로 시작
+TOSS_PAYMENTS_CLIENT_KEY=test_ck_...       # 테스트: test_ck_ 으로 시작
+TOSS_PAYMENTS_WEBHOOK_SECRET=...           # 토스 대시보드 웹훅 설정에서 발급
+# 운영: live_sk_ / live_ck_ 로 변경
+```
+
+> 토스페이먼츠 대시보드: payments.toss.im  
+> 웹훅 엔드포인트: `POST /api/billing/webhook`  
+> 결제 성공 리다이렉트: `NEXT_PUBLIC_APP_URL/admin/billing/toss-success`
+
+---
+
 ## Vercel 배포 시
 
 Vercel 대시보드 → Settings → Environment Variables에 동일하게 등록  

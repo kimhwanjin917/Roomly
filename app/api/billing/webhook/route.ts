@@ -1,54 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { stripe } from '@/lib/stripe'
-import { createClient } from '@supabase/supabase-js'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 function getSupabaseAdmin() {
-  return createClient(
+  return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 }
 
+// setMonth()는 월말 오버플로우 버그(1/31 → 3/3) 있음
+function addOneMonth(date: Date): Date {
+  const d = new Date(date)
+  const day = d.getDate()
+  d.setDate(1)
+  d.setMonth(d.getMonth() + 1)
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
+  d.setDate(Math.min(day, lastDay))
+  return d
+}
+
+const PLAN_AMOUNTS: Record<number, { plan: string; roomLimit: number }> = {
+  30000:  { plan: 'starter',  roomLimit: 50 },
+  70000:  { plan: 'standard', roomLimit: 150 },
+  150000: { plan: 'pro',      roomLimit: 9999 },
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.text()
-  const sig = req.headers.get('stripe-signature')!
-
-  let event
-  try {
-    event = stripe.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK_SECRET!)
-  } catch {
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  const secret = req.headers.get('x-toss-signature') ?? req.headers.get('authorization')
+  if (secret !== process.env.TOSS_PAYMENTS_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: 'invalid signature' }, { status: 400 })
   }
 
-  const supabaseAdmin = getSupabaseAdmin()
+  const event = await req.json()
+  const supabase = getSupabaseAdmin()
 
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as any
-    const customerId = session.customer
-    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
-    await supabaseAdmin
-      .from('hotels')
-      .update({ stripe_subscription_id: session.subscription, plan_expires_at: expiresAt })
-      .eq('stripe_customer_id', customerId)
-  }
+  if (event.eventType === 'PAYMENT_STATUS_CHANGED') {
+    const payment = event.data
+    if (payment.status === 'DONE') {
+      const planInfo = PLAN_AMOUNTS[payment.totalAmount]
+      const customerKey = payment.metadata?.customerKey ?? payment.customerKey
 
-  if (event.type === 'invoice.payment_succeeded') {
-    const invoice = event.data.object as any
-    const nextPayment = new Date(invoice.lines.data[0]?.period?.end * 1000).toISOString()
-    await supabaseAdmin
-      .from('hotels')
-      .update({ plan_expires_at: nextPayment })
-      .eq('stripe_customer_id', invoice.customer)
-  }
+      if (customerKey && planInfo) {
+        const nextExpiry = addOneMonth(new Date())
 
-  if (event.type === 'customer.subscription.deleted') {
-    const sub = event.data.object as any
-    const midnight = new Date()
-    midnight.setHours(23, 59, 59, 999)
-    await supabaseAdmin
-      .from('hotels')
-      .update({ plan_expires_at: midnight.toISOString() })
-      .eq('stripe_customer_id', sub.customer)
+        await supabase.from('hotels')
+          .update({
+            subscription_plan: planInfo.plan,
+            plan_expires_at: nextExpiry.toISOString(),
+          })
+          .eq('toss_customer_key', customerKey)
+      }
+    }
+
+    if (payment.status === 'CANCELED') {
+      const customerKey = payment.metadata?.customerKey ?? payment.customerKey
+      if (customerKey) {
+        await supabase.from('hotels')
+          .update({
+            subscription_plan: 'trial',
+            toss_billing_key: null,
+          })
+          .eq('toss_customer_key', customerKey)
+      }
+    }
   }
 
   return NextResponse.json({ received: true })

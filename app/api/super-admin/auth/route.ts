@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
-import { cookies } from 'next/headers'
+import { generateSuperAdminToken } from '@/lib/super-admin-auth'
 
 export async function POST(req: NextRequest) {
   const { password } = await req.json()
@@ -11,11 +11,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid password' }, { status: 401 })
   }
 
+  const token = generateSuperAdminToken()
   const res = NextResponse.json({ ok: true })
-  res.cookies.set('super_admin_session', hash, {
+  res.cookies.set('super_admin_session', token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    maxAge: 60 * 60 * 8, // 8시간
+    maxAge: 60 * 60 * 8,
     path: '/',
   })
   return res

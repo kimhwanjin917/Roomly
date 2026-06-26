@@ -16,10 +16,17 @@ export async function GET(request: NextRequest) {
 
     const service = createServiceClient()
     const { data: staff } = await service
-      .from('staff').select('qr_version').eq('id', staffId).single()
+      .from('staff').select('qr_version, first_accessed_at').eq('id', staffId).single()
 
     if (!staff || staff.qr_version !== qrVersion) {
       return NextResponse.redirect(new URL('/login?error=qr_expired', request.url))
+    }
+
+    // 첫 QR 접속 시 first_accessed_at 기록 (D+3 온보딩 크론 기준)
+    if (!staff.first_accessed_at) {
+      await service.from('staff')
+        .update({ first_accessed_at: new Date().toISOString() })
+        .eq('id', staffId)
     }
 
     const workerRole = payload.app_metadata?.worker_role
@@ -30,6 +37,7 @@ export async function GET(request: NextRequest) {
       path: '/',
       sameSite: 'lax',
       secure: process.env.NODE_ENV === 'production',
+      maxAge: 30 * 24 * 60 * 60,
     })
     return response
   } catch {
