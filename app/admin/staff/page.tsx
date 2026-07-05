@@ -6,7 +6,8 @@ import { createClient } from '@/lib/supabase/client'
 import QRCode from 'qrcode'
 import AdminNav from '@/components/AdminNav'
 
-type Staff = { id: string; name: string; phone_number: string | null; qr_version: number }
+type StaffRole = 'housekeeping' | 'dirty'
+type Staff = { id: string; name: string; phone_number: string | null; qr_version: number; role: StaffRole }
 type GuestCode = { code: string; expiresAt: string }
 
 export default function StaffPage() {
@@ -17,7 +18,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true)
 
   const [showAddModal, setShowAddModal] = useState(false)
-  const [form, setForm] = useState({ name: '', phone: '' })
+  const [form, setForm] = useState<{ name: string; phone: string; role: StaffRole }>({ name: '', phone: '', role: 'housekeeping' })
   const [saving, setSaving] = useState(false)
   const [addError, setAddError] = useState('')
 
@@ -66,12 +67,12 @@ export default function StaffPage() {
     const res = await fetch('/api/admin/staff', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: form.name.trim(), phone_number: form.phone.trim() || null }),
+      body: JSON.stringify({ name: form.name.trim(), phone_number: form.phone.trim() || null, role: form.role }),
     })
     const data = await res.json()
     if (!res.ok) { setAddError('저장 실패'); setSaving(false); return }
     setShowAddModal(false)
-    setForm({ name: '', phone: '' })
+    setForm({ name: '', phone: '', role: 'housekeeping' })
     setSaving(false)
     await refreshList()
     setQrDataUrl('')
@@ -135,7 +136,7 @@ export default function StaffPage() {
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-base font-semibold text-slate-900">직원 목록 <span className="text-slate-400 font-normal ml-1">{staffList.length}명</span></h1>
             <button
-              onClick={() => { setForm({ name: '', phone: '' }); setAddError(''); setShowAddModal(true) }}
+              onClick={() => { setForm({ name: '', phone: '', role: 'housekeeping' }); setAddError(''); setShowAddModal(true) }}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
             >+ 직원 추가</button>
           </div>
@@ -154,7 +155,16 @@ export default function StaffPage() {
                 <tbody className="divide-y divide-slate-100">
                   {staffList.map(s => (
                     <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-slate-900">{s.name}</td>
+                      <td className="px-4 py-3 font-medium text-slate-900">
+                        <span className="inline-flex items-center gap-2">
+                          {s.name}
+                          {s.role === 'dirty' ? (
+                            <span className="px-1.5 py-0.5 rounded-md bg-amber-100 text-amber-700 text-[11px] font-semibold">더티</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-500 text-[11px] font-semibold">청소</span>
+                          )}
+                        </span>
+                      </td>
                       <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">{s.phone_number ?? '—'}</td>
                       <td className="px-4 py-3 text-right space-x-3">
                         <button onClick={() => handleShowQR(s)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">QR 발급</button>
@@ -237,6 +247,30 @@ export default function StaffPage() {
                   placeholder="010-0000-0000"
                   className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">역할</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, role: 'housekeeping' }))}
+                    className={`py-2.5 rounded-lg text-sm border transition-colors ${
+                      form.role === 'housekeeping'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >청소</button>
+                  <button
+                    type="button"
+                    onClick={() => setForm(f => ({ ...f, role: 'dirty' }))}
+                    className={`py-2.5 rounded-lg text-sm border transition-colors ${
+                      form.role === 'dirty'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700 font-medium'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >더티 처리</button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5">더티 처리: 체크아웃 방을 청소 대기 상태로 전환하는 전담 직원</p>
               </div>
             </div>
             {addError && <p className="text-xs text-red-500 mt-3">{addError}</p>}

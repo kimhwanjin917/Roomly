@@ -9,6 +9,16 @@ interface Stats {
   active: number
   paid: number
   expired: number
+  mrr: number
+  planCounts: Record<string, number>
+  signupTrend: { date: string; count: number }[]
+}
+
+const PLAN_LABELS: Record<string, string> = {
+  trial: '무료 체험',
+  starter: '스타터',
+  standard: '스탠다드',
+  pro: '프로',
 }
 
 interface Hotel {
@@ -207,25 +217,48 @@ function Dashboard() {
               ))}
             </div>
           ) : stats ? (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-white rounded-xl border border-blue-200 p-4">
+                  <p className="text-xs font-medium text-blue-600 mb-1">MRR</p>
+                  <p className="text-2xl font-bold text-blue-700 tabular-nums">
+                    ₩{stats.mrr.toLocaleString('ko-KR')}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">최근 30일 결제 합계</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                  <p className="text-xs font-medium text-slate-500 mb-1">전체 호텔</p>
+                  <p className="text-2xl font-bold text-slate-900 tabular-nums">{stats.total}</p>
+                </div>
+                <div className="bg-white rounded-xl border border-emerald-200 p-4">
+                  <p className="text-xs font-medium text-emerald-600 mb-1">활성</p>
+                  <p className="text-2xl font-bold text-emerald-700 tabular-nums">{stats.active}</p>
+                  <p className="text-xs text-slate-400 mt-1">plan_expires_at &gt; now</p>
+                </div>
+                <div className="bg-white rounded-xl border border-slate-200 p-4">
+                  <p className="text-xs font-medium text-slate-500 mb-1">만료</p>
+                  <p className="text-2xl font-bold text-slate-600 tabular-nums">{stats.expired}</p>
+                  <p className="text-xs text-slate-400 mt-1">무료체험 포함</p>
+                </div>
+              </div>
+
+              {/* 플랜별 호텔 수 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {(['trial', 'starter', 'standard', 'pro'] as const).map(plan => (
+                  <div key={plan} className="bg-white rounded-xl border border-slate-200 p-4">
+                    <p className="text-xs font-medium text-slate-500 mb-1">{PLAN_LABELS[plan]}</p>
+                    <p className="text-xl font-bold text-slate-900 tabular-nums">
+                      {stats.planCounts?.[plan] ?? 0}
+                      <span className="text-xs font-normal text-slate-400 ml-1">개 호텔</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {/* 최근 30일 가입 추이 */}
               <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-xs font-medium text-slate-500 mb-1">전체 호텔</p>
-                <p className="text-2xl font-bold text-slate-900 tabular-nums">{stats.total}</p>
-              </div>
-              <div className="bg-white rounded-xl border border-emerald-200 p-4">
-                <p className="text-xs font-medium text-emerald-600 mb-1">활성</p>
-                <p className="text-2xl font-bold text-emerald-700 tabular-nums">{stats.active}</p>
-                <p className="text-xs text-slate-400 mt-1">plan_expires_at &gt; now</p>
-              </div>
-              <div className="bg-white rounded-xl border border-blue-200 p-4">
-                <p className="text-xs font-medium text-blue-600 mb-1">유료 구독</p>
-                <p className="text-2xl font-bold text-blue-700 tabular-nums">{stats.paid}</p>
-                <p className="text-xs text-slate-400 mt-1">Stripe 구독 보유</p>
-              </div>
-              <div className="bg-white rounded-xl border border-slate-200 p-4">
-                <p className="text-xs font-medium text-slate-500 mb-1">만료</p>
-                <p className="text-2xl font-bold text-slate-600 tabular-nums">{stats.expired}</p>
-                <p className="text-xs text-slate-400 mt-1">무료체험 포함</p>
+                <p className="text-xs font-medium text-slate-500 mb-2">최근 30일 신규 가입</p>
+                <SignupTrendChart data={stats.signupTrend ?? []} />
               </div>
             </div>
           ) : null}
@@ -268,6 +301,31 @@ function Dashboard() {
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+/* ─── Signup Trend Chart (T-061) ───────────────────────────────────────────── */
+
+function SignupTrendChart({ data }: { data: { date: string; count: number }[] }) {
+  if (data.length === 0) {
+    return <p className="text-xs text-slate-400 py-4 text-center">데이터가 없습니다.</p>
+  }
+  const maxVal = Math.max(...data.map(d => d.count), 1)
+  return (
+    <div className="flex items-end gap-0.5 h-24">
+      {data.map(d => (
+        <div
+          key={d.date}
+          className="flex-1 flex flex-col justify-end h-full"
+          title={`${d.date.slice(5).replace('-', '/')} — ${d.count}건`}
+        >
+          <div
+            className={`w-full rounded-t transition-all ${d.count > 0 ? 'bg-blue-500' : 'bg-slate-100'}`}
+            style={{ height: `${Math.max((d.count / maxVal) * 100, 4)}%` }}
+          />
+        </div>
+      ))}
     </div>
   )
 }

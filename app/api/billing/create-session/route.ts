@@ -1,45 +1,56 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import { stripe } from '@/lib/stripe'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { randomUUID } from 'crypto'
+import { PLAN_PRICES } from '@/lib/toss'
 
-const PLAN_PRICES: Record<string, string> = {
-  starter: process.env.STRIPE_PRICE_STARTER ?? '',
-  standard: process.env.STRIPE_PRICE_STANDARD ?? '',
-  pro: process.env.STRIPE_PRICE_PRO ?? '',
-}
-
+/**
+ * Toss 빌링 인증 세션 생성 (T-096)
+ * 클라이언트는 응답의 clientKey/customerKey/successUrl/failUrl로
+ * requestBillingAuth('카드', ...)를 호출한다.
+ * 인증 성공 시 Toss가 successUrl로 authKey/customerKey를 붙여 리다이렉트 →
+ * /api/billing/success 콜백에서 빌링키 발급 + 첫 결제 청구.
+ */
 export async function POST(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const { plan } = await req.json()
-  const priceId = PLAN_PRICES[plan]
-  if (!priceId) return NextResponse.json({ error: 'Invalid plan' }, { status: 400 })
-
-  const { data: hotel } = await supabase
-    .from('hotels')
-    .select('id, stripe_customer_id')
-    .single()
-
-  let customerId = hotel?.stripe_customer_id
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: user.email,
-      metadata: { hotel_id: hotel?.id ?? '' },
-    })
-    customerId = customer.id
-    await supabase.from('hotels').update({ stripe_customer_id: customerId }).eq('id', hotel?.id)
+  if (!PLAN_PRICES[plan]) {
+    return NextResponse.json({ error: '유효하지 않은 플랜입니다.' }, { status: 400 })
   }
 
-  const session = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: 'subscription',
-    line_items: [{ price: priceId, quantity: 1 }],
-    subscription_data: { trial_period_days: 30 },
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/admin/billing?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/admin/billing`,
-  })
+  const hotelId = user.app_metadata?.hotel_id as string | undefined
+  if (!hotelId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  return NextResponse.json({ url: session.url })
+  const service = createServiceClient()
+  const { data: hotel } = await service
+    .from('hotels')
+    .select('id, toss_customer_key')
+    .eq('id', hotelId)
+    .single()
+
+  if (!hotel) return NextResponse.json({ error: '호텔을 찾을 수 없습니다.' }, { status: 404 })
+
+  // customerKey가 없으면 생성 후 저장
+  let customerKey = hotel.toss_customer_key as string | null
+  if (!customerKey) {
+    customerKey = `cus_${randomUUID()}`
+    const { error } = await service
+      .from('hotels')
+      .update({ toss_customer_key: customerKey })
+      .eq('id', hotelId)
+    if (error) {
+      return NextResponse.json({ error: '고객 키 생성에 실패했습니다.' }, { status: 500 })
+    }
+  }
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+
+  return NextResponse.json({
+    clientKey: process.env.TOSS_PAYMENTS_CLIENT_KEY ?? '',
+    customerKey,
+    successUrl: `${appUrl}/api/billing/success?plan=${plan}`,
+    failUrl: `${appUrl}/admin/billing?fail=true`,
+  })
 }

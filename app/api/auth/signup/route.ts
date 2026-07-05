@@ -3,12 +3,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import WelcomeEmail from '@/emails/WelcomeEmail'
 
-export async function POST(request: NextRequest) {
-  const { licenseKey, hotelName, email, password } = await request.json()
+const TRIAL_DAYS = 90  // 3개월 무료 체험
 
-  if (!licenseKey?.trim()) {
-    return NextResponse.json({ error: '라이선스 키를 입력해주세요.' }, { status: 400 })
-  }
+export async function POST(request: NextRequest) {
+  const { hotelName, email, password } = await request.json()
+
   if (!hotelName?.trim() || !email?.trim() || !password) {
     return NextResponse.json({ error: '모든 항목을 입력해주세요.' }, { status: 400 })
   }
@@ -18,20 +17,6 @@ export async function POST(request: NextRequest) {
 
   const service = createServiceClient()
 
-  // 라이선스 키 검증
-  const { data: license, error: licenseErr } = await service
-    .from('licenses')
-    .select('id, used_at')
-    .eq('key', licenseKey.trim())
-    .single()
-
-  if (licenseErr || !license) {
-    return NextResponse.json({ error: '유효하지 않은 라이선스 키입니다.' }, { status: 403 })
-  }
-  if (license.used_at) {
-    return NextResponse.json({ error: '이미 사용된 라이선스 키입니다.' }, { status: 409 })
-  }
-
   // 이메일 중복 확인
   const { data: existing } = await service.auth.admin.listUsers()
   const duplicate = existing?.users.find(u => u.email === email.trim())
@@ -39,10 +24,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 409 })
   }
 
-  // 호텔 생성
+  // 호텔 생성 — 가입 즉시 3개월 무료 체험 시작
+  const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString()
   const { data: hotel, error: hotelErr } = await service
     .from('hotels')
-    .insert({ name: hotelName.trim(), subscription_plan: 'starter' })
+    .insert({
+      name: hotelName.trim(),
+      subscription_plan: 'trial',
+      trial_ends_at: trialEndsAt,
+    })
     .select('id')
     .single()
   if (hotelErr || !hotel) {
@@ -63,12 +53,6 @@ export async function POST(request: NextRequest) {
     await service.from('hotels').delete().eq('id', hotel.id)
     return NextResponse.json({ error: '계정 생성에 실패했습니다.' }, { status: 500 })
   }
-
-  // 라이선스 사용 처리
-  await service
-    .from('licenses')
-    .update({ used_at: new Date().toISOString(), hotel_id: hotel.id })
-    .eq('id', license.id)
 
   // 비차단 환영 이메일 발송
   sendEmail({

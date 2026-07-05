@@ -46,7 +46,7 @@ export default function LandingPage() {
           >
             무료로 시작하기 →
           </Link>
-          <p className="mt-4 text-sm text-slate-400">신용카드 없이 30일 무료 체험</p>
+          <p className="mt-4 text-sm text-slate-400">신용카드 없이 3개월 무료 체험</p>
         </div>
       </section>
 
@@ -147,7 +147,7 @@ export default function LandingPage() {
             투명한 요금제
           </h2>
           <p className="text-center text-slate-500 mb-14 text-sm sm:text-base">
-            30일 무료 체험 후 결정하세요. 언제든 취소 가능합니다.
+            3개월 무료 체험 후 결정하세요. 언제든 취소 가능합니다.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
             {/* 스타터 */}
@@ -226,7 +226,7 @@ export default function LandingPage() {
           </div>
 
           <p className="mt-8 text-center text-sm text-slate-400">
-            모든 요금제에 30일 무료 체험이 포함됩니다. 신용카드 없이 시작하세요.
+            모든 요금제에 3개월 무료 체험이 포함됩니다. 신용카드 없이 시작하세요.
           </p>
         </div>
       </section>
@@ -238,7 +238,7 @@ export default function LandingPage() {
             지금 무료로 시작하세요
           </h2>
           <p className="text-blue-200 mb-10 text-sm sm:text-base leading-relaxed">
-            30일 무료 체험 · 신용카드 불필요 · 언제든 취소
+            3개월 무료 체험 · 신용카드 불필요 · 언제든 취소
           </p>
           <Link
             href="/signup"
@@ -251,6 +251,15 @@ export default function LandingPage() {
 
       {/* 푸터 */}
       <footer className="bg-slate-900 text-slate-400 text-center py-8 px-4 text-sm">
+        <div className="flex items-center justify-center gap-4 mb-3">
+          <Link href="/terms" className="hover:text-white transition-colors">
+            이용약관
+          </Link>
+          <span className="text-slate-700">|</span>
+          <Link href="/privacy" className="hover:text-white transition-colors">
+            개인정보처리방침
+          </Link>
+        </div>
         © 2025 Roomly. All rights reserved.
       </footer>
     </div>

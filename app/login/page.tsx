@@ -7,7 +7,9 @@ function LoginForm() {
   const router = useRouter()
   const params = useSearchParams()
   const registered = params.get('registered') === '1'
+  const verified = params.get('verified') === '1'
   const qrExpired = params.get('error') === 'qr_expired'
+  const sessionExpired = params.get('error') === 'session_expired'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -52,9 +54,21 @@ function LoginForm() {
           </div>
         )}
 
+        {verified && (
+          <div className="mb-5 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-xl text-sm text-emerald-700 text-center">
+            이메일 인증 완료. 로그인해주세요.
+          </div>
+        )}
+
         {qrExpired && (
           <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 text-center">
-            QR 코드가 만료되었습니다. 관리자에게 새 QR을 요청해주세요.
+            QR이 무효화되었습니다. 관리자에게 새 QR을 요청하세요.
+          </div>
+        )}
+
+        {sessionExpired && (
+          <div className="mb-5 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-700 text-center">
+            세션이 만료되었습니다. QR을 다시 스캔해주세요.
           </div>
         )}
 
@@ -94,8 +108,11 @@ function LoginForm() {
         </form>
 
         <div className="mt-6 text-center space-y-3">
+          <a href="/reset-password" className="block text-sm text-slate-500 hover:text-blue-600 transition-colors">
+            비밀번호 찾기
+          </a>
           <a href="/signup" className="block text-sm font-medium text-slate-800 hover:text-blue-600 transition-colors">
-            라이선스 키로 호텔 등록 →
+            호텔 등록하고 3개월 무료 체험 →
           </a>
           <a href="/guest" className="block text-sm text-slate-400 hover:text-slate-600 transition-colors">
             일일 근무자 입장

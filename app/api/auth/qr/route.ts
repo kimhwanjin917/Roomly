@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const staffId = payload.app_metadata?.staff_id
     const hotelId = payload.app_metadata?.hotel_id
     const qrVersion = payload.app_metadata?.qr_version
+    const workerRole = payload.app_metadata?.worker_role
 
     if (!staffId || !hotelId) return NextResponse.redirect(new URL('/login', request.url))
 
@@ -22,7 +23,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/login?error=qr_expired', request.url))
     }
 
-    const response = NextResponse.redirect(new URL(`/worker/${staffId}`, request.url))
+    const destination = workerRole === 'dirty' ? `/worker/dirty/${staffId}` : `/worker/${staffId}`
+    const response = NextResponse.redirect(new URL(destination, request.url))
     response.cookies.set('roomly_worker_session', token, {
       httpOnly: true,
       path: '/',
@@ -30,7 +32,10 @@ export async function GET(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
     })
     return response
-  } catch {
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      return NextResponse.redirect(new URL('/login?error=session_expired', request.url))
+    }
     return NextResponse.redirect(new URL('/login', request.url))
   }
 }
