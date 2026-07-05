@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useLocale } from 'next-intl'
 import { createClientWithToken } from '@/lib/supabase/client'
 
 type Room = {
@@ -19,6 +20,8 @@ type Assignment = {
 }
 
 type Toast = { msg: string; type: 'error' | 'success' }
+
+type Supply = { id: string; name: string; unit: string }
 
 const TYPE_LABELS: Record<string, string> = {
   single: '싱글', double: '더블', suite: '스위트', other: '기타',
@@ -49,11 +52,17 @@ interface Props {
 type PushState = 'idle' | 'subscribed' | 'denied' | 'unsupported'
 
 export default function WorkerDashboard({ staffId, hotelId, staffName, initialAssignments, token }: Props) {
+  const locale = useLocale()
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
+  const [supplies, setSupplies] = useState<Supply[]>([])
+  const [supplyQtys, setSupplyQtys] = useState<Record<string, number>>({})
+  const [maintenanceRoom, setMaintenanceRoom] = useState<Assignment | null>(null)
+  const [maintenanceDesc, setMaintenanceDesc] = useState('')
+  const [maintenanceSaving, setMaintenanceSaving] = useState(false)
   const [toast, setToast] = useState<Toast | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [pushState, setPushState] = useState<PushState>('unsupported')
@@ -143,6 +152,29 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
     return () => { supabase.removeChannel(channel) }
   }, [refetch, token])
 
+  async function submitMaintenance() {
+    if (!maintenanceRoom || !maintenanceDesc.trim()) return
+    setMaintenanceSaving(true)
+    try {
+      const res = await fetch('/api/worker/maintenance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId: maintenanceRoom.rooms.id,
+          description: maintenanceDesc.trim(),
+        }),
+      })
+      if (!res.ok) throw new Error()
+      showToast('신고가 접수되었습니다', 'success')
+      setMaintenanceRoom(null)
+      setMaintenanceDesc('')
+    } catch {
+      showToast('신고 접수에 실패했습니다.')
+    } finally {
+      setMaintenanceSaving(false)
+    }
+  }
+
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id
     setLoading(l => ({ ...l, [roomId]: true }))
@@ -219,6 +251,26 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                 )}
               </div>
             )}
+            <div className="flex items-center gap-1 ml-auto mt-1">
+              {(['ko', 'en', 'vi'] as const).map(loc => (
+                <button
+                  key={loc}
+                  onClick={async () => {
+                    await fetch('/api/worker/locale', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ locale: loc }),
+                    })
+                    window.location.reload()
+                  }}
+                  className={`text-xs px-2 py-1 rounded-md transition-colors ${
+                    locale === loc ? 'bg-blue-100 text-blue-700 font-medium' : 'text-slate-400 hover:bg-slate-100'
+                  }`}
+                >
+                  {loc === 'ko' ? '한' : loc === 'en' ? 'EN' : 'VI'}
+                </button>
+              ))}
+            </div>
           </div>
           {totalCount > 0 && (
             <div className="text-right">
@@ -317,7 +369,15 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                     <>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => { setMemoRoom(assignment); setMemo('') }}
+                          onClick={() => {
+                            setMemoRoom(assignment)
+                            setMemo('')
+                            fetch('/api/worker/supplies')
+                              .then(r => r.json())
+                              .then((data: Supply[]) => setSupplies(data))
+                              .catch(() => {})
+                            setSupplyQtys({})
+                          }}
                           disabled={isLoading}
                           className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
                         >완료</button>
@@ -332,8 +392,21 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                         disabled={isLoading}
                         className="w-full py-2.5 border border-slate-200 text-slate-500 rounded-xl text-xs hover:bg-slate-50 disabled:opacity-40 transition-colors"
                       >대기중으로 되돌리기</button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMaintenanceRoom(assignment); setMaintenanceDesc('') }}
+                        className="w-full py-2 border border-slate-200 text-slate-400 rounded-xl text-xs hover:bg-slate-50 hover:text-slate-600 transition-colors"
+                      >🔧 수리 신고</button>
                     </>
                   )}
+                </div>
+              )}
+              {/* 완료된 카드에도 수리 신고 가능 */}
+              {finished && (
+                <div className="px-3 pb-3">
+                  <button
+                    onClick={() => { setMaintenanceRoom(assignment); setMaintenanceDesc('') }}
+                    className="w-full py-2 border border-dashed border-slate-200 text-slate-400 rounded-xl text-xs hover:bg-slate-50 transition-colors"
+                  >🔧 수리 신고</button>
                 </div>
               )}
             </div>
@@ -356,12 +429,80 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
               autoFocus
               className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
             />
-            <div className="flex gap-2">
+            {supplies.length > 0 && (
+              <div className="mt-3">
+                <p className="text-xs text-slate-500 font-medium mb-2">비품 사용 기록 (선택)</p>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {supplies.map(s => (
+                    <div key={s.id} className="flex items-center gap-2">
+                      <span className="flex-1 text-sm text-slate-700">{s.name}</span>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setSupplyQtys(prev => ({ ...prev, [s.id]: Math.max(0, (prev[s.id] ?? 0) - 1) }))}
+                          className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 text-sm font-bold"
+                        >−</button>
+                        <span className="w-8 text-center text-sm font-medium text-slate-900">{supplyQtys[s.id] ?? 0}</span>
+                        <button
+                          onClick={() => setSupplyQtys(prev => ({ ...prev, [s.id]: (prev[s.id] ?? 0) + 1 }))}
+                          className="w-7 h-7 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 text-sm font-bold"
+                        >+</button>
+                        <span className="text-xs text-slate-400 w-6">{s.unit}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div className="flex gap-2 mt-4">
               <button onClick={() => setMemoRoom(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">취소</button>
               <button
-                onClick={async () => { if (!memoRoom) return; await changeStatus(memoRoom, 'done', memo); setMemoRoom(null) }}
+                onClick={async () => {
+                  if (!memoRoom) return
+                  await changeStatus(memoRoom, 'done', memo)
+
+                  const usedItems = Object.entries(supplyQtys)
+                    .filter(([, qty]) => qty > 0)
+                    .map(([supplyId, quantity]) => ({ supplyId, quantity }))
+
+                  if (usedItems.length > 0) {
+                    fetch('/api/worker/supply-request', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ roomId: memoRoom.rooms.id, items: usedItems }),
+                    }).catch(() => {})
+                  }
+
+                  setMemoRoom(null)
+                }}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors"
               >완료 확인</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 수리 신고 모달 */}
+      {maintenanceRoom && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-30" onClick={() => setMaintenanceRoom(null)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-10" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+            <h2 className="font-bold text-slate-900 text-base mb-0.5">{maintenanceRoom.rooms.number}호 수리 신고</h2>
+            <p className="text-xs text-slate-400 mb-4">고장·파손 내용을 간단히 설명해주세요</p>
+            <textarea
+              value={maintenanceDesc}
+              onChange={e => setMaintenanceDesc(e.target.value)}
+              placeholder="예: 욕실 수도꼭지 물 새는 중, TV 리모컨 분실..."
+              rows={3}
+              autoFocus
+              className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            />
+            <div className="flex gap-2">
+              <button onClick={() => setMaintenanceRoom(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50">취소</button>
+              <button
+                onClick={submitMaintenance}
+                disabled={maintenanceSaving || !maintenanceDesc.trim()}
+                className="flex-1 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-sm font-semibold disabled:opacity-40"
+              >{maintenanceSaving ? '접수 중...' : '신고 접수'}</button>
             </div>
           </div>
         </div>

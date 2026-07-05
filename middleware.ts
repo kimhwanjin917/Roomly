@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { jwtVerify } from 'jose'
+import { checkRateLimit } from '@/lib/rateLimit'
 
 function getJwtSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET!)
@@ -54,8 +55,12 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // /api/auth/* — 인증 불필요 (공개 엔드포인트)
+  // /api/auth/* — 인증 불필요 (공개 엔드포인트), Rate limit 적용
   if (pathname.startsWith('/api/auth')) {
+    const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
+    if (!checkRateLimit(`auth:${ip}`, 10, 60_000)) {
+      return NextResponse.json({ error: 'too_many_requests' }, { status: 429 })
+    }
     return NextResponse.next()
   }
 

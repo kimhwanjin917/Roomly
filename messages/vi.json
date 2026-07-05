@@ -1,0 +1,59 @@
+{
+  "worker": {
+    "greeting": "Xin chào, {name}",
+    "completed": "Hoàn thành",
+    "total": "Tổng",
+    "noAssignments": "Không có phòng được phân công",
+    "offline": "Bạn đang ngoại tuyến. Đang hiển thị dữ liệu đã lưu.",
+    "floor": "Tầng {floor}",
+    "types": {
+      "single": "Đơn",
+      "double": "Đôi",
+      "suite": "Suite",
+      "other": "Khác"
+    },
+    "status": {
+      "dirty": "Trả phòng",
+      "cleaning": "Đang dọn",
+      "done": "Sạch",
+      "inspect": "Kiểm tra",
+      "urgent": "Khẩn cấp"
+    },
+    "checkin": "Nhận phòng",
+    "actions": {
+      "startCleaning": "Bắt đầu dọn",
+      "processing": "Đang xử lý...",
+      "done": "Hoàn thành",
+      "inspectNeeded": "Cần kiểm tra",
+      "revertDirty": "Trả về trạng thái chờ",
+      "maintenanceReport": "Báo cáo sự cố"
+    },
+    "memo": {
+      "title": "Phòng {number} — Hoàn thành",
+      "subtitle": "Để lại ghi chú nếu cần (tùy chọn)",
+      "placeholder": "VD: khăn tắm bổ sung, minibar hết...",
+      "cancel": "Hủy",
+      "confirm": "Xác nhận hoàn thành"
+    },
+    "supplies": {
+      "title": "Ghi lại vật dụng đã dùng (tùy chọn)"
+    },
+    "maintenance": {
+      "title": "Phòng {number} — Báo cáo sự cố",
+      "subtitle": "Mô tả ngắn gọn vấn đề",
+      "placeholder": "VD: vòi nước rò rỉ, điều khiển TV bị mất...",
+      "cancel": "Hủy",
+      "submit": "Gửi báo cáo",
+      "submitting": "Đang gửi...",
+      "success": "Báo cáo đã được gửi thành công",
+      "error": "Gửi báo cáo thất bại."
+    },
+    "push": {
+      "denied": "Thông báo bị chặn trong trình duyệt"
+    },
+    "errors": {
+      "saveFailed": "Lưu thất bại. Vui lòng thử lại."
+    },
+    "language": "Ngôn ngữ"
+  }
+}

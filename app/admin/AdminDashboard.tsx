@@ -81,6 +81,12 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   const [toast, setToast] = useState<Toast | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const [bulkCheckinOpen, setBulkCheckinOpen] = useState(false)
+  const [bulkTimes, setBulkTimes] = useState<Record<string, string>>({}) // roomId → HH:MM
+  const [bulkSaving, setBulkSaving] = useState(false)
+
+  const [quickAssignRoom, setQuickAssignRoom] = useState<string | null>(null) // room.id
+
   function showToast(msg: string, type: Toast['type'] = 'error') {
     if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast({ msg, type })
@@ -110,6 +116,13 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [refetch])
+
+  useEffect(() => {
+    if (!quickAssignRoom) return
+    const handler = () => setQuickAssignRoom(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
+  }, [quickAssignRoom])
 
   function openModal(room: Room) {
     const a = assignments.find(a => a.room_id === room.id)
@@ -141,6 +154,53 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
       showToast('배정에 실패했습니다. 다시 시도해주세요.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleBulkCheckin() {
+    setBulkSaving(true)
+    try {
+      const supabase = createClient()
+      const updates = rooms.map(r => ({
+        id: r.id,
+        checkin_time: bulkTimes[r.id]
+          ? (() => {
+              const [h, m] = bulkTimes[r.id].split(':')
+              const d = new Date()
+              d.setHours(Number(h), Number(m), 0, 0)
+              return d.toISOString()
+            })()
+          : null,
+      }))
+      await supabase.from('rooms').upsert(updates, { onConflict: 'id' })
+      await refetch()
+      setBulkCheckinOpen(false)
+      setBulkTimes({})
+      showToast('체크인 시간이 저장되었습니다', 'success')
+    } catch {
+      showToast('저장에 실패했습니다.')
+    } finally {
+      setBulkSaving(false)
+    }
+  }
+
+  async function quickAssign(roomId: string, staffId: string | null, isGuest = false) {
+    try {
+      await fetch('/api/admin/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          roomId,
+          staffId: staffId && staffId !== 'guest' ? staffId : undefined,
+          isGuest: staffId === 'guest' || isGuest,
+          unassign: !staffId,
+        }),
+      })
+      await refetch()
+    } catch {
+      showToast('배정에 실패했습니다.')
+    } finally {
+      setQuickAssignRoom(null)
     }
   }
 
@@ -244,6 +304,20 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           </select>
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs text-slate-400">{filtered.length}개 객실</span>
+            <button
+              onClick={() => {
+                const times: Record<string, string> = {}
+                rooms.forEach(r => {
+                  if (r.checkin_time) {
+                    const d = new Date(r.checkin_time)
+                    times[r.id] = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+                  }
+                })
+                setBulkTimes(times)
+                setBulkCheckinOpen(true)
+              }}
+              className="px-3 py-1.5 text-xs border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50"
+            >체크인 일괄</button>
             <div className="flex rounded-lg border border-slate-200 overflow-hidden bg-white">
               <button
                 onClick={() => setViewMode('table')}
@@ -310,7 +384,36 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                           {cfg.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-slate-600 font-medium">{assignedName ?? <span className="text-slate-300">—</span>}</td>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <div className="relative">
+                          {assignedName ? (
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => setQuickAssignRoom(quickAssignRoom === room.id ? null : room.id)}
+                                className="text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded-md transition-colors"
+                              >{assignedName}</button>
+                              <button
+                                onClick={() => quickAssign(room.id, null)}
+                                className="text-slate-300 hover:text-red-400 text-sm"
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setQuickAssignRoom(quickAssignRoom === room.id ? null : room.id)}
+                              className="text-xs text-slate-400 hover:text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-md transition-colors border border-dashed border-slate-200 hover:border-blue-300"
+                            >+ 배정</button>
+                          )}
+                          {quickAssignRoom === room.id && (
+                            <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                              {staffList.map(s => (
+                                <button key={s.id} onClick={() => quickAssign(room.id, s.id)} className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-700">{s.name}</button>
+                              ))}
+                              <button onClick={() => quickAssign(room.id, 'guest')} className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-500">게스트</button>
+                              {assignedName && <button onClick={() => quickAssign(room.id, null)} className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-500 border-t border-slate-100">배정 취소</button>}
+                            </div>
+                          )}
+                        </div>
+                      </td>
                       <td className={`px-4 py-3 text-sm ${urgent ? 'text-red-500 font-medium' : 'text-slate-400'}`}>
                         {room.checkin_time ? fmtTime(room.checkin_time) : <span className="text-slate-300">—</span>}
                       </td>
@@ -343,7 +446,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                 <button
                   key={room.id}
                   onClick={() => openModal(room)}
-                  className={`bg-white rounded-xl p-3 text-left border transition-all hover:shadow-md active:scale-95 ${
+                  className={`relative bg-white rounded-xl p-3 text-left border transition-all hover:shadow-md active:scale-95 ${
                     urgent ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
@@ -357,7 +460,31 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                   </div>
                   <div className="space-y-0.5 text-xs text-slate-400">
                     <p>{room.floor}층</p>
-                    {assignedName && <p className="text-slate-600 font-medium truncate">{assignedName}</p>}
+                    <div onClick={e => e.stopPropagation()}>
+                      {assignedName ? (
+                        <div className="flex items-center gap-1 mt-1">
+                          <button
+                            onClick={() => setQuickAssignRoom(quickAssignRoom === room.id ? null : room.id)}
+                            className="text-xs text-slate-700 font-medium bg-slate-100 hover:bg-slate-200 px-1.5 py-0.5 rounded transition-colors truncate max-w-[70px]"
+                          >{assignedName}</button>
+                          <button onClick={() => quickAssign(room.id, null)} className="text-slate-300 hover:text-red-400 text-xs leading-none">✕</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setQuickAssignRoom(quickAssignRoom === room.id ? null : room.id)}
+                          className="text-xs text-slate-400 hover:text-blue-600 mt-1"
+                        >+ 배정</button>
+                      )}
+                      {quickAssignRoom === room.id && (
+                        <div className="absolute bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 min-w-[130px] left-0 top-full mt-1">
+                          {staffList.map(s => (
+                            <button key={s.id} onClick={() => quickAssign(room.id, s.id)} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700">{s.name}</button>
+                          ))}
+                          <button onClick={() => quickAssign(room.id, 'guest')} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-500">게스트</button>
+                          {assignedName && <button onClick={() => quickAssign(room.id, null)} className="w-full text-left px-3 py-2 text-xs hover:bg-red-50 text-red-500 border-t border-slate-100">취소</button>}
+                        </div>
+                      )}
+                    </div>
                     {room.checkin_time && (
                       <p className={urgent ? 'text-red-500 font-medium' : ''}>CI {fmtTime(room.checkin_time)}</p>
                     )}
@@ -378,6 +505,46 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'
         }`}>
           {toast.msg}
+        </div>
+      )}
+
+      {/* 체크인 일괄 등록 모달 */}
+      {bulkCheckinOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-20 p-4" onClick={() => setBulkCheckinOpen(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 pt-5 pb-4 border-b border-slate-100 flex items-center justify-between">
+              <h2 className="font-bold text-slate-900">체크인 일괄 등록</h2>
+              <button
+                onClick={() => {
+                  const t: Record<string, string> = {}
+                  rooms.forEach(r => { t[r.id] = '15:00' })
+                  setBulkTimes(t)
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800"
+              >전체 15:00</button>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {rooms.map(r => (
+                <div key={r.id} className="flex items-center gap-3">
+                  <span className="w-16 font-semibold text-slate-900 text-sm">{r.number}호</span>
+                  <span className="text-xs text-slate-400 w-6">{r.floor}층</span>
+                  <input
+                    type="time"
+                    value={bulkTimes[r.id] ?? ''}
+                    onChange={e => setBulkTimes(prev => ({ ...prev, [r.id]: e.target.value }))}
+                    className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {bulkTimes[r.id] && (
+                    <button onClick={() => setBulkTimes(prev => { const n = {...prev}; delete n[r.id]; return n })} className="text-xs text-slate-400 hover:text-slate-600">✕</button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="p-4 border-t border-slate-100 flex gap-2">
+              <button onClick={() => setBulkCheckinOpen(false)} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">취소</button>
+              <button onClick={handleBulkCheckin} disabled={bulkSaving} className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold disabled:opacity-40">{bulkSaving ? '저장 중...' : '저장'}</button>
+            </div>
+          </div>
         </div>
       )}
 

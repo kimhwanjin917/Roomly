@@ -2,10 +2,13 @@ import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
 import { redirect } from 'next/navigation'
 import * as jwt from 'jsonwebtoken'
+import { NextIntlClientProvider } from 'next-intl'
 import WorkerDashboard from './WorkerDashboard'
 
 export default async function WorkerPage({ params }: { params: { staffId: string } }) {
   const cookieStore = cookies()
+  const locale = cookieStore.get('roomly_locale')?.value ?? 'ko'
+  const messages = (await import(`@/messages/${locale}.json`)).default
   const sessionCookie = cookieStore.get('roomly_worker_session')
   if (!sessionCookie) redirect('/login')
 
@@ -40,12 +43,14 @@ export default async function WorkerPage({ params }: { params: { staffId: string
   ])
 
   return (
-    <WorkerDashboard
-      staffId={staffId}
-      hotelId={hotelId}
-      staffName={staffRes.data?.name ?? '직원'}
-      initialAssignments={(assignRes.data ?? []) as any}
-      token={sessionCookie.value}
-    />
+    <NextIntlClientProvider locale={locale} messages={messages}>
+      <WorkerDashboard
+        staffId={staffId}
+        hotelId={hotelId}
+        staffName={staffRes.data?.name ?? '직원'}
+        initialAssignments={(assignRes.data ?? []) as any}
+        token={sessionCookie.value}
+      />
+    </NextIntlClientProvider>
   )
 }

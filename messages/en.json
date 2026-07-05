@@ -1,0 +1,59 @@
+{
+  "worker": {
+    "greeting": "Hello, {name}",
+    "completed": "Done",
+    "total": "Total",
+    "noAssignments": "No rooms assigned",
+    "offline": "You are offline. Showing last cached data.",
+    "floor": "Floor {floor}",
+    "types": {
+      "single": "Single",
+      "double": "Double",
+      "suite": "Suite",
+      "other": "Other"
+    },
+    "status": {
+      "dirty": "Checkout",
+      "cleaning": "In Progress",
+      "done": "Clean",
+      "inspect": "Inspect",
+      "urgent": "Urgent"
+    },
+    "checkin": "Check-in",
+    "actions": {
+      "startCleaning": "Start Cleaning",
+      "processing": "Processing...",
+      "done": "Done",
+      "inspectNeeded": "Needs Inspection",
+      "revertDirty": "Revert to Checkout",
+      "maintenanceReport": "Report Issue"
+    },
+    "memo": {
+      "title": "Room {number} — Complete",
+      "subtitle": "Leave a note if needed (optional)",
+      "placeholder": "e.g. extra towels requested, minibar empty...",
+      "cancel": "Cancel",
+      "confirm": "Confirm Complete"
+    },
+    "supplies": {
+      "title": "Record Supply Usage (optional)"
+    },
+    "maintenance": {
+      "title": "Room {number} — Report Issue",
+      "subtitle": "Briefly describe the problem",
+      "placeholder": "e.g. bathroom faucet leaking, TV remote missing...",
+      "cancel": "Cancel",
+      "submit": "Submit Report",
+      "submitting": "Submitting...",
+      "success": "Report submitted successfully",
+      "error": "Failed to submit report."
+    },
+    "push": {
+      "denied": "Notifications blocked in browser"
+    },
+    "errors": {
+      "saveFailed": "Failed to save. Please try again."
+    },
+    "language": "Language"
+  }
+}

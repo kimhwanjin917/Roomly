@@ -2,7 +2,6 @@
 
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 
 function LoginForm() {
   const router = useRouter()
@@ -18,10 +17,18 @@ function LoginForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setError('이메일 또는 비밀번호를 확인해주세요.')
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    if (!res.ok) {
+      const data = await res.json()
+      if (data.error === 'account_locked') {
+        setError(`로그인 시도가 너무 많습니다. ${data.minutesLeft}분 후 다시 시도해주세요.`)
+      } else {
+        setError('이메일 또는 비밀번호를 확인해주세요.')
+      }
       setLoading(false)
       return
     }

@@ -1,0 +1,59 @@
+{
+  "worker": {
+    "greeting": "안녕하세요, {name}님",
+    "completed": "완료",
+    "total": "전체",
+    "noAssignments": "배정된 객실이 없습니다",
+    "offline": "오프라인 상태입니다. 마지막 데이터를 표시 중입니다.",
+    "floor": "{floor}층",
+    "types": {
+      "single": "싱글",
+      "double": "더블",
+      "suite": "스위트",
+      "other": "기타"
+    },
+    "status": {
+      "dirty": "대기",
+      "cleaning": "청소중",
+      "done": "완료",
+      "inspect": "점검대기",
+      "urgent": "긴급"
+    },
+    "checkin": "체크인",
+    "actions": {
+      "startCleaning": "청소 시작",
+      "processing": "처리 중...",
+      "done": "완료",
+      "inspectNeeded": "점검 필요",
+      "revertDirty": "대기중으로 되돌리기",
+      "maintenanceReport": "수리 신고"
+    },
+    "memo": {
+      "title": "{number}호 완료 처리",
+      "subtitle": "특이사항이 있으면 메모를 남겨주세요 (선택)",
+      "placeholder": "예: 욕실 수건 추가 요청, 미니바 비어있음...",
+      "cancel": "취소",
+      "confirm": "완료 확인"
+    },
+    "supplies": {
+      "title": "비품 사용 기록 (선택)"
+    },
+    "maintenance": {
+      "title": "{number}호 수리 신고",
+      "subtitle": "고장·파손 내용을 간단히 설명해주세요",
+      "placeholder": "예: 욕실 수도꼭지 물 새는 중, TV 리모컨 분실...",
+      "cancel": "취소",
+      "submit": "신고 접수",
+      "submitting": "접수 중...",
+      "success": "신고가 접수되었습니다",
+      "error": "신고 접수에 실패했습니다."
+    },
+    "push": {
+      "denied": "브라우저 알림이 차단됨"
+    },
+    "errors": {
+      "saveFailed": "저장에 실패했습니다. 다시 시도해주세요."
+    },
+    "language": "언어"
+  }
+}

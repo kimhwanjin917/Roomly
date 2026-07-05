@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { sendPushToStaff } from '@/lib/push'
 
 export async function POST(request: NextRequest) {
   const supabase = createClient()
@@ -38,6 +39,15 @@ export async function POST(request: NextRequest) {
   }).select('id').single()
 
   if (error) return NextResponse.json({ error: 'server_error' }, { status: 500 })
+
+  if (staffId) {
+    sendPushToStaff(staffId, {
+      title: `${room.number}호 배정됨`,
+      body: '청소를 시작해주세요',
+      url: `/worker/${staffId}`,
+      tag: `assign-${staffId}`,
+    }).catch(() => {})
+  }
 
   return NextResponse.json({ assignmentId: assignment.id })
 }

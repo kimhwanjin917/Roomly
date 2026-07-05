@@ -4,6 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 
 type Tab = 'hotels' | 'licenses'
 
+interface Stats {
+  total: number
+  active: number
+  paid: number
+  expired: number
+}
+
 interface Hotel {
   id: string
   name: string
@@ -137,6 +144,26 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
 function Dashboard() {
   const [tab, setTab] = useState<Tab>('hotels')
   const [toasts, setToasts] = useState<Toast[]>([])
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+
+  useEffect(() => {
+    fetchStats()
+  }, [])
+
+  async function fetchStats() {
+    setStatsLoading(true)
+    try {
+      const res = await fetch('/api/super-admin/stats')
+      if (!res.ok) throw new Error('fetch failed')
+      const data = await res.json()
+      setStats(data)
+    } catch {
+      // stats 실패 시 조용히 무시
+    } finally {
+      setStatsLoading(false)
+    }
+  }
 
   function addToast(message: string, type: ToastType = 'success') {
     const id = ++toastId
@@ -157,8 +184,54 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Tabs */}
       <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-6">
+        {/* Stats Section */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-sm font-semibold text-slate-700">수익 현황</h2>
+            <button
+              onClick={fetchStats}
+              disabled={statsLoading}
+              className="text-xs text-slate-400 hover:text-slate-600 font-medium disabled:opacity-40 transition-colors"
+            >
+              새로고침
+            </button>
+          </div>
+          {statsLoading ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {[0, 1, 2, 3].map(i => (
+                <div key={i} className="bg-white rounded-xl border border-slate-200 p-4 animate-pulse">
+                  <div className="h-3 bg-slate-100 rounded w-1/2 mb-3" />
+                  <div className="h-7 bg-slate-100 rounded w-1/3" />
+                </div>
+              ))}
+            </div>
+          ) : stats ? (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-xs font-medium text-slate-500 mb-1">전체 호텔</p>
+                <p className="text-2xl font-bold text-slate-900 tabular-nums">{stats.total}</p>
+              </div>
+              <div className="bg-white rounded-xl border border-emerald-200 p-4">
+                <p className="text-xs font-medium text-emerald-600 mb-1">활성</p>
+                <p className="text-2xl font-bold text-emerald-700 tabular-nums">{stats.active}</p>
+                <p className="text-xs text-slate-400 mt-1">plan_expires_at &gt; now</p>
+              </div>
+              <div className="bg-white rounded-xl border border-blue-200 p-4">
+                <p className="text-xs font-medium text-blue-600 mb-1">유료 구독</p>
+                <p className="text-2xl font-bold text-blue-700 tabular-nums">{stats.paid}</p>
+                <p className="text-xs text-slate-400 mt-1">Stripe 구독 보유</p>
+              </div>
+              <div className="bg-white rounded-xl border border-slate-200 p-4">
+                <p className="text-xs font-medium text-slate-500 mb-1">만료</p>
+                <p className="text-2xl font-bold text-slate-600 tabular-nums">{stats.expired}</p>
+                <p className="text-xs text-slate-400 mt-1">무료체험 포함</p>
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Tabs */}
         <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit mb-6">
           {(['hotels', 'licenses'] as Tab[]).map(t => (
             <button
