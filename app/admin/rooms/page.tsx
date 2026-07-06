@@ -137,8 +137,12 @@ export default function RoomsPage() {
 
         {rooms.length === 0 ? (
           <div className="bg-white rounded-2xl border border-slate-200 py-24 text-center">
-            <p className="text-slate-400 text-sm mb-3">등록된 객실이 없습니다</p>
-            <button onClick={openAdd} className="text-blue-600 font-medium text-sm hover:underline">객실 추가하기</button>
+            <p className="text-slate-700 text-sm font-medium mb-1">첫 객실을 등록해보세요</p>
+            <p className="text-slate-400 text-xs mb-4">객실을 등록하면 청소 배정과 상태 관리를 시작할 수 있습니다</p>
+            <button
+              onClick={openAdd}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
+            >+ 객실 추가</button>
           </div>
         ) : (
           <div className="space-y-4">

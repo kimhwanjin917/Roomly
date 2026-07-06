@@ -26,10 +26,25 @@ function formatDate(iso: string | null) {
   })
 }
 
+const ALERT_MINUTE_OPTIONS = [30, 60, 90, 120, 180, 240]
+
 export default function SettingsPage() {
   const router = useRouter()
   const [hotelId, setHotelId] = useState('')
   const [loading, setLoading] = useState(true)
+
+  // 일반 설정 (T-058)
+  const [hotelName, setHotelName] = useState('')
+  const [adminEmail, setAdminEmail] = useState('')
+  const [alertMinutes, setAlertMinutes] = useState(120)
+  const [generalSaving, setGeneralSaving] = useState(false)
+  const [generalMsg, setGeneralMsg] = useState<{ text: string; ok: boolean } | null>(null)
+
+  // 비밀번호 변경
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordMsg, setPasswordMsg] = useState<{ text: string; ok: boolean } | null>(null)
 
   // API 키 상태
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
@@ -62,17 +77,73 @@ export default function SettingsPage() {
     }
   }, [])
 
+  const loadSettings = useCallback(async () => {
+    const res = await fetch('/api/admin/settings')
+    if (res.ok) {
+      const data = await res.json() as { hotelName: string; email: string; checkinAlertMinutes: number }
+      setHotelName(data.hotelName ?? '')
+      setAdminEmail(data.email ?? '')
+      setAlertMinutes(data.checkinAlertMinutes ?? 120)
+    }
+  }, [])
+
   useEffect(() => {
     async function init() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/login'); return }
       setHotelId(user.app_metadata?.hotel_id as string)
-      await Promise.all([loadApiKeys(), loadWebhookInfo()])
+      await Promise.all([loadSettings(), loadApiKeys(), loadWebhookInfo()])
       setLoading(false)
     }
     init()
-  }, [router, loadApiKeys, loadWebhookInfo])
+  }, [router, loadSettings, loadApiKeys, loadWebhookInfo])
+
+  async function handleSaveGeneral() {
+    if (!hotelName.trim()) {
+      setGeneralMsg({ text: '호텔명을 입력해주세요.', ok: false })
+      return
+    }
+    setGeneralSaving(true)
+    setGeneralMsg(null)
+    const res = await fetch('/api/admin/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hotelName: hotelName.trim(), checkinAlertMinutes: alertMinutes }),
+    })
+    if (res.ok) {
+      setGeneralMsg({ text: '저장되었습니다.', ok: true })
+    } else {
+      setGeneralMsg({ text: '저장에 실패했습니다. 다시 시도해주세요.', ok: false })
+    }
+    setGeneralSaving(false)
+  }
+
+  async function handleChangePassword() {
+    if (newPassword.length < 8) {
+      setPasswordMsg({ text: '비밀번호는 8자 이상이어야 합니다.', ok: false })
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ text: '비밀번호가 일치하지 않습니다.', ok: false })
+      return
+    }
+    setPasswordSaving(true)
+    setPasswordMsg(null)
+    const res = await fetch('/api/admin/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ newPassword }),
+    })
+    if (res.ok) {
+      setPasswordMsg({ text: '비밀번호가 변경되었습니다.', ok: true })
+      setNewPassword('')
+      setConfirmPassword('')
+    } else {
+      setPasswordMsg({ text: '비밀번호 변경에 실패했습니다.', ok: false })
+    }
+    setPasswordSaving(false)
+  }
 
   async function handleIssueKey() {
     if (!newKeyLabel.trim()) return
@@ -137,6 +208,104 @@ export default function SettingsPage() {
           <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center text-slate-400 text-sm">불러오는 중...</div>
         ) : (
           <>
+            {/* 섹션 0: 일반 설정 (T-058) */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h2 className="text-sm font-semibold text-slate-900">일반 설정</h2>
+                <p className="text-xs text-slate-400 mt-0.5">호텔 기본 정보와 체크인 긴급 알림 기준을 설정합니다.</p>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">호텔명</label>
+                  <input
+                    type="text"
+                    value={hotelName}
+                    onChange={e => setHotelName(e.target.value)}
+                    maxLength={100}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">관리자 이메일</label>
+                  <input
+                    type="email"
+                    value={adminEmail}
+                    disabled
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-slate-50 text-slate-500 cursor-not-allowed"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">체크인 긴급 알림 기준</label>
+                  <select
+                    value={alertMinutes}
+                    onChange={e => setAlertMinutes(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {ALERT_MINUTE_OPTIONS.map(m => (
+                      <option key={m} value={m}>
+                        체크인 {m >= 60 ? `${m / 60}시간` : `${m}분`} 전
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-400 mt-1.5">체크인이 이 시간 안으로 다가온 미완료 객실을 현황판에서 강조하고 푸시 알림을 발송합니다.</p>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  {generalMsg
+                    ? <p className={`text-xs ${generalMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{generalMsg.text}</p>
+                    : <span />}
+                  <button
+                    onClick={handleSaveGeneral}
+                    disabled={generalSaving}
+                    className="shrink-0 px-4 py-2 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {generalSaving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* 섹션 0-1: 비밀번호 변경 (T-058) */}
+            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100">
+                <h2 className="text-sm font-semibold text-slate-900">비밀번호 변경</h2>
+                <p className="text-xs text-slate-400 mt-0.5">관리자 계정 로그인 비밀번호를 변경합니다.</p>
+              </div>
+              <div className="px-5 py-4 space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">새 비밀번호 (8자 이상)</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">새 비밀번호 확인</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={e => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  {passwordMsg
+                    ? <p className={`text-xs ${passwordMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{passwordMsg.text}</p>
+                    : <span />}
+                  <button
+                    onClick={handleChangePassword}
+                    disabled={passwordSaving || !newPassword || !confirmPassword}
+                    className="shrink-0 px-4 py-2 bg-slate-800 text-white text-xs font-medium rounded-lg hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                  >
+                    {passwordSaving ? '변경 중...' : '비밀번호 변경'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* 섹션 1: API 키 관리 */}
             <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">

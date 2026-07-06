@@ -9,19 +9,31 @@ export default function SignupPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [agreedTerms, setAgreedTerms] = useState(false)
+  const [agreedPrivacy, setAgreedPrivacy] = useState(false)
+  const [agreedMarketing, setAgreedMarketing] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const requiredAgreed = agreedTerms && agreedPrivacy
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     if (password !== confirm) { setError('비밀번호가 일치하지 않습니다.'); return }
+    if (!requiredAgreed) { setError('필수 약관에 동의해주세요.'); return }
     setLoading(true)
     try {
       const res = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hotelName, email, password }),
+        body: JSON.stringify({
+          hotelName,
+          email,
+          password,
+          agreedTerms: requiredAgreed,
+          agreedMarketing,
+        }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error ?? '가입에 실패했습니다.'); return }
@@ -96,11 +108,67 @@ export default function SignupPage() {
             />
           </div>
 
+          <div className="space-y-2 pt-1">
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedTerms}
+                onChange={e => setAgreedTerms(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-600">
+                <span className="text-red-500 font-medium">(필수)</span>{' '}
+                <a
+                  href="/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
+                  onClick={e => e.stopPropagation()}
+                >
+                  이용약관
+                </a>
+                에 동의합니다
+              </span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedPrivacy}
+                onChange={e => setAgreedPrivacy(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-600">
+                <span className="text-red-500 font-medium">(필수)</span>{' '}
+                <a
+                  href="/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline hover:text-blue-800"
+                  onClick={e => e.stopPropagation()}
+                >
+                  개인정보처리방침
+                </a>
+                에 동의합니다
+              </span>
+            </label>
+            <label className="flex items-start gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={agreedMarketing}
+                onChange={e => setAgreedMarketing(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-xs text-slate-600">
+                <span className="text-slate-400">(선택)</span> 마케팅 이메일 수신에 동의합니다
+              </span>
+            </label>
+          </div>
+
           {error && <p className="text-sm text-red-500">{error}</p>}
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || !requiredAgreed}
             className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white py-2.5 rounded-lg text-sm font-semibold transition-colors"
           >
             {loading ? '등록 중...' : '호텔 등록하기'}

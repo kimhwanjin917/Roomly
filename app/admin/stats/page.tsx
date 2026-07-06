@@ -22,6 +22,8 @@ type IncompleteRoom = {
 
 type ChartPoint = { label: string; value: number }
 
+type AiState = 'idle' | 'loading' | 'streaming' | 'error' | 'disabled'
+
 const STATUS_LABELS: Record<string, string> = {
   dirty: '더티', cleaning: '청소중', inspect: '점검대기',
 }
@@ -58,6 +60,9 @@ export default function StatsPage() {
   const [hotelId, setHotelId] = useState('')
   const [hotelName, setHotelName] = useState('')
   const [loading, setLoading] = useState(true)
+
+  const [aiState, setAiState] = useState<AiState>('idle')
+  const [aiText, setAiText] = useState('')
 
   const [totalRooms, setTotalRooms] = useState(0)
   const [totalCompleted, setTotalCompleted] = useState(0)
@@ -183,6 +188,58 @@ export default function StatsPage() {
     setLoading(false)
   }
 
+  async function runAiInsight() {
+    setAiState('loading')
+    setAiText('')
+    try {
+      const res = await fetch('/api/admin/ai-insight', { method: 'POST' })
+      if (res.status === 501) {
+        // ANTHROPIC_API_KEY 미설정 → 버튼 숨김
+        setAiState('disabled')
+        return
+      }
+      if (!res.ok || !res.body) {
+        setAiState('error')
+        return
+      }
+
+      setAiState('streaming')
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let received = ''
+
+      // @anthropic-ai/sdk toReadableStream(): 줄 단위 JSON 이벤트
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) {
+          if (!line.trim()) continue
+          try {
+            const event = JSON.parse(line)
+            if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+              received += event.delta.text
+              setAiText(received)
+            }
+          } catch {
+            // 파싱 불가 라인 무시
+          }
+        }
+      }
+
+      if (received) {
+        setAiState('idle')
+      } else {
+        setAiState('error')
+      }
+    } catch {
+      setAiState('error')
+    }
+  }
+
   const completionRate = totalRooms > 0 ? Math.round((totalCompleted / totalRooms) * 100) : 0
   const maxCompleted = staffStats[0]?.completed ?? 1
 
@@ -236,6 +293,37 @@ export default function StatsPage() {
             >
               <span>↓</span> CSV
             </button>
+          </div>
+        )}
+
+        {/* AI 운영 인사이트 */}
+        {aiState !== 'disabled' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-900">AI 운영 인사이트</h2>
+              <button
+                onClick={runAiInsight}
+                disabled={aiState === 'loading' || aiState === 'streaming'}
+                className="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {aiState === 'loading'
+                  ? '분석 준비 중...'
+                  : aiState === 'streaming'
+                    ? '분석 중...'
+                    : 'AI 분석'}
+              </button>
+            </div>
+            {aiText && (
+              <p className="mt-3 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                {aiText}
+                {aiState === 'streaming' && <span className="animate-pulse">▍</span>}
+              </p>
+            )}
+            {aiState === 'error' && (
+              <p className="mt-3 text-sm text-red-500">
+                분석을 생성하지 못했습니다. 잠시 후 다시 시도해주세요.
+              </p>
+            )}
           </div>
         )}
 

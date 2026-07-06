@@ -29,6 +29,11 @@ export default function StaffPage() {
   const [deleteError, setDeleteError] = useState('')
   const [deleting, setDeleting] = useState(false)
 
+  const [editTarget, setEditTarget] = useState<Staff | null>(null)
+  const [editForm, setEditForm] = useState<{ name: string; phone: string; role: StaffRole }>({ name: '', phone: '', role: 'housekeeping' })
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError, setEditError] = useState('')
+
   const [guestCode, setGuestCode] = useState<GuestCode | null>(null)
   const [guestLoading, setGuestLoading] = useState(false)
 
@@ -95,6 +100,37 @@ export default function StaffPage() {
     if (res.ok) { setQrModal(m => m ? { ...m, qrUrl: data.qrUrl } : null); await refreshList() }
   }
 
+  function openEdit(staff: Staff) {
+    setEditTarget(staff)
+    setEditForm({ name: staff.name, phone: staff.phone_number ?? '', role: staff.role })
+    setEditError('')
+  }
+
+  async function handleEdit() {
+    if (!editTarget) return
+    if (!editForm.name.trim()) { setEditError('이름을 입력해 주세요.'); return }
+    setEditSaving(true); setEditError('')
+    const roleChanged = editForm.role !== editTarget.role
+    const res = await fetch(`/api/admin/staff/${editTarget.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editForm.name.trim(),
+        phone_number: editForm.phone.trim() || null,
+        role: editForm.role,
+      }),
+    })
+    if (!res.ok) { setEditError('저장 실패'); setEditSaving(false); return }
+    const updated: Staff = await res.json()
+    setEditSaving(false)
+    setEditTarget(null)
+    await refreshList()
+    // 역할 변경 시 기존 QR이 무효화되므로 새 QR 인쇄 유도
+    if (roleChanged) {
+      await handleShowQR(updated)
+    }
+  }
+
   async function handleDelete(force = false) {
     if (!deleteTarget) return
     setDeleting(true)
@@ -142,7 +178,14 @@ export default function StaffPage() {
           </div>
           <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
             {staffList.length === 0 ? (
-              <div className="py-20 text-center text-slate-400 text-sm">등록된 직원이 없습니다</div>
+              <div className="py-20 text-center">
+                <p className="text-slate-700 text-sm font-medium mb-1">첫 직원을 등록해보세요</p>
+                <p className="text-slate-400 text-xs mb-4">직원을 등록하면 QR로 바로 업무 화면에 접속할 수 있습니다</p>
+                <button
+                  onClick={() => { setForm({ name: '', phone: '', role: 'housekeeping' }); setAddError(''); setShowAddModal(true) }}
+                  className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold shadow-sm transition-colors"
+                >+ 직원 등록</button>
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-slate-100">
@@ -168,6 +211,15 @@ export default function StaffPage() {
                       <td className="px-4 py-3 text-slate-500 hidden sm:table-cell">{s.phone_number ?? '—'}</td>
                       <td className="px-4 py-3 text-right space-x-3">
                         <button onClick={() => handleShowQR(s)} className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors">QR 발급</button>
+                        <button
+                          onClick={() => openEdit(s)}
+                          title="수정"
+                          className="text-slate-400 hover:text-slate-700 transition-colors align-middle"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 inline">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125" />
+                          </svg>
+                        </button>
                         <button
                           onClick={() => { setDeleteTarget(s); setDeleteError('') }}
                           className="text-xs text-slate-400 hover:text-red-500 transition-colors"
@@ -278,6 +330,71 @@ export default function StaffPage() {
               <button onClick={() => setShowAddModal(false)} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">취소</button>
               <button onClick={handleAdd} disabled={saving} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 transition-colors">
                 {saving ? '저장 중...' : '저장 후 QR 발급'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 직원 수정 모달 */}
+      {editTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-20 p-4" onClick={() => setEditTarget(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-5" onClick={e => e.stopPropagation()}>
+            <h2 className="text-base font-semibold text-slate-900 mb-4">직원 정보 수정</h2>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">이름</label>
+                <input
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="홍길동"
+                  autoFocus
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">연락처 <span className="text-slate-300 normal-case font-normal">(선택)</span></label>
+                <input
+                  value={editForm.phone}
+                  onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))}
+                  placeholder="010-0000-0000"
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wide mb-1.5">역할</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditForm(f => ({ ...f, role: 'housekeeping' }))}
+                    className={`py-2.5 rounded-lg text-sm border transition-colors ${
+                      editForm.role === 'housekeeping'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 font-medium'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >청소</button>
+                  <button
+                    type="button"
+                    onClick={() => setEditForm(f => ({ ...f, role: 'dirty' }))}
+                    className={`py-2.5 rounded-lg text-sm border transition-colors ${
+                      editForm.role === 'dirty'
+                        ? 'border-amber-500 bg-amber-50 text-amber-700 font-medium'
+                        : 'border-slate-200 text-slate-500 hover:bg-slate-50'
+                    }`}
+                  >더티 처리</button>
+                </div>
+                {editForm.role !== editTarget.role && (
+                  <p className="text-[11px] text-amber-600 mt-1.5 font-medium">
+                    ⚠️ 역할을 변경하면 기존 QR이 무효화됩니다. 새 QR을 인쇄해 주세요.
+                  </p>
+                )}
+              </div>
+            </div>
+            {editError && <p className="text-xs text-red-500 mt-3">{editError}</p>}
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setEditTarget(null)} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 transition-colors">취소</button>
+              <button onClick={handleEdit} disabled={editSaving} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 transition-colors">
+                {editSaving ? '저장 중...' : '저장'}
               </button>
             </div>
           </div>

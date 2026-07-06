@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { jwtVerify } from 'jose'
-import { checkRateLimit } from '@/lib/rateLimit'
+import { authLimiter, adminLimiter, qrLimiter, checkLimit } from '@/lib/rateLimit'
 
 function getJwtSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET!)
@@ -17,6 +17,17 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
+    }
+
+    // /api/admin/* — Rate limit (60회/분 per user, T-070)
+    if (pathname.startsWith('/api/admin')) {
+      const allowed = await checkLimit(adminLimiter, `admin:${user.id}`, {
+        limit: 60,
+        windowMs: 60_000,
+      })
+      if (!allowed) {
+        return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429 })
+      }
     }
 
     // 플랜 만료 체크 — 페이지 라우트에만 적용 (API 라우트 및 /admin/billing 제외)
@@ -55,11 +66,16 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // /api/auth/* — 인증 불필요 (공개 엔드포인트), Rate limit 적용
+  // /api/auth/* — 인증 불필요 (공개 엔드포인트), Rate limit 적용 (T-070)
   if (pathname.startsWith('/api/auth')) {
-    const ip = request.headers.get('x-forwarded-for') ?? 'unknown'
-    if (!checkRateLimit(`auth:${ip}`, 10, 60_000)) {
-      return NextResponse.json({ error: 'too_many_requests' }, { status: 429 })
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    // /api/auth/qr — QR 로그인 전용 리미터 (20회/분 per IP)
+    const isQr = pathname.startsWith('/api/auth/qr')
+    const allowed = isQr
+      ? await checkLimit(qrLimiter, `qr:${ip}`, { limit: 20, windowMs: 60_000 })
+      : await checkLimit(authLimiter, `auth:${ip}`, { limit: 10, windowMs: 60_000 })
+    if (!allowed) {
+      return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429 })
     }
     return NextResponse.next()
   }

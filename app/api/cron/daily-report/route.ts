@@ -1,7 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
+import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import { DailyReportEmail } from '@/emails/DailyReportEmail'
+
+/**
+ * AI-03: 일일 리포트 AI 요약 (ANTHROPIC_API_KEY 있을 때만).
+ * 실패해도 리포트 발송은 계속되도록 null 반환.
+ */
+async function generateAiSummary(stats: {
+  completionRate: number
+  completed: number
+  avgMinutes: number
+  delayed: number
+}): Promise<string | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null
+  try {
+    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const response = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 150,
+      messages: [
+        {
+          role: 'user',
+          content: `어제 하우스키핑: 완료율 ${stats.completionRate}%, 완료 ${stats.completed}건, 평균 처리 ${stats.avgMinutes}분, 딜레이 ${stats.delayed}건. 관리자용 2문장 요약. 과장 없이.`,
+        },
+      ],
+    })
+    const textBlock = response.content.find((b) => b.type === 'text')
+    return textBlock && textBlock.type === 'text' ? textBlock.text.trim() : null
+  } catch {
+    return null
+  }
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
@@ -77,9 +108,29 @@ export async function GET(request: NextRequest) {
       avgMinutes: s.count > 0 ? Math.round(s.totalMinutes / s.count) : null,
     }))
 
+    // 전체 평균 처리시간(분) + 어제 딜레이(체크인 2시간 전 알림) 건수
+    const totalMinutesAll = Array.from(staffMap.values()).reduce((sum, s) => sum + s.totalMinutes, 0)
+    const avgMinutesAll = completed > 0 ? Math.round(totalMinutesAll / completed) : 0
+
+    const { count: delayedCount } = await service
+      .from('room_logs')
+      .select('*, rooms!inner(hotel_id)', { count: 'exact', head: true })
+      .eq('rooms.hotel_id', hotel.id)
+      .eq('alert_type', 'urgent_2h')
+      .gte('changed_at', dayStart)
+      .lte('changed_at', dayEnd)
+
+    const aiSummary = await generateAiSummary({
+      completionRate,
+      completed,
+      avgMinutes: avgMinutesAll,
+      delayed: delayedCount ?? 0,
+    })
+
     await sendEmail({
       to: adminUser.email,
       subject: `[Roomly] ${hotel.name} 일일 리포트 — ${dateStr}`,
+      hotelId: hotel.id,
       react: DailyReportEmail({
         hotelName: hotel.name,
         date: dateStr,
@@ -87,6 +138,7 @@ export async function GET(request: NextRequest) {
         completed,
         completionRate,
         staffStats,
+        aiSummary: aiSummary ?? undefined,
       }),
     })
     sent++

@@ -6,7 +6,7 @@ import WelcomeEmail from '@/emails/WelcomeEmail'
 const TRIAL_DAYS = 90  // 3개월 무료 체험
 
 export async function POST(request: NextRequest) {
-  const { hotelName, email, password } = await request.json()
+  const { hotelName, email, password, agreedTerms, agreedMarketing } = await request.json()
 
   if (!hotelName?.trim() || !email?.trim() || !password) {
     return NextResponse.json({ error: '모든 항목을 입력해주세요.' }, { status: 400 })
@@ -14,6 +14,11 @@ export async function POST(request: NextRequest) {
   if (password.length < 8) {
     return NextResponse.json({ error: '비밀번호는 8자 이상이어야 합니다.' }, { status: 400 })
   }
+  if (agreedTerms !== true) {
+    return NextResponse.json({ error: '필수 약관에 동의해주세요.' }, { status: 400 })
+  }
+  // agreedMarketing: 수신은 하되 저장은 추후 구현 (마케팅 수신 동의 컬럼 추가 시 hotels INSERT에 반영)
+  void agreedMarketing
 
   const service = createServiceClient()
 
@@ -32,6 +37,7 @@ export async function POST(request: NextRequest) {
       name: hotelName.trim(),
       subscription_plan: 'trial',
       trial_ends_at: trialEndsAt,
+      agreed_terms_at: new Date().toISOString(),  // 011_settings.sql에서 추가되는 컬럼
     })
     .select('id')
     .single()

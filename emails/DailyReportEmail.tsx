@@ -24,6 +24,7 @@ interface DailyReportEmailProps {
   completed: number
   completionRate: number
   staffStats: StaffStat[]
+  aiSummary?: string
 }
 
 export function DailyReportEmail({
@@ -33,6 +34,7 @@ export function DailyReportEmail({
   completed,
   completionRate,
   staffStats,
+  aiSummary,
 }: DailyReportEmailProps) {
   // Format date as Korean: YYYY년 MM월 DD일
   const [year, month, day] = date.split('-')
@@ -52,6 +54,25 @@ export function DailyReportEmail({
           </Text>
 
           <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
+
+          {/* AI 요약 (있을 때만) */}
+          {aiSummary && (
+            <Section
+              style={{
+                backgroundColor: '#eff6ff',
+                borderRadius: '8px',
+                padding: '4px 16px',
+                marginBottom: '24px',
+              }}
+            >
+              <Text style={{ fontSize: '12px', fontWeight: 'bold', color: '#2563eb', marginBottom: '4px' }}>
+                AI 요약
+              </Text>
+              <Text style={{ fontSize: '14px', color: '#1e3a5f', lineHeight: '1.6', marginTop: '0' }}>
+                {aiSummary}
+              </Text>
+            </Section>
+          )}
 
           {/* Summary stats */}
           <Section>

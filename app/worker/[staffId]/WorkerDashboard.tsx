@@ -19,9 +19,34 @@ type Assignment = {
   rooms: Room
 }
 
-type Toast = { msg: string; type: 'error' | 'success' }
+type Toast = { msg: string; type: 'error' | 'success' | 'info'; retry?: () => void }
 
 type Supply = { id: string; name: string; unit: string }
+
+// 오프라인 상태 변경 큐 (T-085)
+type QueuedChange = { roomId: string; assignmentId: string; status: string; memo: string | null; ts: number }
+
+const QUEUE_KEY = 'worker-status-queue'
+const QUEUE_MAX_AGE_MS = 24 * 60 * 60 * 1000 // 24시간 지난 항목 폐기
+
+function readQueue(): QueuedChange[] {
+  try {
+    const raw = localStorage.getItem(QUEUE_KEY)
+    const items: QueuedChange[] = raw ? JSON.parse(raw) : []
+    return items.filter(i => Date.now() - i.ts < QUEUE_MAX_AGE_MS)
+  } catch {
+    return []
+  }
+}
+
+function writeQueue(items: QueuedChange[]) {
+  try {
+    if (items.length === 0) localStorage.removeItem(QUEUE_KEY)
+    else localStorage.setItem(QUEUE_KEY, JSON.stringify(items))
+  } catch {
+    // localStorage 사용 불가 시 무시
+  }
+}
 
 const TYPE_LABELS: Record<string, string> = {
   single: '싱글', double: '더블', suite: '스위트', other: '기타',
@@ -66,7 +91,20 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
   const [toast, setToast] = useState<Toast | null>(null)
   const [isOnline, setIsOnline] = useState(true)
   const [pushState, setPushState] = useState<PushState>('unsupported')
+  const [showIosGuide, setShowIosGuide] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // iOS Safari 푸시 안내 (T-054): 홈 화면 추가 전에는 웹 푸시 불가
+  useEffect(() => {
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent)
+    const isStandalone =
+      window.matchMedia('(display-mode: standalone)').matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true
+    if (isIos && !isStandalone && !localStorage.getItem('ios-push-guide-shown')) {
+      setShowIosGuide(true)
+      localStorage.setItem('ios-push-guide-shown', '1')
+    }
+  }, [])
 
   useEffect(() => {
     if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
@@ -112,10 +150,10 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
     setPushState('idle')
   }
 
-  function showToast(msg: string, type: Toast['type'] = 'error') {
+  function showToast(msg: string, type: Toast['type'] = 'error', retry?: () => void) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
+    setToast({ msg, type, retry })
+    toastTimer.current = setTimeout(() => setToast(null), retry ? 6000 : 3000)
   }
 
   useEffect(() => {
@@ -132,16 +170,51 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
     }
   }, [staffId])
 
+  // 오프라인 큐 순차 재전송 (T-085): 성공 항목은 큐에서 제거, 실패 시 중단해 다음 복귀 때 재시도
+  const flushQueue = useCallback(async () => {
+    let queue = readQueue()
+    writeQueue(queue) // 24시간 지난 항목 폐기 결과 반영
+    if (queue.length === 0) return
+    let sent = 0
+    for (const item of [...queue]) {
+      try {
+        const res = await fetch('/api/worker/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomId: item.roomId, assignmentId: item.assignmentId, status: item.status, memo: item.memo }),
+        })
+        if (!res.ok) break
+        queue = queue.filter(q => q !== item)
+        writeQueue(queue)
+        sent++
+      } catch {
+        break
+      }
+    }
+    if (sent > 0) {
+      showToast(`오프라인 중 변경 ${sent}건을 전송했습니다`, 'success')
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); refetch() }
+    const handleOnline = () => {
+      setIsOnline(true)
+      flushQueue().finally(() => refetch())
+    }
     const handleOffline = () => setIsOnline(false)
     window.addEventListener('online', handleOnline)
     window.addEventListener('offline', handleOffline)
+    // 접속 시점에 밀린 큐가 있으면 전송
+    if (navigator.onLine) {
+      if (readQueue().length > 0) flushQueue().finally(() => refetch())
+    } else {
+      setIsOnline(false)
+    }
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
     }
-  }, [refetch])
+  }, [refetch, flushQueue])
 
   useEffect(() => {
     const supabase = createClientWithToken(token)
@@ -177,6 +250,20 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
 
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id
+
+    // 오프라인이면 큐에 저장 후 온라인 복귀 시 자동 전송 (T-085)
+    if (!navigator.onLine) {
+      const queue = readQueue()
+      queue.push({ roomId, assignmentId: assignment.id, status, memo: memoText ?? null, ts: Date.now() })
+      writeQueue(queue)
+      // 화면에는 변경 결과를 미리 반영
+      setAssignments(prev => prev.map(a =>
+        a.rooms.id === roomId ? { ...a, rooms: { ...a.rooms, status: status as Room['status'] } } : a
+      ))
+      showToast('오프라인 — 온라인 복귀 시 자동 전송됩니다', 'info')
+      return
+    }
+
     setLoading(l => ({ ...l, [roomId]: true }))
     try {
       const res = await fetch('/api/worker/status', {
@@ -187,7 +274,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
       if (!res.ok) throw new Error()
       await refetch()
     } catch {
-      showToast('저장에 실패했습니다. 다시 시도해주세요.')
+      showToast('저장에 실패했습니다.', 'error', () => changeStatus(assignment, status, memoText))
     } finally {
       setLoading(l => ({ ...l, [roomId]: false }))
     }
@@ -299,7 +386,11 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
       {/* 배정 목록 */}
       <div className="px-4 pt-4 space-y-2.5">
         {sorted.length === 0 && (
-          <div className="text-center py-24 text-slate-400 text-sm">배정된 객실이 없습니다</div>
+          <div className="text-center py-24">
+            <p className="text-3xl mb-3">🧺</p>
+            <p className="text-slate-500 text-sm font-medium">오늘 배정된 방이 없습니다.</p>
+            <p className="text-slate-400 text-xs mt-1">잠시 후 다시 확인해주세요.</p>
+          </div>
         )}
 
         {sorted.map(assignment => {
@@ -508,12 +599,58 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         </div>
       )}
 
+      {/* iOS Safari 푸시 안내 모달 (T-054) */}
+      {showIosGuide && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-40" onClick={() => setShowIosGuide(false)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-10" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
+            <h2 className="font-bold text-slate-900 text-base mb-1">🔔 알림을 받으려면 홈 화면에 추가하세요</h2>
+            <p className="text-xs text-slate-400 mb-5">iPhone·iPad의 Safari에서는 홈 화면에 추가해야 새 배정 알림을 받을 수 있습니다.</p>
+            <ol className="space-y-3 mb-6">
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">1</span>
+                <span className="text-sm text-slate-700">
+                  하단의 <span className="font-semibold">공유 버튼</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-4 h-4 inline mx-1 -mt-0.5 text-blue-600">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5m-13.5-9L12 3m0 0 4.5 4.5M12 3v13.5" />
+                  </svg>
+                  을 탭하세요
+                </span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">2</span>
+                <span className="text-sm text-slate-700">➕ <span className="font-semibold">&lsquo;홈 화면에 추가&rsquo;</span>를 선택하세요</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">3</span>
+                <span className="text-sm text-slate-700">🏠 홈 화면의 아이콘으로 접속하면 알림을 켤 수 있어요</span>
+              </li>
+            </ol>
+            <button
+              onClick={() => setShowIosGuide(false)}
+              className="w-full py-3 bg-slate-900 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold transition-colors"
+            >닫기</button>
+          </div>
+        </div>
+      )}
+
       {/* 토스트 */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 ${
-          toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 flex items-center gap-3 ${
+          toast.type === 'error' ? 'bg-red-500' : toast.type === 'info' ? 'bg-slate-700' : 'bg-emerald-500'
         }`}>
-          {toast.msg}
+          <span>{toast.msg}</span>
+          {toast.retry && (
+            <button
+              onClick={() => {
+                const retry = toast.retry
+                setToast(null)
+                if (toastTimer.current) clearTimeout(toastTimer.current)
+                retry?.()
+              }}
+              className="shrink-0 px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold transition-colors"
+            >다시 시도</button>
+          )}
         </div>
       )}
     </div>

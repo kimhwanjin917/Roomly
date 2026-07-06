@@ -53,7 +53,20 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     serverComponentsExternalPackages: ['web-push', 'resend', '@react-email/components'],
+    // T-170: instrumentation.ts에서 Sentry 서버/엣지 설정 로드
+    instrumentationHook: true,
   },
 }
 
-module.exports = withPWA(nextConfig)
+// T-170: Sentry wrap — 기존 withPWA 유지, 가장 바깥에서 감싼다.
+// SENTRY_AUTH_TOKEN이 없으면 소스맵 업로드는 자동 스킵되고 빌드는 정상 진행.
+const { withSentryConfig } = require('@sentry/nextjs')
+
+module.exports = withSentryConfig(withPWA(nextConfig), {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: true,
+  widenClientFileUpload: true,
+  disableLogger: true,
+})

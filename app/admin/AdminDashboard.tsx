@@ -24,8 +24,10 @@ type Assignment = {
 }
 
 type Staff = { id: string; name: string }
-type Toast = { msg: string; type: 'error' | 'success' }
+type Toast = { msg: string; type: 'error' | 'success'; retry?: boolean }
 type ViewMode = 'grid' | 'table'
+type AiRecommendation = { roomId: string; staffId: string; reason: string }
+type DurationEstimate = { avgMinutes: number; sampleCount: number }
 
 const STATUS_CONFIG = {
   dirty:   { label: '더티',     bg: 'bg-slate-100',    text: 'text-slate-600',   dot: 'bg-slate-400'   },
@@ -34,12 +36,10 @@ const STATUS_CONFIG = {
   inspect: { label: '점검대기', bg: 'bg-violet-50',    text: 'text-violet-700',  dot: 'bg-violet-500'  },
 }
 
-const ALERT_MINUTES = Number(process.env.NEXT_PUBLIC_CHECKIN_ALERT_MINUTES ?? 120)
-
-function isUrgent(room: Room, now: Date) {
+function isUrgent(room: Room, now: Date, alertMinutes: number) {
   if (!room.checkin_time) return false
   if (room.status === 'done' || room.status === 'inspect') return false
-  const alertAt = new Date(new Date(room.checkin_time).getTime() - ALERT_MINUTES * 60 * 1000)
+  const alertAt = new Date(new Date(room.checkin_time).getTime() - alertMinutes * 60 * 1000)
   return now >= alertAt
 }
 
@@ -57,12 +57,15 @@ function toDatetimeLocal(iso: string) {
 interface Props {
   hotelId: string
   hotelName: string
+  checkinAlertMinutes: number
+  subscriptionPlan: string
+  trialEndsAt: string | null
   initialRooms: Room[]
   initialAssignments: Assignment[]
   staffList: Staff[]
 }
 
-export default function AdminDashboard({ hotelId, hotelName, initialRooms, initialAssignments, staffList }: Props) {
+export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes, subscriptionPlan, trialEndsAt, initialRooms, initialAssignments, staffList }: Props) {
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
@@ -87,10 +90,21 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
   const [quickAssignRoom, setQuickAssignRoom] = useState<string | null>(null) // room.id
 
-  function showToast(msg: string, type: Toast['type'] = 'error') {
+  // AI 스마트 배정 추천 (AI-02)
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiRecs, setAiRecs] = useState<AiRecommendation[] | null>(null)
+  const [aiApplying, setAiApplying] = useState(false)
+
+  // 청소 소요시간 예측 (AI-04)
+  const [durationEstimate, setDurationEstimate] = useState<DurationEstimate | null>(null)
+
+  function showToast(msg: string, type: Toast['type'] = 'error', retry = false) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
+    setToast({ msg, type, retry })
+    // 재시도 버튼이 있는 토스트는 자동으로 닫지 않음
+    if (!retry) {
+      toastTimer.current = setTimeout(() => setToast(null), 3000)
+    }
   }
 
   useEffect(() => {
@@ -99,13 +113,19 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   }, [])
 
   const refetch = useCallback(async () => {
-    const supabase = createClient()
-    const [rr, ar] = await Promise.all([
-      supabase.from('rooms').select('*').eq('hotel_id', hotelId).is('deleted_at', null).order('floor').order('number'),
-      supabase.from('assignments').select('id, room_id, staff_id, is_guest, assigned_at, staff(id, name)').is('completed_at', null).is('cancelled_at', null),
-    ])
-    if (rr.data) setRooms(rr.data)
-    if (ar.data) setAssignments(ar.data as unknown as Assignment[])
+    try {
+      const supabase = createClient()
+      const [rr, ar] = await Promise.all([
+        supabase.from('rooms').select('*').eq('hotel_id', hotelId).is('deleted_at', null).order('floor').order('number'),
+        supabase.from('assignments').select('id, room_id, staff_id, is_guest, assigned_at, staff(id, name)').is('completed_at', null).is('cancelled_at', null),
+      ])
+      if (rr.error || ar.error) throw new Error('fetch_failed')
+      if (rr.data) setRooms(rr.data)
+      if (ar.data) setAssignments(ar.data as unknown as Assignment[])
+      setToast(t => (t?.retry ? null : t)) // 성공 시 재시도 토스트 제거
+    } catch {
+      showToast('데이터를 불러오지 못했습니다.', 'error', true)
+    }
   }, [hotelId])
 
   useEffect(() => {
@@ -131,6 +151,73 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     setModalCheckinTime(room.checkin_time ? toDatetimeLocal(room.checkin_time) : '')
     setModalMemo('')
     setModalAssign(a?.is_guest ? 'guest' : (a?.staff_id ?? ''))
+  }
+
+  // AI-04: 배정 모달에서 직원 선택 시 최근 완료 이력 10건으로 평균 소요시간 계산
+  useEffect(() => {
+    setDurationEstimate(null)
+    if (!selectedRoom || !modalAssign || modalAssign === 'guest') return
+
+    let cancelled = false
+    const supabase = createClient()
+    supabase
+      .from('assignments')
+      .select('assigned_at, completed_at')
+      .eq('staff_id', modalAssign)
+      .not('completed_at', 'is', null)
+      .order('completed_at', { ascending: false })
+      .limit(10)
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        const durations = data
+          .map(a => new Date(a.completed_at as string).getTime() - new Date(a.assigned_at as string).getTime())
+          .filter(ms => ms > 0)
+        if (durations.length < 3) return // 이력 부족 시 배지 숨김
+        const avgMs = durations.reduce((sum, ms) => sum + ms, 0) / durations.length
+        setDurationEstimate({ avgMinutes: Math.round(avgMs / 60_000), sampleCount: durations.length })
+      })
+    return () => { cancelled = true }
+  }, [modalAssign, selectedRoom])
+
+  // AI-02: AI 스마트 배정 추천
+  async function requestAiRecommendation() {
+    setAiLoading(true)
+    try {
+      const res = await fetch('/api/admin/ai-assign', { method: 'POST' })
+      if (!res.ok) throw new Error()
+      const data = await res.json() as { recommendations: AiRecommendation[] }
+      if (!Array.isArray(data.recommendations) || data.recommendations.length === 0) throw new Error()
+      setAiRecs(data.recommendations)
+    } catch {
+      showToast('추천을 생성하지 못했습니다.')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  async function applyAiRecommendations() {
+    if (!aiRecs?.length) return
+    setAiApplying(true)
+    try {
+      const results = await Promise.all(
+        aiRecs.map(rec =>
+          fetch('/api/admin/assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roomId: rec.roomId, staffId: rec.staffId }),
+          }),
+        ),
+      )
+      if (results.some(r => !r.ok)) throw new Error()
+      await refetch()
+      setAiRecs(null)
+      showToast('AI 추천 배정이 적용되었습니다', 'success')
+    } catch {
+      showToast('일부 배정에 실패했습니다. 현황을 확인해주세요.')
+      await refetch()
+    } finally {
+      setAiApplying(false)
+    }
   }
 
   async function handleAssign() {
@@ -249,11 +336,43 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     inspect:  rooms.filter(r => r.status === 'inspect').length,
   }
 
+  const unassignedDirtyCount = rooms.filter(
+    r => r.status === 'dirty' && !assignments.some(a => a.room_id === r.id),
+  ).length
+
+  // T-024: 무료체험 D-day
+  const trialDaysLeft = subscriptionPlan === 'trial' && trialEndsAt
+    ? Math.ceil((new Date(trialEndsAt).getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+    : null
+
   return (
     <div className="min-h-screen bg-slate-50">
       <AdminNav />
 
       <main className="max-w-7xl mx-auto px-4 py-5 pb-16 md:pb-5">
+        {/* 무료체험 배너 */}
+        {trialDaysLeft !== null && (
+          <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 mb-4 ${
+            trialDaysLeft <= 3
+              ? 'bg-amber-50 border-amber-300'
+              : 'bg-blue-50 border-blue-200'
+          }`}>
+            <p className={`text-sm font-medium ${trialDaysLeft <= 3 ? 'text-amber-800' : 'text-blue-800'}`}>
+              {trialDaysLeft > 0
+                ? <>D-{trialDaysLeft}일 무료체험 중</>
+                : <>무료체험이 종료되었습니다</>}
+              {trialDaysLeft > 0 && trialDaysLeft <= 3 && (
+                <span className="ml-2 text-xs font-normal text-amber-700">곧 종료됩니다 — 지금 업그레이드하세요</span>
+              )}
+            </p>
+            {(trialDaysLeft <= 3) && (
+              <a
+                href="/admin/billing"
+                className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg transition-colors"
+              >업그레이드</a>
+            )}
+          </div>
+        )}
         {/* 상태 카운터 */}
         <div className="grid grid-cols-4 gap-2 mb-5">
           {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => {
@@ -304,6 +423,13 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           </select>
           <div className="flex items-center gap-2 ml-auto">
             <span className="text-xs text-slate-400">{filtered.length}개 객실</span>
+            {unassignedDirtyCount > 0 && staffList.length > 0 && (
+              <button
+                onClick={requestAiRecommendation}
+                disabled={aiLoading}
+                className="px-3 py-1.5 text-xs font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >{aiLoading ? '추천 생성 중...' : '✦ AI 배정 추천'}</button>
+            )}
             <button
               onClick={() => {
                 const times: Record<string, string> = {}
@@ -331,15 +457,15 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           </div>
         </div>
 
-        {/* 객실 없음 — 첫 설정 안내 */}
+        {/* 객실 없음 — 빈 상태 (T-053) */}
         {rooms.length === 0 && (
           <div className="bg-white rounded-2xl border border-slate-200 py-20 text-center">
-            <p className="text-slate-800 font-semibold mb-1">등록된 객실이 없습니다</p>
+            <p className="text-slate-800 font-semibold mb-1">아직 객실이 없습니다</p>
             <p className="text-sm text-slate-400 mb-6">객실을 먼저 등록하면 현황판을 사용할 수 있습니다.</p>
             <a
-              href="/admin/onboarding"
+              href="/admin/rooms"
               className="inline-flex items-center px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-            >시작하기 →</a>
+            >객실 추가하기 →</a>
           </div>
         )}
 
@@ -361,7 +487,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
               <tbody className="divide-y divide-slate-100">
                 {filtered.map(room => {
                   const a = assignments.find(a => a.room_id === room.id)
-                  const urgent = isUrgent(room, now)
+                  const urgent = isUrgent(room, now, checkinAlertMinutes)
                   const cfg = STATUS_CONFIG[room.status]
                   const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
                   return (
@@ -438,7 +564,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
             {filtered.map(room => {
               const a = assignments.find(a => a.room_id === room.id)
-              const urgent = isUrgent(room, now)
+              const urgent = isUrgent(room, now, checkinAlertMinutes)
               const cfg = STATUS_CONFIG[room.status]
               const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
 
@@ -501,10 +627,16 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
       {/* 토스트 */}
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 ${
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-3 rounded-xl text-sm font-medium text-white shadow-lg z-50 flex items-center gap-3 ${
           toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'
         }`}>
-          {toast.msg}
+          <span>{toast.msg}</span>
+          {toast.retry && (
+            <button
+              onClick={() => { setToast(null); refetch() }}
+              className="shrink-0 px-2.5 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-xs font-semibold transition-colors"
+            >다시 시도</button>
+          )}
         </div>
       )}
 
@@ -543,6 +675,45 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             <div className="p-4 border-t border-slate-100 flex gap-2">
               <button onClick={() => setBulkCheckinOpen(false)} className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50">취소</button>
               <button onClick={handleBulkCheckin} disabled={bulkSaving} className="flex-1 py-2.5 bg-slate-900 hover:bg-slate-700 text-white rounded-lg text-sm font-semibold disabled:opacity-40">{bulkSaving ? '저장 중...' : '저장'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI 배정 추천 모달 */}
+      {aiRecs && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-20 p-4" onClick={() => !aiApplying && setAiRecs(null)}>
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 pt-5 pb-4 border-b border-slate-100">
+              <h2 className="font-bold text-slate-900">✦ AI 배정 추천</h2>
+              <p className="text-xs text-slate-400 mt-0.5">체크인 임박 · 부하 균형 · 층 이동 최소화 기준</p>
+            </div>
+            <div className="overflow-y-auto flex-1 p-4 space-y-2">
+              {aiRecs.map(rec => {
+                const room = rooms.find(r => r.id === rec.roomId)
+                const staff = staffList.find(s => s.id === rec.staffId)
+                return (
+                  <div key={rec.roomId} className="flex items-start gap-3 bg-slate-50 rounded-xl px-3 py-2.5">
+                    <span className="w-14 shrink-0 font-bold text-slate-900 text-sm">{room?.number ?? '?'}호</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-violet-700">{staff?.name ?? '알 수 없음'}</p>
+                      {rec.reason && <p className="text-xs text-slate-500 mt-0.5">{rec.reason}</p>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="p-4 border-t border-slate-100 flex gap-2">
+              <button
+                onClick={() => setAiRecs(null)}
+                disabled={aiApplying}
+                className="flex-1 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              >취소</button>
+              <button
+                onClick={applyAiRecommendations}
+                disabled={aiApplying}
+                className="flex-1 py-2.5 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-sm font-semibold disabled:opacity-40"
+              >{aiApplying ? '적용 중...' : '전체 적용'}</button>
             </div>
           </div>
         </div>
@@ -591,6 +762,40 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                     className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium disabled:opacity-40 transition-colors"
                   >배정</button>
                 </div>
+
+                {/* AI-04: 청소 소요시간 예측 배지 */}
+                {durationEstimate && (() => {
+                  const estimatedDone = new Date(now.getTime() + durationEstimate.avgMinutes * 60_000)
+                  const doneTime = estimatedDone.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+                  if (!selectedRoom.checkin_time) {
+                    return (
+                      <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600">
+                        평균 소요 {durationEstimate.avgMinutes}분 · 최근 {durationEstimate.sampleCount}건
+                      </span>
+                    )
+                  }
+                  const marginMs = new Date(selectedRoom.checkin_time).getTime() - estimatedDone.getTime()
+                  const marginMin = Math.round(marginMs / 60_000)
+                  if (marginMin >= 30) {
+                    return (
+                      <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700">
+                        완료 예상 ~{doneTime} · 체크인까지 {marginMin}분 여유
+                      </span>
+                    )
+                  }
+                  if (marginMin >= 0) {
+                    return (
+                      <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-50 text-amber-700">
+                        완료 예상 ~{doneTime} · 체크인 임박 (여유 {marginMin}분)
+                      </span>
+                    )
+                  }
+                  return (
+                    <span className="inline-flex items-center gap-1 mt-2 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600">
+                      체크인 초과 예상 · 완료 예상 ~{doneTime}
+                    </span>
+                  )
+                })()}
               </div>
 
               {/* 체크인 시간 */}
