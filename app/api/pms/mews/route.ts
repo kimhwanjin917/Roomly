@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   const webhookSecret = request.headers.get('x-roomly-webhook-secret')
 
   if (!hotelId || !webhookSecret) {
-    return NextResponse.json({ error: 'missing_headers' }, { status: 400 })
+    return NextResponse.json({ error: 'missing_headers', code: 'missing_headers' }, { status: 400 })
   }
 
   const service = createServiceClient()
@@ -20,7 +20,7 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (!hotel || hotel.webhook_secret !== webhookSecret) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   const body = await request.json() as MewsReservationEvent

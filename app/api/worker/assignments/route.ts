@@ -4,13 +4,13 @@ import * as jwt from 'jsonwebtoken'
 
 export async function GET(request: NextRequest) {
   const sessionCookie = request.cookies.get('roomly_worker_session')
-  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   let payload: jwt.JwtPayload
   try {
     payload = jwt.verify(sessionCookie.value, process.env.JWT_SECRET!) as jwt.JwtPayload
   } catch {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   const staffId = payload.app_metadata?.staff_id as string

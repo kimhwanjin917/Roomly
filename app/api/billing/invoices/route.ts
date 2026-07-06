@@ -8,10 +8,10 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string | undefined
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
   const { data, error } = await service
@@ -21,7 +21,7 @@ export async function GET() {
     .order('created_at', { ascending: false })
     .limit(20)
 
-  if (error) return NextResponse.json({ error: 'server_error' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
 
   return NextResponse.json({ invoices: data ?? [] })
 }

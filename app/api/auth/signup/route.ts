@@ -9,13 +9,13 @@ export async function POST(request: NextRequest) {
   const { hotelName, email, password, agreedTerms, agreedMarketing } = await request.json()
 
   if (!hotelName?.trim() || !email?.trim() || !password) {
-    return NextResponse.json({ error: '모든 항목을 입력해주세요.' }, { status: 400 })
+    return NextResponse.json({ error: '모든 항목을 입력해주세요.', code: 'missing_fields' }, { status: 400 })
   }
   if (password.length < 8) {
-    return NextResponse.json({ error: '비밀번호는 8자 이상이어야 합니다.' }, { status: 400 })
+    return NextResponse.json({ error: '비밀번호는 8자 이상이어야 합니다.', code: 'password_too_short' }, { status: 400 })
   }
   if (agreedTerms !== true) {
-    return NextResponse.json({ error: '필수 약관에 동의해주세요.' }, { status: 400 })
+    return NextResponse.json({ error: '필수 약관에 동의해주세요.', code: 'terms_required' }, { status: 400 })
   }
   // agreedMarketing: 수신은 하되 저장은 추후 구현 (마케팅 수신 동의 컬럼 추가 시 hotels INSERT에 반영)
   void agreedMarketing
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   const { data: existing } = await service.auth.admin.listUsers()
   const duplicate = existing?.users.find(u => u.email === email.trim())
   if (duplicate) {
-    return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 409 })
+    return NextResponse.json({ error: '이미 사용 중인 이메일입니다.', code: 'email_in_use' }, { status: 409 })
   }
 
   // 호텔 생성 — 가입 즉시 3개월 무료 체험 시작
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
     .select('id')
     .single()
   if (hotelErr || !hotel) {
-    return NextResponse.json({ error: '호텔 생성에 실패했습니다.' }, { status: 500 })
+    return NextResponse.json({ error: '호텔 생성에 실패했습니다.', code: 'hotel_create_failed' }, { status: 500 })
   }
 
   // 관리자 계정 생성 + app_metadata 설정
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
   })
   if (authErr || !authUser) {
     await service.from('hotels').delete().eq('id', hotel.id)
-    return NextResponse.json({ error: '계정 생성에 실패했습니다.' }, { status: 500 })
+    return NextResponse.json({ error: '계정 생성에 실패했습니다.', code: 'account_create_failed' }, { status: 500 })
   }
 
   // 비차단 환영 이메일 발송

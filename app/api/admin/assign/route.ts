@@ -5,19 +5,19 @@ import { sendPushToStaff } from '@/lib/push'
 export async function POST(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
   const { roomId, staffId, isGuest, unassign } = await request.json()
 
-  if (!roomId) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!roomId) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
   const service = createServiceClient()
 
   // 해당 방이 내 호텔 소속인지 확인
   const { data: room } = await service
     .from('rooms').select('id, number').eq('id', roomId).eq('hotel_id', hotelId).single()
-  if (!room) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (!room) return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
 
   // 기존 활성 배정 취소
   await service.from('assignments')
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     is_guest: isGuest ?? false,
   }).select('id').single()
 
-  if (error) return NextResponse.json({ error: 'server_error' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
 
   if (staffId) {
     sendPushToStaff(staffId, {

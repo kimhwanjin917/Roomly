@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(
 )
 
 export async function GET() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { data: hotels } = await supabaseAdmin
     .from('hotels')

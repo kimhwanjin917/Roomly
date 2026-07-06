@@ -15,20 +15,20 @@ const supabaseAdmin = createClient(
 )
 
 export async function POST() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const part1 = randomBytes(3).toString('hex').toUpperCase()
   const part2 = randomBytes(3).toString('hex').toUpperCase()
   const key = `ROOMLY-${part1}-${part2}`
 
   const { error } = await supabaseAdmin.from('licenses').insert({ key })
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) return NextResponse.json({ error: error.message, code: 'server_error' }, { status: 500 })
 
   return NextResponse.json({ key })
 }
 
 export async function GET() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { data } = await supabaseAdmin
     .from('licenses')

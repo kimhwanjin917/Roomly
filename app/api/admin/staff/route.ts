@@ -9,11 +9,11 @@ type StaffRole = (typeof STAFF_ROLES)[number]
 export async function POST(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
   const { name, phone_number, role } = await request.json()
-  if (!name?.trim()) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!name?.trim()) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
   const staffRole: StaffRole = STAFF_ROLES.includes(role) ? role : 'housekeeping'
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     .select('id')
     .single()
 
-  if (error) return NextResponse.json({ error: 'server_error' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
 
   const token = jwt.sign(
     {

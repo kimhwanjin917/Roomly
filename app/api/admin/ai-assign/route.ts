@@ -8,13 +8,13 @@ type Recommendation = { roomId: string; staffId: string; reason: string }
 export async function POST() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: 'ai_disabled' }, { status: 501 })
+    return NextResponse.json({ error: 'ai_disabled', code: 'ai_disabled' }, { status: 501 })
   }
 
   const service = createServiceClient()
@@ -101,7 +101,7 @@ export async function POST() {
     const textBlock = message.content.find(b => b.type === 'text')
     text = textBlock && textBlock.type === 'text' ? textBlock.text : ''
   } catch {
-    return NextResponse.json({ error: 'ai_request_failed' }, { status: 502 })
+    return NextResponse.json({ error: 'ai_request_failed', code: 'ai_request_failed' }, { status: 502 })
   }
 
   // 코드 펜스가 붙어 오는 경우 방어적으로 제거
@@ -111,11 +111,11 @@ export async function POST() {
   try {
     parsed = JSON.parse(cleaned)
   } catch {
-    return NextResponse.json({ error: 'parse_failed' }, { status: 400 })
+    return NextResponse.json({ error: 'parse_failed', code: 'parse_failed' }, { status: 400 })
   }
 
   if (!Array.isArray(parsed)) {
-    return NextResponse.json({ error: 'parse_failed' }, { status: 400 })
+    return NextResponse.json({ error: 'parse_failed', code: 'parse_failed' }, { status: 400 })
   }
 
   const validRoomIds = new Set(unassignedRooms.map(r => r.id))
@@ -140,7 +140,7 @@ export async function POST() {
   }
 
   if (recommendations.length === 0) {
-    return NextResponse.json({ error: 'parse_failed' }, { status: 400 })
+    return NextResponse.json({ error: 'parse_failed', code: 'parse_failed' }, { status: 400 })
   }
 
   return NextResponse.json({ recommendations })

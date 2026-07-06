@@ -5,7 +5,7 @@ import { randomBytes } from 'crypto'
 export async function POST() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   const hotelId = user.app_metadata?.hotel_id as string
 
   const secret = randomBytes(24).toString('hex')
@@ -18,7 +18,7 @@ export async function POST() {
 export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   const hotelId = user.app_metadata?.hotel_id as string
 
   const service = createServiceClient()

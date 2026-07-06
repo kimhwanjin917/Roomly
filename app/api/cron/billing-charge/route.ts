@@ -14,7 +14,7 @@ import { chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   const service = createServiceClient()

@@ -13,15 +13,15 @@ import { PLAN_PRICES } from '@/lib/toss'
 export async function POST(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { plan } = await req.json()
   if (!PLAN_PRICES[plan]) {
-    return NextResponse.json({ error: '유효하지 않은 플랜입니다.' }, { status: 400 })
+    return NextResponse.json({ error: '유효하지 않은 플랜입니다.', code: 'invalid_plan' }, { status: 400 })
   }
 
   const hotelId = user.app_metadata?.hotel_id as string | undefined
-  if (!hotelId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!hotelId) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
   const { data: hotel } = await service
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
     .eq('id', hotelId)
     .single()
 
-  if (!hotel) return NextResponse.json({ error: '호텔을 찾을 수 없습니다.' }, { status: 404 })
+  if (!hotel) return NextResponse.json({ error: '호텔을 찾을 수 없습니다.', code: 'hotel_not_found' }, { status: 404 })
 
   // customerKey가 없으면 생성 후 저장
   let customerKey = hotel.toss_customer_key as string | null
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       .update({ toss_customer_key: customerKey })
       .eq('id', hotelId)
     if (error) {
-      return NextResponse.json({ error: '고객 키 생성에 실패했습니다.' }, { status: 500 })
+      return NextResponse.json({ error: '고객 키 생성에 실패했습니다.', code: 'customer_key_failed' }, { status: 500 })
     }
   }
 

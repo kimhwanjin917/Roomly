@@ -4,15 +4,15 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401 })
+  if (!user) return new Response(JSON.stringify({ error: 'unauthorized', code: 'unauthorized' }), { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
-  if (!hotelId) return new Response(JSON.stringify({ error: 'forbidden' }), { status: 403 })
+  if (!hotelId) return new Response(JSON.stringify({ error: 'forbidden', code: 'forbidden' }), { status: 403 })
 
   const { searchParams } = new URL(request.url)
   const date = searchParams.get('date')
   if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    return new Response(JSON.stringify({ error: 'invalid_date' }), { status: 400 })
+    return new Response(JSON.stringify({ error: 'invalid_date', code: 'invalid_date' }), { status: 400 })
   }
 
   const { data: assignments, error } = await supabase
@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     .lte('completed_at', `${date}T23:59:59+09:00`)
     .not('completed_at', 'is', null)
 
-  if (error) return new Response(JSON.stringify({ error: 'server_error' }), { status: 500 })
+  if (error) return new Response(JSON.stringify({ error: 'server_error', code: 'server_error' }), { status: 500 })
 
   const rows = [['날짜', '직원', '객실', '층', '처리시간(분)']]
   for (const a of assignments ?? []) {

@@ -7,11 +7,11 @@ export const dynamic = 'force-dynamic'
 /**
  * AI-01: AI 운영 인사이트 (스트리밍)
  * 관리자 세션 확인 → 최근 7일 운영 데이터 집계 → Claude Haiku 스트리밍 응답.
- * ANTHROPIC_API_KEY 없으면 501 { error: 'ai_disabled' }.
+ * ANTHROPIC_API_KEY 없으면 501 { error: 'ai_disabled', code: 'ai_disabled' }.
  */
 export async function POST() {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: 'ai_disabled' }, { status: 501 })
+    return NextResponse.json({ error: 'ai_disabled', code: 'ai_disabled' }, { status: 501 })
   }
 
   // 관리자 세션 확인
@@ -21,7 +21,7 @@ export async function POST() {
   } = await supabase.auth.getUser()
   const hotelId = user?.app_metadata?.hotel_id as string | undefined
   if (!user || !hotelId || user.app_metadata?.role !== 'admin') {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   // 최근 7일 데이터 집계 (KST 기준)

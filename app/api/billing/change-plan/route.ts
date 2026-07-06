@@ -13,14 +13,14 @@ const PLAN_ORDER: Record<string, number> = { trial: 0, starter: 1, standard: 2, 
 export async function POST(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string | undefined
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { targetPlan } = await req.json()
   if (!PLAN_PRICES[targetPlan]) {
-    return NextResponse.json({ error: '유효하지 않은 플랜입니다.' }, { status: 400 })
+    return NextResponse.json({ error: '유효하지 않은 플랜입니다.', code: 'invalid_plan' }, { status: 400 })
   }
 
   const service = createServiceClient()
@@ -30,11 +30,11 @@ export async function POST(req: NextRequest) {
     .eq('id', hotelId)
     .single()
 
-  if (!hotel) return NextResponse.json({ error: '호텔을 찾을 수 없습니다.' }, { status: 404 })
+  if (!hotel) return NextResponse.json({ error: '호텔을 찾을 수 없습니다.', code: 'hotel_not_found' }, { status: 404 })
 
   const currentPlan = hotel.subscription_plan as string
   if (targetPlan === currentPlan) {
-    return NextResponse.json({ error: '이미 이용 중인 플랜입니다.' }, { status: 400 })
+    return NextResponse.json({ error: '이미 이용 중인 플랜입니다.', code: 'plan_already_active' }, { status: 400 })
   }
 
   const isUpgrade = (PLAN_ORDER[targetPlan] ?? 0) > (PLAN_ORDER[currentPlan] ?? 0)
@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     if (!result.success) {
       return NextResponse.json(
-        { error: result.failureReason ?? '결제에 실패했습니다. 카드를 확인해주세요.' },
+        { error: result.failureReason ?? '결제에 실패했습니다. 카드를 확인해주세요.', code: 'payment_failed' },
         { status: 402 }
       )
     }
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     .update({ pending_plan: targetPlan })
     .eq('id', hotelId)
 
-  if (error) return NextResponse.json({ error: 'server_error' }, { status: 500 })
+  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
 
   return NextResponse.json({
     ok: true,

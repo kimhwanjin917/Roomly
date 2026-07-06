@@ -4,13 +4,13 @@ import { createClient, createServiceClient } from '@/lib/supabase/server'
 export async function POST(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { number, floor, type } = await request.json()
-  if (!number?.trim() || !floor) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!number?.trim() || !floor) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
   const service = createServiceClient()
   const { data, error } = await service
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     console.error('[rooms POST]', error)
-    if (error.code === '23505') return NextResponse.json({ error: 'duplicate' }, { status: 409 })
+    if (error.code === '23505') return NextResponse.json({ error: 'duplicate', code: 'duplicate' }, { status: 409 })
     return NextResponse.json({ error: 'server_error', detail: error.message, code: error.code }, { status: 500 })
   }
 

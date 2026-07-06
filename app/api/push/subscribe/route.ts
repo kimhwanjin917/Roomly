@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
   const { subscription, staffId, isAdmin, hotelId } = body
 
   if (!subscription?.endpoint || !hotelId) {
-    return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+    return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
   }
 
   const service = createServiceClient()
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (isAdmin) {
     const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
     await service.from('push_subscriptions').upsert(
       {
@@ -39,11 +39,11 @@ export async function POST(request: NextRequest) {
       { onConflict: 'endpoint' }
     )
   } else {
-    if (!staffId) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+    if (!staffId) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
     const cookieStore = cookies()
     const sessionCookie = cookieStore.get('roomly_worker_session')
-    if (!sessionCookie) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    if (!sessionCookie) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
     const secret = new TextEncoder().encode(process.env.JWT_SECRET!)
     let jwtPayload: { app_metadata?: { staff_id?: string } }
@@ -51,11 +51,11 @@ export async function POST(request: NextRequest) {
       const { payload } = await jwtVerify(sessionCookie.value, secret)
       jwtPayload = payload as typeof jwtPayload
     } catch {
-      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
     }
 
     if (jwtPayload.app_metadata?.staff_id !== staffId) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+      return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
     }
 
     await service.from('push_subscriptions').upsert(
@@ -78,7 +78,7 @@ export async function DELETE(request: NextRequest) {
   const body = await request.json() as { endpoint: string }
   const { endpoint } = body
 
-  if (!endpoint) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!endpoint) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
   const service = createServiceClient()
   await service.from('push_subscriptions').delete().eq('endpoint', endpoint)

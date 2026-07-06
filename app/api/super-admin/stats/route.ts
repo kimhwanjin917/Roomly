@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(
 )
 
 export async function GET() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const now = new Date()
   const nowIso = now.toISOString()
@@ -33,7 +33,7 @@ export async function GET() {
   ])
 
   if (hotelsRes.error || paymentsRes.error) {
-    return NextResponse.json({ error: 'DB error' }, { status: 500 })
+    return NextResponse.json({ error: 'DB error', code: 'db_error' }, { status: 500 })
   }
 
   const hotels = hotelsRes.data ?? []

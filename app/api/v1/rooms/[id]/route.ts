@@ -23,7 +23,7 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   const auth = await verifyApiKey(request)
-  if (!auth) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!auth) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const body = await request.json() as { status?: string; checkin_time?: string | null }
 
@@ -33,7 +33,7 @@ export async function PATCH(
   if ('checkin_time' in body) update.checkin_time = body.checkin_time
 
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: 'no_fields' }, { status: 400 })
+    return NextResponse.json({ error: 'no_fields', code: 'no_fields' }, { status: 400 })
   }
 
   const service = createServiceClient()
@@ -45,7 +45,7 @@ export async function PATCH(
     .select('id, number, floor, type, status, checkinTime:checkin_time')
     .single()
 
-  if (error || !data) return NextResponse.json({ error: 'not_found' }, { status: 404 })
+  if (error || !data) return NextResponse.json({ error: 'not_found', code: 'not_found' }, { status: 404 })
 
   return NextResponse.json(data)
 }

@@ -21,7 +21,7 @@ async function verifyApiKey(request: NextRequest): Promise<{ hotelId: string } |
 
 export async function GET(request: NextRequest) {
   const auth = await verifyApiKey(request)
-  if (!auth) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!auth) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const service = createServiceClient()
   const { data } = await service

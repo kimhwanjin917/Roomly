@@ -5,24 +5,24 @@ import * as jwt from 'jsonwebtoken'
 // done/inspect → dirty 전환만 허용 (체크아웃 방 더티 처리 전용)
 export async function POST(request: NextRequest) {
   const sessionCookie = request.cookies.get('roomly_worker_session')
-  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   let payload: jwt.JwtPayload
   try {
     payload = jwt.verify(sessionCookie.value, process.env.JWT_SECRET!) as jwt.JwtPayload
   } catch {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   if (payload.app_metadata?.worker_role !== 'dirty') {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
   }
 
   const staffId = payload.app_metadata?.staff_id as string
   const hotelId = payload.app_metadata?.hotel_id as string
   const { roomId } = await request.json()
 
-  if (!roomId) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!roomId) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
   const service = createServiceClient()
 
@@ -34,9 +34,9 @@ export async function POST(request: NextRequest) {
     .eq('hotel_id', hotelId)
     .is('deleted_at', null)
     .single()
-  if (!room) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (!room) return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
   if (room.status !== 'done' && room.status !== 'inspect') {
-    return NextResponse.json({ error: 'invalid_status' }, { status: 400 })
+    return NextResponse.json({ error: 'invalid_status', code: 'invalid_status' }, { status: 400 })
   }
 
   // 방 상태 업데이트

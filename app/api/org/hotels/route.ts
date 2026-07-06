@@ -22,13 +22,13 @@ export async function GET() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   const role = user.app_metadata?.role as string | undefined
   const orgId = user.app_metadata?.org_id as string | undefined
   if (role !== 'org_admin' || !orgId) {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
   }
 
   const service = createServiceClient()
@@ -40,7 +40,7 @@ export async function GET() {
     .order('name')
 
   if (hotelsErr) {
-    return NextResponse.json({ error: 'server_error' }, { status: 500 })
+    return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
   }
   if (!hotels || hotels.length === 0) {
     return NextResponse.json({ hotels: [] })
@@ -65,7 +65,7 @@ export async function GET() {
   ])
 
   if (roomsRes.error || completedRes.error) {
-    return NextResponse.json({ error: 'server_error' }, { status: 500 })
+    return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
   }
 
   const statMap: Record<string, { total: number; incomplete: number; cleaning: number; completed: number }> = {}

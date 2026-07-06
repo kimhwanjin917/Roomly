@@ -30,14 +30,14 @@ export async function POST(req: NextRequest) {
 
   if (!verifySignature(rawBody, req.headers.get('x-toss-signature'))) {
     // 보안상 상세 에러 노출 금지 (BILLING-04)
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid signature', code: 'invalid_signature' }, { status: 400 })
   }
 
   let event: { eventType?: string; data?: Record<string, unknown> }
   try {
     event = JSON.parse(rawBody)
   } catch {
-    return NextResponse.json({ error: 'Invalid payload' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid payload', code: 'invalid_payload' }, { status: 400 })
   }
 
   if (event.eventType !== 'PAYMENT_STATUS_CHANGED' || !event.data) {
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     if (insertError.code === '23505') {
       return NextResponse.json({ received: true, duplicate: true })
     }
-    return NextResponse.json({ error: 'DB error' }, { status: 500 })
+    return NextResponse.json({ error: 'DB error', code: 'db_error' }, { status: 500 })
   }
 
   if (isSuccess) {
