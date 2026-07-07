@@ -99,6 +99,8 @@ SUPER_ADMIN_PASSWORD_HASH=<출력된 해시값>
 
 ## `.env.local` 파일 예시
 
+> 최신 전체 예시는 저장소 루트의 `.env.local.example` 참고 (Toss/Cron/Upstash/Sentry/Anthropic 포함).
+
 ```bash
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://xxxxxxxxxxxx.supabase.co
@@ -212,40 +214,80 @@ npm install resend react-email @react-email/components
 
 ---
 
-## Stripe (결제)
+## Toss Payments (결제 — T-096에서 Stripe 전면 대체)
 
 | 변수명 | 용도 | 노출 범위 |
 |--------|------|-----------|
-| `STRIPE_SECRET_KEY` | Stripe API 서버 시크릿 키 | 서버만 (**절대 클라이언트 노출 금지**) |
-| `STRIPE_WEBHOOK_SECRET` | Stripe 웹훅 서명 검증 시크릿 | 서버만 (**절대 클라이언트 노출 금지**) |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Stripe 클라이언트 공개키 | 클라이언트 (공개 가능) |
-| `STRIPE_PRICE_STARTER` | 스타터 플랜 Price ID (Stripe 대시보드에서 생성) | 서버만 |
-| `STRIPE_PRICE_STANDARD` | 스탠다드 플랜 Price ID | 서버만 |
-| `STRIPE_PRICE_PRO` | 프로 플랜 Price ID | 서버만 |
+| `TOSS_PAYMENTS_CLIENT_KEY` | Toss 클라이언트 키 (빌링 인증 위젯) | 클라이언트 (공개 가능) |
+| `TOSS_PAYMENTS_SECRET_KEY` | Toss API 서버 시크릿 키 | 서버만 (**절대 클라이언트 노출 금지**) |
+| `TOSS_PAYMENTS_WEBHOOK_SECRET` | Toss 웹훅 서명 검증 시크릿 | 서버만 (**절대 클라이언트 노출 금지**) |
 
 ```bash
-STRIPE_SECRET_KEY=sk_test_...
-STRIPE_WEBHOOK_SECRET=whsec_...
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_...
-
-# Stripe Dashboard에서 생성한 Price ID
-STRIPE_PRICE_STARTER=price_starter_monthly
-STRIPE_PRICE_STANDARD=price_standard_monthly
-STRIPE_PRICE_PRO=price_pro_monthly
+TOSS_PAYMENTS_CLIENT_KEY=test_ck_...   # 프로덕션은 live_ck_...
+TOSS_PAYMENTS_SECRET_KEY=test_sk_...   # 프로덕션은 live_sk_...
+TOSS_PAYMENTS_WEBHOOK_SECRET=whsec_...
 ```
 
-Stripe Dashboard에서 생성할 상품:
-- 스타터: 월 30,000원 → price_starter_monthly
-- 스탠다드: 월 70,000원 → price_standard_monthly
-- 프로: 월 150,000원 → price_pro_monthly
+> 플랜 가격은 Price ID 없이 `lib/toss.ts`의 `PLAN_PRICES`에서 관리 (스타터 3만/스탠다드 7만/프로 15만).  
+> 웹훅 엔드포인트: `POST /api/billing/webhook` — Toss 개발자센터에 등록.  
+> 정기결제(빌링키)는 Toss와 별도 계약 필요.
 
-> 웹훅 엔드포인트: `POST /api/billing/webhook`  
-> Stripe Dashboard → Developers → Webhooks에 등록 필요  
-> 수신 이벤트: `checkout.session.completed`, `invoice.payment_succeeded`, `customer.subscription.deleted`
+---
+
+## 슈퍼어드민 알림 / Cron
+
+| 변수명 | 용도 | 노출 범위 |
+|--------|------|-----------|
+| `SUPER_ADMIN_EMAIL` | 결제 실패 등 운영 알림 수신 이메일 | 서버만 |
+| `CRON_SECRET` | Vercel Cron 인증 — 크론 라우트가 `Authorization: Bearer $CRON_SECRET` 검증 | 서버만 (**절대 클라이언트 노출 금지**) |
+
+```bash
+SUPER_ADMIN_EMAIL=admin@roomly.app
+CRON_SECRET=<32자 이상 랜덤 시크릿>
+```
+
+> 크론 5종: daily-report(UTC 23시), billing-charge(20시), trial-ending(0시), checkin-alert(10분), cleanup(16시) — `vercel.json` 참고.
+
+---
+
+## Upstash Redis (Rate Limiting — T-070)
+
+| 변수명 | 용도 | 노출 범위 |
+|--------|------|-----------|
+| `UPSTASH_REDIS_REST_URL` | Upstash REST API URL | 서버만 |
+| `UPSTASH_REDIS_REST_TOKEN` | Upstash REST 토큰 | 서버만 (**절대 클라이언트 노출 금지**) |
+
+```bash
+UPSTASH_REDIS_REST_URL=https://xxxxxxxx.upstash.io
+UPSTASH_REDIS_REST_TOKEN=AXxx...
+```
+
+> 미설정 시 인메모리 폴백으로 동작 — 단일 인스턴스에서만 정확하므로 프로덕션에서는 필수.
+
+---
+
+## Sentry (에러 추적 — T-170)
+
+| 변수명 | 용도 | 노출 범위 |
+|--------|------|-----------|
+| `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` | 에러 수집 DSN | 서버/클라이언트 |
+| `SENTRY_ORG` / `SENTRY_PROJECT` | 소스맵 업로드 대상 | 빌드 시 |
+| `SENTRY_AUTH_TOKEN` | 소스맵 업로드 토큰 (없으면 업로드만 스킵) | 빌드 시 (**절대 클라이언트 노출 금지**) |
+
+---
+
+## Anthropic (AI 기능 — AI-01~04)
+
+| 변수명 | 용도 | 노출 범위 |
+|--------|------|-----------|
+| `ANTHROPIC_API_KEY` | AI 인사이트·스마트 배정·리포트 요약 | 서버만 (**절대 클라이언트 노출 금지**) |
+
+> 미설정 시 AI 기능만 비활성화되고 나머지는 정상 동작.
 
 ---
 
 ## Vercel 배포 시
 
 Vercel 대시보드 → Settings → Environment Variables에 동일하게 등록  
-`NEXT_PUBLIC_` 접두사가 붙은 변수만 클라이언트 번들에 포함됨
+`NEXT_PUBLIC_` 접두사가 붙은 변수만 클라이언트 번들에 포함됨  
+전체 등록 목록과 체크 절차는 `docs/Roomly_배포체크리스트.md` §1 참고

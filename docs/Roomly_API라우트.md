@@ -268,16 +268,90 @@ supabase.channel('guest-assignments')
 
 ---
 
-## 에러 응답 형식 (공통)
+## 에러 응답 형식 (공통 — T-084 표준)
 
 ```json
-{ "error": "error_code", "message": "사람이 읽을 수 있는 설명" }
+{ "error": "사람이 읽을 수 있는 설명", "code": "error_code" }
 ```
 
-| HTTP | error_code | 의미 |
-|------|------------|------|
-| 400 | `invalid_request` | 필수 파라미터 누락 또는 형식 오류 |
-| 401 | `unauthorized` | 세션 없음 또는 만료 |
-| 403 | `forbidden` | 권한 없음 (다른 호텔, 다른 직원 등) |
-| 409 | `conflict` | 비즈니스 규칙 충돌 (미완료 배정 있음 등) |
-| 500 | `server_error` | 서버 내부 오류 |
+| HTTP | code | 의미 |
+|------|------|------|
+| 400 | `invalid_request` / `invalid_json` | 필수 파라미터 누락, 형식 오류, 잘못된 JSON 바디 |
+| 401 | `unauthorized` / `session_expired` / `invalid_token` | 세션 없음·만료·JWT 무효 |
+| 403 | `forbidden` / `invalid_password` | 권한 없음 (다른 호텔, 다른 직원 등) |
+| 409 | `conflict` / `duplicate` | 비즈니스 규칙 충돌, unique 위반 |
+| 429 | `rate_limit_exceeded` | Rate limit 초과 (T-070) |
+| 500 | `internal` / `db_error` | 서버 내부 오류 (Sentry 자동 보고) |
+
+> 모든 라우트는 `lib/api-error.ts`의 `withApiError()` 래퍼로 감싸져 있어
+> 처리되지 않은 예외도 위 형식으로 변환된다.
+
+---
+
+## Phase 2/3 엔드포인트 (T-192 반영)
+
+### 결제 — `/api/billing` (Toss)
+
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| POST | `/api/billing/create-session` | 빌링 인증 요청 생성 | 관리자 |
+| GET | `/api/billing/success` | 빌링 인증 콜백 → 빌링키 발급 + 첫 결제 | 관리자 |
+| POST | `/api/billing/webhook` | Toss 웹훅 (멱등 처리, T-082) | 서명 검증 |
+| GET | `/api/billing/status` | 현재 플랜·만료일 조회 | 관리자 |
+| POST | `/api/billing/change-plan` | 플랜 변경 (업/다운그레이드) | 관리자 |
+| POST | `/api/billing/cancel` | 구독 해지 (기간 만료까지 유지) | 관리자 |
+| GET | `/api/billing/invoices` | 결제 내역 조회 | 관리자 |
+
+### 푸시 — `/api/push`
+
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| POST/DELETE | `/api/push/subscribe` | 푸시 구독 등록/해제 | 직원 JWT |
+
+### 크론 — `/api/cron` (Vercel Cron, `Bearer $CRON_SECRET`)
+
+| 경로 | 스케줄 (UTC) | 설명 |
+|------|------|------|
+| `/api/cron/daily-report` | 0 23 * * * | 일일 리포트 이메일 |
+| `/api/cron/billing-charge` | 0 20 * * * | 빌링키 정기 청구 |
+| `/api/cron/trial-ending` | 0 0 * * * | 무료체험 D-3/D-1 알림 |
+| `/api/cron/checkin-alert` | */10 * * * * | 체크인 긴급/초과 푸시 |
+| `/api/cron/cleanup` | 0 16 * * * | 만료 게스트 코드 정리 |
+
+### 관리자 확장 — `/api/admin`
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/admin/stats/export` | 통계 CSV 내보내기 (UTF-8 BOM) |
+| PATCH | `/api/admin/rooms/bulk-status` | 객실 상태 일괄 변경 (T-198) |
+| GET/PATCH | `/api/admin/settings` | 일반 설정 조회/수정, 비밀번호 변경 |
+| GET/POST/DELETE | `/api/admin/api-keys` | 공개 API 키 관리 |
+| GET/POST | `/api/admin/webhook-secret` | PMS 웹훅 시크릿 |
+| GET/PATCH | `/api/admin/maintenance` | 유지보수 신고 처리 |
+| GET/POST/PUT | `/api/admin/supplies` | 비품 관리 |
+| POST | `/api/admin/ai-insight` / `ai-assign` | AI 인사이트·배정 추천 |
+| DELETE | `/api/admin/account` | 계정 탈퇴 + 데이터 삭제 (T-182) |
+
+### PMS 연동 — `/api/pms`
+
+| 메서드 | 경로 | 설명 | 인증 |
+|--------|------|------|------|
+| POST | `/api/pms/webhook` | 표준 웹훅 (checkout/checkin_updated) | X-Roomly-Webhook-Secret |
+| POST | `/api/pms/mews` | Mews 어댑터 | X-Roomly-Webhook-Secret |
+| POST | `/api/pms/cloudbeds` | Cloudbeds 어댑터 (T-202) | X-Roomly-Webhook-Secret |
+
+### 공개 API — `/api/v1` (Bearer API 키, 100회/분)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/v1/rooms` | 객실 목록 |
+| PATCH | `/api/v1/rooms/{id}` | 객실 상태/체크인 변경 |
+| GET | `/api/v1/assignments` | 배정 목록 |
+| GET | `/api/v1/docs` | OpenAPI 문서 (T-203) |
+
+### 슈퍼어드민 — `/api/super-admin` (별도 세션)
+
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| POST | `/api/super-admin/auth` | SHA-256 비밀번호 인증 |
+| GET | `/api/super-admin/hotels` / `stats` | 호텔 현황 / MRR |

@@ -6,15 +6,39 @@
 
 ```
 /
+├── /                       랜딩 페이지 (T-050)
+├── /signup                 호텔 셀프서브 가입 (T-028)
 ├── /login                  관리자 로그인
+├── /reset-password         비밀번호 재설정 (T-055)
 ├── /guest                  게스트(일일알바) 접속 코드 입력 (?h={hotelId} 파라미터 필수)
+├── /terms, /privacy        이용약관 / 개인정보처리방침 (T-180/181)
 ├── /admin                  전체 객실 현황판 (메인)
 │   ├── /admin/rooms        객실 추가·관리
 │   ├── /admin/staff        직원 관리
-│   └── /admin/stats        일일 통계
-├── /worker/[staffId]       고정 직원 화면 (QR 접속)
-└── /worker/guest           게스트 작업 화면
+│   ├── /admin/stats        통계 (주간/월간 차트, CSV)
+│   ├── /admin/billing      결제·구독 관리 (Toss, T-021)
+│   ├── /admin/supplies     비품 재고 현황 (T-122)
+│   ├── /admin/maintenance  유지보수 신고 처리 (T-132)
+│   ├── /admin/settings     일반 설정·API 키·PMS 웹훅·계정 탈퇴 (T-058/140/182)
+│   └── /admin/onboarding   가입 직후 3단계 가이드 (T-052)
+├── /worker/[staffId]       고정 직원 화면 (QR 접속, 다국어 ko/en/vi)
+├── /worker/dirty/[staffId] Dirty Worker 전용 현황판 (T-017)
+├── /worker/guest           게스트 작업 화면
+├── /super-admin            운영자 대시보드 (별도 인증, T-060)
+├── /org/[orgId]            체인 호텔 멀티 프로퍼티 현황판 (T-151)
+└── /offline                PWA 오프라인 폴백
 ```
+
+### 접근 권한 요약
+
+| 경로 | 권한 | 인증 방식 |
+|---|---|---|
+| `/`, `/signup`, `/login`, `/reset-password`, `/terms`, `/privacy`, `/guest` | 공개 | — |
+| `/admin/*` | 관리자 | Supabase Auth 세션 (미들웨어에서 플랜 만료 체크) |
+| `/worker/[staffId]`, `/worker/dirty/[staffId]` | 해당 직원 | `roomly_worker_session` JWT (staffId 일치 검증) |
+| `/worker/guest` | 게스트 | `roomly_guest_session` JWT (당일 자정 만료) |
+| `/super-admin` | 운영자 | SHA-256 비밀번호 (일반 관리자와 분리) |
+| `/org/[orgId]` | 법인 관리자 | Supabase Auth + org_admin 역할 |
 
 ---
 
