@@ -61,6 +61,12 @@ export default function SettingsPage() {
   const [copiedSecret, setCopiedSecret] = useState(false)
   const [copiedUrl, setCopiedUrl] = useState(false)
 
+  // 계정 탈퇴 (T-182)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [deleteMsg, setDeleteMsg] = useState<string | null>(null)
+
   const loadApiKeys = useCallback(async () => {
     const res = await fetch('/api/admin/api-keys')
     if (res.ok) {
@@ -182,6 +188,35 @@ export default function SettingsPage() {
       await loadWebhookInfo()
     }
     setSecretIssuing(false)
+  }
+
+  async function handleDeleteAccount() {
+    if (!deletePassword) return
+    setDeleting(true)
+    setDeleteMsg(null)
+    const res = await fetch('/api/admin/account', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: deletePassword }),
+    })
+    if (res.ok) {
+      // 세션이 서버에서 종료되므로 전체 리로드로 이동
+      window.location.href = '/?deleted=true'
+      return
+    }
+    const data = await res.json().catch(() => null) as { code?: string } | null
+    setDeleteMsg(
+      data?.code === 'invalid_password'
+        ? '비밀번호가 올바르지 않습니다.'
+        : '탈퇴 처리에 실패했습니다. 다시 시도해주세요.'
+    )
+    setDeleting(false)
+  }
+
+  function closeDeleteModal() {
+    setShowDeleteModal(false)
+    setDeletePassword('')
+    setDeleteMsg(null)
   }
 
   function copyToClipboard(text: string, setCopied: (v: boolean) => void) {
@@ -439,9 +474,73 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+
+            {/* 섹션 3: 계정 탈퇴 (T-182) */}
+            <div className="bg-white rounded-2xl border border-red-200 overflow-hidden">
+              <div className="px-5 py-4 border-b border-red-100">
+                <h2 className="text-sm font-semibold text-red-600">계정 탈퇴</h2>
+                <p className="text-xs text-slate-400 mt-0.5">호텔의 모든 데이터가 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.</p>
+              </div>
+              <div className="px-5 py-4 flex items-center justify-between gap-3">
+                <p className="text-xs text-slate-500">
+                  객실·직원·배정 기록·비품·유지보수 내역이 모두 삭제되며, 결제 기록은 법령에 따라 개인 식별 정보 없이 보존됩니다.
+                </p>
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  className="shrink-0 px-4 py-2 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                >
+                  계정 탈퇴
+                </button>
+              </div>
+            </div>
           </>
         )}
       </main>
+
+      {/* 계정 탈퇴 확인 모달 (T-182) */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-5">
+            <h3 className="text-sm font-semibold text-red-600 mb-1">정말 탈퇴하시겠습니까?</h3>
+            <p className="text-xs text-slate-500 mb-3">
+              아래 데이터가 <span className="font-semibold text-red-500">즉시 영구 삭제</span>되며 복구할 수 없습니다.
+            </p>
+            <ul className="text-xs text-slate-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3 mb-4 space-y-1 list-disc list-inside">
+              <li>호텔 정보 및 관리자 계정</li>
+              <li>전체 객실·직원·배정 기록</li>
+              <li>비품·유지보수·통계 데이터</li>
+              <li>API 키 및 PMS 연동 설정</li>
+            </ul>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">비밀번호를 입력해 확인</label>
+            <input
+              type="password"
+              value={deletePassword}
+              onChange={e => setDeletePassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleDeleteAccount()}
+              autoComplete="current-password"
+              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              autoFocus
+            />
+            {deleteMsg && <p className="text-xs text-red-500 mt-2">{deleteMsg}</p>}
+            <div className="flex gap-2 mt-4">
+              <button
+                onClick={closeDeleteModal}
+                disabled={deleting}
+                className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDeleteAccount}
+                disabled={deleting || !deletePassword}
+                className="flex-1 px-3 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {deleting ? '삭제 중...' : '영구 삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* API 키 발급 모달 */}
       {showKeyModal && (
