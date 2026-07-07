@@ -17,7 +17,8 @@ type WebhookInfo = {
   masked: string | null
 }
 
-const WEBHOOK_URL = 'https://roomly-plum-eight.vercel.app/api/pms/webhook'
+// 배포 도메인 기준 웹훅 URL — 커스텀 도메인 전환 시 NEXT_PUBLIC_APP_URL만 바꾸면 된다
+const WEBHOOK_URL = `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://roomly-plum-eight.vercel.app'}/api/pms/webhook`
 
 function formatDate(iso: string | null) {
   if (!iso) return '-'
