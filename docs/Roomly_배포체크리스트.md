@@ -44,10 +44,16 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 | `/api/cron/daily-report` | `0 23 * * *` | 08:00 | 일일 리포트 이메일 |
 | `/api/cron/billing-charge` | `0 20 * * *` | 05:00 | 정기 결제 청구 |
 | `/api/cron/trial-ending` | `0 0 * * *` | 09:00 | 무료체험 만료 D-3/D-1 알림 |
-| `/api/cron/checkin-alert` | `*/10 * * * *` | 10분마다 | 체크인 긴급 푸시 |
+| `/api/cron/checkin-alert` | `0 22 * * *` | 07:00 | 체크인 긴급/초과 푸시 ⚠️ |
 | `/api/cron/cleanup` | `0 16 * * *` | 01:00 | 만료 게스트 코드 정리 |
 
 - [ ] 배포 후 각 크론 잡 최초 실행 로그 확인 (Vercel → Logs, 401이 나오면 CRON_SECRET 불일치)
+
+> ⚠️ **Hobby 플랜 제약**: 크론이 하루 1회로 제한되어 checkin-alert를 일 1회(07:00 KST)로 낮춰 배포함.
+> 체크인 긴급/초과 알림을 원래 설계(10분 주기)로 돌리려면 둘 중 하나:
+> 1. Vercel **Pro 플랜** 업그레이드 후 `vercel.json`을 `*/10 * * * *`로 복원
+> 2. 외부 스케줄러(cron-job.org 등)에서 10분마다 `GET {도메인}/api/cron/checkin-alert`를
+>    `Authorization: Bearer $CRON_SECRET` 헤더로 호출
 
 ### 배포 후 스모크 테스트
 - [ ] `/` 랜딩 페이지 로드
