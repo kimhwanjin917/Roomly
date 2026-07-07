@@ -41,6 +41,7 @@ interface BillingStatus {
   pendingPlan: string | null
   planExpiresAt: string | null
   hasBillingKey: boolean
+  billingInterval?: 'monthly' | 'yearly'
 }
 
 interface Invoice {
@@ -135,7 +136,7 @@ function BillingContent() {
       const res = await fetch('/api/billing/change-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetPlan: planId }),
+        body: JSON.stringify({ targetPlan: planId, targetInterval: billingInterval }),
       })
       const data = await res.json()
       if (data.requiresPayment) {
@@ -145,6 +146,11 @@ function BillingContent() {
       }
       if (!res.ok) {
         alert(data.error ?? '플랜 변경에 실패했습니다.')
+        return
+      }
+      if (data.intervalChanged) {
+        setNotice(`다음 결제부터 ${data.interval === 'yearly' ? '연간(2개월 무료)' : '월간'} 주기로 청구됩니다.`)
+        await Promise.all([loadStatus(), loadInvoices()])
         return
       }
       if (data.pending) {
@@ -193,10 +199,18 @@ function BillingContent() {
     }
   }
 
+  // T-201: 현재 플랜 카드에서 결제 주기(월간↔연간) 전환 가능 여부
+  const currentInterval = status?.billingInterval ?? 'monthly'
+  function canSwitchInterval(planId: string) {
+    return planId === currentPlan && !isCancelled && !!status?.hasBillingKey && billingInterval !== currentInterval
+  }
+
   function buttonLabel(planId: string) {
     if (!status) return '시작하기'
     if (planId === currentPlan) {
-      return isCancelled ? '재구독' : '현재 플랜'
+      if (isCancelled) return '재구독'
+      if (canSwitchInterval(planId)) return billingInterval === 'yearly' ? '연간으로 전환' : '월간으로 전환'
+      return '현재 플랜'
     }
     if (!status.hasBillingKey) return isPaidPlan ? '재구독' : '시작하기'
     const isUpgrade = (PLAN_ORDER[planId] ?? 0) > (PLAN_ORDER[currentPlan] ?? 0)
@@ -406,7 +420,7 @@ function BillingContent() {
                   {/* 결제/변경 버튼 */}
                   <button
                     onClick={() => handlePlanClick(plan.id)}
-                    disabled={loading !== null || (isCurrent && !isCancelled)}
+                    disabled={loading !== null || (isCurrent && !isCancelled && !canSwitchInterval(plan.id))}
                     className={`w-full py-3 rounded-xl font-semibold text-sm transition-all duration-150 ${
                       isCurrent && !isCancelled
                         ? 'bg-emerald-50 text-emerald-700 cursor-default'
