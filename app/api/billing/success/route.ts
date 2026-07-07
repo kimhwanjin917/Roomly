@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { issueBillingKey, chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/toss'
+import { issueBillingKey, chargeBillingKey, buildOrderId, getPlanAmount, PLAN_PRICES, PLAN_LABELS, INTERVAL_LABELS, type BillingInterval } from '@/lib/toss'
 import { withApiError } from '@/lib/api-error'
+import { sendEmail } from '@/lib/email'
+import ReceiptEmail from '@/emails/ReceiptEmail'
 
 /**
  * Toss 빌링 인증 성공 콜백 (T-096)
@@ -19,6 +21,8 @@ async function getHandler(req: NextRequest) {
   const authKey = searchParams.get('authKey')
   const customerKey = searchParams.get('customerKey')
   const plan = searchParams.get('plan') ?? ''
+  // T-201: 결제 주기 (yearly = 2개월 무료)
+  const interval: BillingInterval = searchParams.get('interval') === 'yearly' ? 'yearly' : 'monthly'
 
   if (!authKey || !customerKey || !PLAN_PRICES[plan]) {
     return failRedirect('잘못된 요청입니다.')
@@ -56,13 +60,13 @@ async function getHandler(req: NextRequest) {
   await service.from('hotels').update({ toss_billing_key: billingKey }).eq('id', hotelId)
 
   // 2) 첫 결제 즉시 청구
-  const amount = PLAN_PRICES[plan]
+  const amount = getPlanAmount(plan, interval)!
   const result = await chargeBillingKey({
     billingKey,
     customerKey,
     amount,
     orderId: buildOrderId(hotelId),
-    orderName: `Roomly ${PLAN_LABELS[plan] ?? plan} 플랜 (월간)`,
+    orderName: `Roomly ${PLAN_LABELS[plan] ?? plan} 플랜 (${INTERVAL_LABELS[interval]})`,
     hotelId,
     plan,
   })
@@ -71,17 +75,36 @@ async function getHandler(req: NextRequest) {
     return failRedirect(result.failureReason ?? '결제에 실패했습니다.')
   }
 
-  // 3) 구독 활성화 (1개월)
+  // 3) 구독 활성화 (월간 1개월 / 연간 1년)
   const expiresAt = new Date()
-  expiresAt.setMonth(expiresAt.getMonth() + 1)
+  if (interval === 'yearly') expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+  else expiresAt.setMonth(expiresAt.getMonth() + 1)
   await service
     .from('hotels')
     .update({
       subscription_plan: plan,
       plan_expires_at: expiresAt.toISOString(),
       pending_plan: null,
+      billing_interval: interval,
     })
     .eq('id', hotelId)
+
+  // T-197: 첫 결제 영수증 이메일 (비차단)
+  if (user.email) {
+    await sendEmail({
+      to: user.email,
+      subject: '[Roomly] 결제 영수증',
+      react: ReceiptEmail({
+        hotelName: hotel.name as string,
+        plan: PLAN_LABELS[plan] ?? plan,
+        amount,
+        nextBillingDate: expiresAt.toLocaleDateString('ko-KR', {
+          year: 'numeric', month: 'long', day: 'numeric',
+        }),
+      }),
+      hotelId,
+    }).catch(() => {})
+  }
 
   return NextResponse.redirect(`${appUrl}/admin/billing?success=true`)
 }

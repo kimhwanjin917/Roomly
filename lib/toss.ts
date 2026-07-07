@@ -8,6 +8,24 @@ export const PLAN_PRICES: Record<string, number> = {
   pro: 150000,
 }
 
+// T-201: 연 단위 구독 — 월간가 × 10 (2개월 무료)
+export const PLAN_PRICES_YEARLY: Record<string, number> = {
+  starter: 300000,
+  standard: 700000,
+  pro: 1500000,
+}
+
+export type BillingInterval = 'monthly' | 'yearly'
+
+export function getPlanAmount(plan: string, interval: BillingInterval): number | undefined {
+  return interval === 'yearly' ? PLAN_PRICES_YEARLY[plan] : PLAN_PRICES[plan]
+}
+
+export const INTERVAL_LABELS: Record<BillingInterval, string> = {
+  monthly: '월간',
+  yearly: '연간',
+}
+
 export const PLAN_LABELS: Record<string, string> = {
   trial: '무료 체험',
   starter: '스타터',

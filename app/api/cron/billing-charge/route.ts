@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import PaymentFailedEmail from '@/emails/PaymentFailedEmail'
-import { chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/toss'
+import ReceiptEmail from '@/emails/ReceiptEmail'
+import { chargeBillingKey, buildOrderId, getPlanAmount, PLAN_LABELS, INTERVAL_LABELS, type BillingInterval } from '@/lib/toss'
 import { withApiError } from '@/lib/api-error'
 
 /**
@@ -24,7 +25,7 @@ async function getHandler(request: NextRequest) {
   // 만료 도래 호텔 조회
   const { data: hotels } = await service
     .from('hotels')
-    .select('id, name, subscription_plan, pending_plan, plan_expires_at, toss_customer_key, toss_billing_key')
+    .select('id, name, subscription_plan, pending_plan, plan_expires_at, toss_customer_key, toss_billing_key, billing_interval')
     .lte('plan_expires_at', nowIso)
 
   if (!hotels?.length) return NextResponse.json({ charged: 0, failed: 0, skipped: 0 })
@@ -49,9 +50,10 @@ async function getHandler(request: NextRequest) {
       continue
     }
 
-    // 청구할 플랜: pending_plan 우선, 없으면 현재 플랜
+    // 청구할 플랜: pending_plan 우선, 없으면 현재 플랜. 주기는 billing_interval (T-201)
     const targetPlan = (hotel.pending_plan ?? hotel.subscription_plan) as string
-    const amount = PLAN_PRICES[targetPlan]
+    const interval: BillingInterval = hotel.billing_interval === 'yearly' ? 'yearly' : 'monthly'
+    const amount = getPlanAmount(targetPlan, interval)
     if (!amount) {
       skipped++
       continue
@@ -62,14 +64,15 @@ async function getHandler(request: NextRequest) {
       customerKey: hotel.toss_customer_key,
       amount,
       orderId: buildOrderId(hotel.id),
-      orderName: `Roomly ${PLAN_LABELS[targetPlan] ?? targetPlan} 플랜 (월간)`,
+      orderName: `Roomly ${PLAN_LABELS[targetPlan] ?? targetPlan} 플랜 (${INTERVAL_LABELS[interval]})`,
       hotelId: hotel.id,
       plan: targetPlan,
     })
 
     if (result.success) {
       const expiresAt = new Date()
-      expiresAt.setMonth(expiresAt.getMonth() + 1)
+      if (interval === 'yearly') expiresAt.setFullYear(expiresAt.getFullYear() + 1)
+      else expiresAt.setMonth(expiresAt.getMonth() + 1)
       await service
         .from('hotels')
         .update({
@@ -78,6 +81,24 @@ async function getHandler(request: NextRequest) {
           plan_expires_at: expiresAt.toISOString(),
         })
         .eq('id', hotel.id)
+
+      // T-197: 결제 영수증 이메일 (비차단)
+      const adminUser = users.find((u) => u.app_metadata?.hotel_id === hotel.id)
+      if (adminUser?.email) {
+        await sendEmail({
+          to: adminUser.email,
+          subject: '[Roomly] 결제 영수증',
+          react: ReceiptEmail({
+            hotelName: hotel.name as string,
+            plan: PLAN_LABELS[targetPlan] ?? targetPlan,
+            amount,
+            nextBillingDate: expiresAt.toLocaleDateString('ko-KR', {
+              year: 'numeric', month: 'long', day: 'numeric',
+            }),
+          }),
+          hotelId: hotel.id,
+        }).catch(() => {})
+      }
       charged++
     } else {
       // 실패: trial로 되돌리기 + 실패 이메일

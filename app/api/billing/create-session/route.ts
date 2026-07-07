@@ -16,10 +16,12 @@ async function postHandler(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
-  const { plan } = await req.json()
+  const { plan, interval } = await req.json() as { plan: string; interval?: string }
   if (!PLAN_PRICES[plan]) {
     return NextResponse.json({ error: '유효하지 않은 플랜입니다.', code: 'invalid_plan' }, { status: 400 })
   }
+  // T-201: 결제 주기 (기본 월간)
+  const billingInterval = interval === 'yearly' ? 'yearly' : 'monthly'
 
   const hotelId = user.app_metadata?.hotel_id as string | undefined
   if (!hotelId) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -51,7 +53,7 @@ async function postHandler(req: NextRequest) {
   return NextResponse.json({
     clientKey: process.env.TOSS_PAYMENTS_CLIENT_KEY ?? '',
     customerKey,
-    successUrl: `${appUrl}/api/billing/success?plan=${plan}`,
+    successUrl: `${appUrl}/api/billing/success?plan=${plan}&interval=${billingInterval}`,
     failUrl: `${appUrl}/admin/billing?fail=true`,
   })
 }

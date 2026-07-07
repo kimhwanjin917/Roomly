@@ -98,6 +98,9 @@ function BillingContent() {
     loadInvoices()
   }, [loadStatus, loadInvoices])
 
+  // 결제 주기 (T-201) — 연간은 2개월 무료 (월간가 × 10)
+  const [billingInterval, setBillingInterval] = useState<'monthly' | 'yearly'>('monthly')
+
   // Toss 빌링 인증 창 열기 (신규 결제 / 재구독)
   async function startBillingAuth(planId: string) {
     setLoading(planId)
@@ -105,7 +108,7 @@ function BillingContent() {
       const res = await fetch('/api/billing/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan: planId }),
+        body: JSON.stringify({ plan: planId, interval: billingInterval }),
       })
       const data = await res.json()
       if (!res.ok || !data.clientKey) {
@@ -301,6 +304,29 @@ function BillingContent() {
           </div>
         )}
 
+        {/* 월간/연간 토글 (T-201) */}
+        <div className="flex items-center justify-center gap-2 mb-8">
+          <div className="inline-flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
+            <button
+              onClick={() => setBillingInterval('monthly')}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                billingInterval === 'monthly' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >월간</button>
+            <button
+              onClick={() => setBillingInterval('yearly')}
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+                billingInterval === 'yearly' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:text-gray-800'
+              }`}
+            >
+              연간
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                billingInterval === 'yearly' ? 'bg-emerald-400 text-emerald-950' : 'bg-emerald-100 text-emerald-700'
+              }`}>2개월 무료</span>
+            </button>
+          </div>
+        </div>
+
         {/* 플랜 카드 */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {PLANS.map((plan) => {
@@ -335,12 +361,27 @@ function BillingContent() {
                   {/* 플랜 이름 & 가격 */}
                   <div className="mb-6">
                     <h2 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h2>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-extrabold text-gray-900">
-                        ₩{plan.price.toLocaleString('ko-KR')}
-                      </span>
-                      <span className="text-gray-400 text-sm">/월</span>
-                    </div>
+                    {billingInterval === 'yearly' ? (
+                      <>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-3xl font-extrabold text-gray-900">
+                            ₩{(plan.price * 10).toLocaleString('ko-KR')}
+                          </span>
+                          <span className="text-gray-400 text-sm">/년</span>
+                        </div>
+                        <p className="text-xs text-emerald-600 font-medium mt-1">
+                          <span className="line-through text-gray-300 mr-1.5">₩{(plan.price * 12).toLocaleString('ko-KR')}</span>
+                          2개월 무료 — 월 ₩{Math.round(plan.price * 10 / 12).toLocaleString('ko-KR')} 꼴
+                        </p>
+                      </>
+                    ) : (
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-3xl font-extrabold text-gray-900">
+                          ₩{plan.price.toLocaleString('ko-KR')}
+                        </span>
+                        <span className="text-gray-400 text-sm">/월</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* 기능 목록 */}
