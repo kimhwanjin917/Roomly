@@ -40,6 +40,49 @@ async function getHandler(request: NextRequest) {
     .lte('checkin_time', windowEnd.toISOString())
     .is('deleted_at', null)
 
+  // T-194: 체크인 시간이 이미 지난 미완료 방 — urgent_2h와 독립적으로 1회 알림
+  // 최근 24시간 내 초과분만 대상 (오래된 미입력 데이터로 인한 알림 폭주 방지)
+  const overdueSince = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const { data: overdueRooms } = await service
+    .from('rooms')
+    .select('id, hotel_id, number, checkin_time')
+    .in('status', ['dirty', 'cleaning'])
+    .lt('checkin_time', now.toISOString())
+    .gte('checkin_time', overdueSince.toISOString())
+    .is('deleted_at', null)
+
+  let overdueCount = 0
+  if (overdueRooms?.length) {
+    const { data: existingOverdue } = await service
+      .from('room_logs')
+      .select('room_id')
+      .in('room_id', overdueRooms.map(r => r.id))
+      .eq('alert_type', 'overdue')
+    const overdueAlerted = new Set(existingOverdue?.map(a => a.room_id) ?? [])
+
+    for (const room of overdueRooms.filter(r => !overdueAlerted.has(r.id))) {
+      const { error: logError } = await service.from('room_logs').insert({
+        room_id: room.id,
+        status: 'dirty',
+        changed_by: 'system',
+        alert_type: 'overdue',
+      })
+      if (logError) continue
+
+      const checkinTime = new Date(room.checkin_time!).toLocaleTimeString('ko-KR', {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+      await sendPushToAdmin(room.hotel_id, {
+        title: '🚨 체크인 시간 초과',
+        body: `${room.number}호 미완료 — 체크인 ${checkinTime} 경과`,
+        url: '/admin',
+        tag: `overdue-alert-${room.id}`,
+      }).catch(() => {})
+      overdueCount++
+    }
+  }
+
   // 호텔별 기준 시간 적용: checkin_time <= now + checkin_alert_minutes
   const candidates = (rooms ?? []).filter(room => {
     if (!room.checkin_time) return false
@@ -48,7 +91,7 @@ async function getHandler(request: NextRequest) {
     return new Date(room.checkin_time).getTime() <= alertWindowEnd
   })
 
-  if (!candidates.length) return NextResponse.json({ alerted: 0 })
+  if (!candidates.length) return NextResponse.json({ alerted: 0, overdue: overdueCount })
 
   // room_logs alert_type='urgent_2h' 중복 방지
   const { data: existingAlerts } = await service
@@ -86,7 +129,7 @@ async function getHandler(request: NextRequest) {
     count++
   }
 
-  return NextResponse.json({ alerted: count })
+  return NextResponse.json({ alerted: count, overdue: overdueCount })
 }
 
 export const GET = withApiError(getHandler)
