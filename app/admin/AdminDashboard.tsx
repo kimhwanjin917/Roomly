@@ -530,7 +530,7 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
                             >+ 배정</button>
                           )}
                           {quickAssignRoom === room.id && (
-                            <div className="absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
+                            <div className="hidden sm:block absolute top-full left-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 min-w-[140px]">
                               {staffList.map(s => (
                                 <button key={s.id} onClick={() => quickAssign(room.id, s.id)} className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-700">{s.name}</button>
                               ))}
@@ -602,7 +602,7 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
                         >+ 배정</button>
                       )}
                       {quickAssignRoom === room.id && (
-                        <div className="absolute bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 min-w-[130px] left-0 top-full mt-1">
+                        <div className="hidden sm:block absolute bg-white border border-slate-200 rounded-xl shadow-lg z-10 py-1 min-w-[130px] left-0 top-full mt-1">
                           {staffList.map(s => (
                             <button key={s.id} onClick={() => quickAssign(room.id, s.id)} className="w-full text-left px-3 py-2 text-xs hover:bg-slate-50 text-slate-700">{s.name}</button>
                           ))}
@@ -624,6 +624,44 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
           </div>
         )}
       </main>
+
+      {/* 모바일 배정 bottom sheet (T-081) */}
+      {quickAssignRoom && (() => {
+        const room = rooms.find(r => r.id === quickAssignRoom)
+        if (!room) return null
+        const a = assignments.find(a => a.room_id === quickAssignRoom)
+        const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+        return (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-30 flex items-end sm:hidden" onClick={() => setQuickAssignRoom(null)}>
+            <div className="bg-white rounded-t-2xl w-full max-h-[70vh] flex flex-col pb-[env(safe-area-inset-bottom)]" onClick={e => e.stopPropagation()}>
+              <div className="px-5 pt-4 pb-3 border-b border-slate-100">
+                <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-3" />
+                <h2 className="font-bold text-slate-900">{room.number}호 담당자 배정</h2>
+                {assignedName && <p className="text-xs text-slate-400 mt-0.5">현재 담당: {assignedName}</p>}
+              </div>
+              <div className="overflow-y-auto flex-1 py-1">
+                {staffList.map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => quickAssign(room.id, s.id)}
+                    className="w-full text-left px-5 py-3.5 text-sm text-slate-700 active:bg-slate-50 border-b border-slate-50"
+                  >{s.name}</button>
+                ))}
+                <button
+                  onClick={() => quickAssign(room.id, 'guest')}
+                  className="w-full text-left px-5 py-3.5 text-sm text-slate-500 active:bg-slate-50 border-b border-slate-50"
+                >게스트</button>
+                {assignedName && (
+                  <button
+                    onClick={() => quickAssign(room.id, null)}
+                    className="w-full text-left px-5 py-3.5 text-sm text-red-500 active:bg-red-50"
+                  >배정 취소</button>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* 토스트 */}
       {toast && (
