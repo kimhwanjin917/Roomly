@@ -79,6 +79,11 @@
       "cancel": "Cancel",
       "confirmAction": "Mark as Checkout"
     },
-    "language": "Language"
+    "language": "Language",
+    "install": {
+      "message": "Add to home screen to receive assignment alerts",
+      "add": "Add",
+      "dismiss": "Dismiss"
+    }
   }
 }

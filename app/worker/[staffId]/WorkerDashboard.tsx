@@ -78,6 +78,12 @@ interface Props {
 
 type PushState = 'idle' | 'subscribed' | 'denied' | 'unsupported'
 
+// T-193: Android Chrome 설치 프롬프트 이벤트 (TS 표준 lib에 없음)
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
 export default function WorkerDashboard({ staffId, hotelId, staffName, initialAssignments, token }: Props) {
   const locale = useLocale()
   const t = useTranslations('worker')
@@ -97,7 +103,32 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
   const [isOnline, setIsOnline] = useState(true)
   const [pushState, setPushState] = useState<PushState>('unsupported')
   const [showIosGuide, setShowIosGuide] = useState(false)
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // T-193: Android Chrome 홈 화면 설치 유도 — 한 번 닫으면 다시 표시 안 함
+  useEffect(() => {
+    if (localStorage.getItem('pwa-install-dismissed')) return
+    const handler = (e: Event) => {
+      e.preventDefault()
+      setInstallPrompt(e as BeforeInstallPromptEvent)
+    }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  async function handleInstall() {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    const { outcome } = await installPrompt.userChoice
+    if (outcome === 'accepted') localStorage.setItem('pwa-install-dismissed', '1')
+    setInstallPrompt(null)
+  }
+
+  function dismissInstall() {
+    localStorage.setItem('pwa-install-dismissed', '1')
+    setInstallPrompt(null)
+  }
 
   // iOS Safari 푸시 안내 (T-054): 홈 화면 추가 전에는 웹 푸시 불가
   useEffect(() => {
@@ -300,6 +331,19 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
 
   const doneCount = assignments.filter(a => a.rooms.status === 'done' || a.rooms.status === 'inspect').length
   const totalCount = assignments.length
+  const pendingCount = totalCount - doneCount
+
+  // T-196: 앱 아이콘 배지 — 미완료 배정 수 표시, 미지원 브라우저는 조용히 스킵
+  useEffect(() => {
+    const nav = navigator as Navigator & {
+      setAppBadge?: (n: number) => Promise<void>
+      clearAppBadge?: () => Promise<void>
+    }
+    if (typeof nav.setAppBadge !== 'function') return
+    if (pendingCount > 0) nav.setAppBadge(pendingCount).catch(() => {})
+    else nav.clearAppBadge?.().catch(() => {})
+    return () => { nav.clearAppBadge?.().catch(() => {}) }
+  }, [pendingCount])
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
@@ -636,6 +680,21 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
               className="w-full py-3 bg-slate-900 hover:bg-slate-700 text-white rounded-xl text-sm font-semibold transition-colors"
             >닫기</button>
           </div>
+        </div>
+      )}
+
+      {/* 홈 화면 설치 유도 배너 (T-193) */}
+      {installPrompt && (
+        <div className="fixed bottom-0 inset-x-0 z-40 bg-slate-900 text-white px-4 py-3 flex items-center gap-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+          <p className="flex-1 text-sm">{t('install.message')}</p>
+          <button
+            onClick={handleInstall}
+            className="shrink-0 px-3.5 py-2 bg-blue-500 hover:bg-blue-600 rounded-lg text-xs font-semibold transition-colors"
+          >{t('install.add')}</button>
+          <button
+            onClick={dismissInstall}
+            className="shrink-0 px-2 py-2 text-slate-400 hover:text-white text-xs transition-colors"
+          >{t('install.dismiss')}</button>
         </div>
       )}
 

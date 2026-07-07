@@ -79,6 +79,11 @@
       "cancel": "Hủy",
       "confirmAction": "Chuyển trả phòng"
     },
-    "language": "Ngôn ngữ"
+    "language": "Ngôn ngữ",
+    "install": {
+      "message": "Thêm vào màn hình chính để nhận thông báo phân công",
+      "add": "Thêm",
+      "dismiss": "Đóng"
+    }
   }
 }
