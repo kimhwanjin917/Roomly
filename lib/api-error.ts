@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import * as jwt from 'jsonwebtoken'
+import * as Sentry from '@sentry/nextjs'
 
 /**
  * API 에러 응답 표준 (T-084)
@@ -46,11 +47,34 @@ export function handleApiError(e: unknown): NextResponse<ApiErrorBody> {
   if (e instanceof jwt.JsonWebTokenError) {
     return apiError(401, 'invalid_token', '유효하지 않은 토큰입니다.')
   }
+  // 클라이언트가 잘못된 JSON 바디를 보낸 경우 (request.json() 실패)
+  if (e instanceof SyntaxError) {
+    return apiError(400, 'invalid_json', '잘못된 요청 형식입니다.')
+  }
   if (isPostgrestError(e)) {
     if (e.code === '23505') {
       return apiError(409, 'duplicate', '이미 존재하는 데이터입니다.')
     }
+    Sentry.captureException(e)
     return apiError(500, 'db_error', '데이터베이스 오류가 발생했습니다.')
   }
+  Sentry.captureException(e)
+  console.error('[api-error]', e)
   return apiError(500, 'internal', '서버 오류가 발생했습니다.')
+}
+
+type RouteHandler<Args extends unknown[]> = (...args: Args) => Promise<Response> | Response
+
+/**
+ * API 라우트 핸들러를 감싸 처리되지 않은 예외를 표준 에러 응답으로 변환한다 (T-084).
+ * 사용: export const POST = withApiError(postHandler)
+ */
+export function withApiError<Args extends unknown[]>(handler: RouteHandler<Args>) {
+  return async (...args: Args): Promise<Response> => {
+    try {
+      return await handler(...args)
+    } catch (e) {
+      return handleApiError(e)
+    }
+  }
 }

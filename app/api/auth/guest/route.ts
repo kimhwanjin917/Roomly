@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
 import { randomUUID } from 'crypto'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const { hotelId, code } = await request.json()
 
   if (!hotelId || !code) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
@@ -47,3 +48,5 @@ export async function POST(request: NextRequest) {
   })
   return response
 }
+
+export const POST = withApiError(postHandler)

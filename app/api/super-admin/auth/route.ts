@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { cookies } from 'next/headers'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const { password } = await req.json()
   if (!password) return NextResponse.json({ error: 'Missing password', code: 'missing_password' }, { status: 400 })
 
@@ -20,3 +21,5 @@ export async function POST(req: NextRequest) {
   })
   return res
 }
+
+export const POST = withApiError(postHandler)

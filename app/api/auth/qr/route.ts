@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
+import { withApiError } from '@/lib/api-error'
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const token = request.nextUrl.searchParams.get('token')
   if (!token) return NextResponse.redirect(new URL('/login', request.url))
 
@@ -39,3 +40,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 }
+
+export const GET = withApiError(getHandler)

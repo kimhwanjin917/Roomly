@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 type Recommendation = { roomId: string; staffId: string; reason: string }
 
 // POST: 미배정 dirty 객실에 대한 AI 스마트 배정 추천
-export async function POST() {
+async function postHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -145,3 +146,5 @@ export async function POST() {
 
   return NextResponse.json({ recommendations })
 }
+
+export const POST = withApiError(postHandler)

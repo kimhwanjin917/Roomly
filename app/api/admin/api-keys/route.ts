@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { createHash, randomBytes } from 'crypto'
+import { withApiError } from '@/lib/api-error'
 
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -13,7 +14,7 @@ export async function GET() {
   return NextResponse.json(data ?? [])
 }
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ id: data.id, key: rawKey }) // 평문은 한 번만 반환
 }
 
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -41,3 +42,7 @@ export async function DELETE(request: NextRequest) {
   await service.from('api_keys').delete().eq('id', id).eq('hotel_id', hotelId)
   return NextResponse.json({ ok: true })
 }
+
+export const GET = withApiError(getHandler)
+export const POST = withApiError(postHandler)
+export const DELETE = withApiError(deleteHandler)

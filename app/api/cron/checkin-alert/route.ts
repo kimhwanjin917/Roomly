@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendPushToAdmin } from '@/lib/push'
+import { withApiError } from '@/lib/api-error'
 
 const DEFAULT_ALERT_MINUTES = 120
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   // Verify cron secret
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -87,3 +88,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ alerted: count })
 }
+
+export const GET = withApiError(getHandler)

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { randomBytes } from 'crypto'
+import { withApiError } from '@/lib/api-error'
 
 function verifySession() {
   const cookieStore = cookies()
@@ -14,7 +15,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-export async function POST() {
+async function postHandler() {
   if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const part1 = randomBytes(3).toString('hex').toUpperCase()
@@ -27,7 +28,7 @@ export async function POST() {
   return NextResponse.json({ key })
 }
 
-export async function GET() {
+async function getHandler() {
   if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { data } = await supabaseAdmin
@@ -37,3 +38,6 @@ export async function GET() {
 
   return NextResponse.json({ licenses: data ?? [] })
 }
+
+export const GET = withApiError(getHandler)
+export const POST = withApiError(postHandler)

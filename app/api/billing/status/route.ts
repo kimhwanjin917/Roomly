@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * 현재 구독 상태 조회 (billing 페이지용)
  */
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -28,3 +29,5 @@ export async function GET() {
     hasBillingKey: !!hotel.toss_billing_key,
   })
 }
+
+export const GET = withApiError(getHandler)

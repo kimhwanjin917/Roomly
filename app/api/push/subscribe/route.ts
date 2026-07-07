@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const body = await request.json() as {
     subscription: {
       endpoint: string
@@ -74,7 +75,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({ ok: true })
 }
 
-export async function DELETE(request: NextRequest) {
+async function deleteHandler(request: NextRequest) {
   const body = await request.json() as { endpoint: string }
   const { endpoint } = body
 
@@ -85,3 +86,6 @@ export async function DELETE(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)
+export const DELETE = withApiError(deleteHandler)

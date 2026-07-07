@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import PaymentFailedEmail from '@/emails/PaymentFailedEmail'
 import { parseHotelIdFromOrderId, PLAN_LABELS } from '@/lib/toss'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * Toss Payments 웹훅 (T-096, T-082)
@@ -25,7 +26,7 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
   return a.length === b.length && timingSafeEqual(a, b)
 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const rawBody = await req.text()
 
   if (!verifySignature(rawBody, req.headers.get('x-toss-signature'))) {
@@ -146,3 +147,5 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ received: true })
 }
+
+export const POST = withApiError(postHandler)

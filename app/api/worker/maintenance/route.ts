@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { jwtVerify } from 'jose'
 import { createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const cookieStore = cookies()
   const session = cookieStore.get('roomly_worker_session')
   if (!session) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -34,3 +35,5 @@ export async function POST(request: NextRequest) {
   if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
   return NextResponse.json(data)
 }
+
+export const POST = withApiError(postHandler)

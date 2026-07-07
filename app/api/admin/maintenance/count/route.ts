@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ count: 0 })
@@ -16,3 +17,5 @@ export async function GET() {
 
   return NextResponse.json({ count: count ?? 0 })
 }
+
+export const GET = withApiError(getHandler)

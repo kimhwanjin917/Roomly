@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * T-093: 정리 크론
@@ -9,7 +10,7 @@ import { createServiceClient } from '@/lib/supabase/server'
  *   staff 테이블에 deleted_at 컬럼이 없고(001_init.sql, 013_staff_role.sql 확인),
  *   push_subscriptions.staff_id는 ON DELETE CASCADE라 직원 삭제 시 자동 정리됨.
  */
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -30,3 +31,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ deletedGuestCodes: deletedCodes?.length ?? 0 })
 }
+
+export const GET = withApiError(getHandler)

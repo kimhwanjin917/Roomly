@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { issueBillingKey, chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/toss'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * Toss 빌링 인증 성공 콜백 (T-096)
  * requestBillingAuth 성공 시 Toss가 authKey/customerKey를 붙여 리다이렉트.
  * 빌링키 발급 → hotels.toss_billing_key 저장 → 첫 결제 즉시 청구.
  */
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
   const failRedirect = (reason?: string) =>
     NextResponse.redirect(
@@ -84,3 +85,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.redirect(`${appUrl}/admin/billing?success=true`)
 }
+
+export const GET = withApiError(getHandler)

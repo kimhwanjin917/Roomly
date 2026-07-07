@@ -1,7 +1,8 @@
 import { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return new Response(JSON.stringify({ error: 'unauthorized', code: 'unauthorized' }), { status: 401 })
@@ -48,3 +49,5 @@ export async function GET(request: NextRequest) {
     },
   })
 }
+
+export const GET = withApiError(getHandler)

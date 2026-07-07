@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import { TrialEndingEmail } from '@/emails/TrialEndingEmail'
+import { withApiError } from '@/lib/api-error'
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000
 
@@ -15,7 +16,7 @@ function kstDateStr(d: Date): string {
  * trial_ends_at이 KST 날짜 기준 D-3 또는 D-1인 trial 호텔에 알림 이메일 발송.
  * email_logs로 같은 날 중복 발송 방지.
  */
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -80,3 +81,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ sent })
 }
+
+export const GET = withApiError(getHandler)

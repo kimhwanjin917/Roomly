@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 // GET: 호텔명 / 관리자 이메일 / 체크인 알림 기준 시간(분)
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -27,7 +28,7 @@ export async function GET() {
 }
 
 // PATCH: { hotelName?, checkinAlertMinutes?, newPassword? }
-export async function PATCH(request: NextRequest) {
+async function patchHandler(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -78,3 +79,6 @@ export async function PATCH(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const GET = withApiError(getHandler)
+export const PATCH = withApiError(patchHandler)

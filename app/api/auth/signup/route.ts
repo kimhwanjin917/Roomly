@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import WelcomeEmail from '@/emails/WelcomeEmail'
+import { withApiError } from '@/lib/api-error'
 
 const TRIAL_DAYS = 90  // 3개월 무료 체험
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const { hotelName, email, password, agreedTerms, agreedMarketing } = await request.json()
 
   if (!hotelName?.trim() || !email?.trim() || !password) {
@@ -69,3 +70,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 async function verifyApiKey(request: NextRequest): Promise<{ hotelId: string } | null> {
   const auth = request.headers.get('authorization')
@@ -18,7 +19,7 @@ async function verifyApiKey(request: NextRequest): Promise<{ hotelId: string } |
   return { hotelId: data.hotel_id }
 }
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const auth = await verifyApiKey(request)
   if (!auth) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
@@ -42,3 +43,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(filtered)
 }
+
+export const GET = withApiError(getHandler)

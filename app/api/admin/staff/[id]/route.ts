@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 const STAFF_ROLES = ['housekeeping', 'dirty'] as const
 type StaffRole = (typeof STAFF_ROLES)[number]
 
-export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+async function patchHandler(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -63,7 +64,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   return NextResponse.json(updated)
 }
 
-export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+async function deleteHandler(request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -101,3 +102,6 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
   return NextResponse.json({ ok: true })
 }
+
+export const PATCH = withApiError(patchHandler)
+export const DELETE = withApiError(deleteHandler)

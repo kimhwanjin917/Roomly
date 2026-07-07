@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
 import { randomUUID } from 'crypto'
+import { withApiError } from '@/lib/api-error'
 
 const STAFF_ROLES = ['housekeeping', 'dirty'] as const
 type StaffRole = (typeof STAFF_ROLES)[number]
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -49,3 +50,5 @@ export async function POST(request: NextRequest) {
   const qrUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/qr?token=${token}`
   return NextResponse.json({ staffId: staff.id, qrUrl })
 }
+
+export const POST = withApiError(postHandler)

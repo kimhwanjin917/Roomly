@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic'
  * 관리자 세션 확인 → 최근 7일 운영 데이터 집계 → Claude Haiku 스트리밍 응답.
  * ANTHROPIC_API_KEY 없으면 501 { error: 'ai_disabled', code: 'ai_disabled' }.
  */
-export async function POST() {
+async function postHandler() {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'ai_disabled', code: 'ai_disabled' }, { status: 501 })
   }
@@ -98,3 +99,5 @@ export async function POST() {
     headers: { 'Content-Type': 'text/event-stream' },
   })
 }
+
+export const POST = withApiError(postHandler)

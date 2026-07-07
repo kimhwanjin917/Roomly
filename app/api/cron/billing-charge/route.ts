@@ -3,6 +3,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import PaymentFailedEmail from '@/emails/PaymentFailedEmail'
 import { chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/toss'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * 정기 결제 크론 (T-096)
@@ -11,7 +12,7 @@ import { chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/
  * - 실패 → PaymentFailedEmail 발송 + subscription_plan='trial' 되돌리기
  * - toss_billing_key NULL → 스킵
  */
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -114,3 +115,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ charged, failed, skipped })
 }
+
+export const GET = withApiError(getHandler)

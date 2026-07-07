@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 const VALID_STATUSES = ['dirty', 'cleaning', 'done', 'inspect'] as const
 type RoomStatus = (typeof VALID_STATUSES)[number]
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -40,3 +41,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

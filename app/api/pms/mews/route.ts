@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { convertMewsEvent, type MewsReservationEvent } from '@/lib/pms/mews'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const hotelId = request.headers.get('x-hotel-id')
   const webhookSecret = request.headers.get('x-roomly-webhook-secret')
 
@@ -51,3 +52,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * 구독 해지 (T-026)
  * 빌링키/예약 플랜만 제거하고 plan_expires_at은 유지 → 기간 만료 후 중단.
  */
-export async function POST() {
+async function postHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -23,3 +24,5 @@ export async function POST() {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

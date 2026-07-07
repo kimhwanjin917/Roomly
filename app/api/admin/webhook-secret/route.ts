@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { randomBytes } from 'crypto'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST() {
+async function postHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -15,7 +16,7 @@ export async function POST() {
   return NextResponse.json({ secret })
 }
 
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -29,3 +30,6 @@ export async function GET() {
     : null
   return NextResponse.json({ hasSec: !!data?.webhook_secret, masked })
 }
+
+export const GET = withApiError(getHandler)
+export const POST = withApiError(postHandler)

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { withApiError } from '@/lib/api-error'
 
 function verifySession() {
   const cookieStore = cookies()
@@ -14,7 +15,7 @@ const supabaseAdmin = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 )
 
-export async function GET() {
+async function getHandler() {
   if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const now = new Date()
@@ -71,3 +72,5 @@ export async function GET() {
 
   return NextResponse.json({ total, active, paid, expired, mrr, planCounts, signupTrend })
 }
+
+export const GET = withApiError(getHandler)

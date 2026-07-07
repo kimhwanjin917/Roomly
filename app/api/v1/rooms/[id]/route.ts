@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHash } from 'crypto'
 import { createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 async function verifyApiKey(request: NextRequest): Promise<{ hotelId: string } | null> {
   const auth = request.headers.get('authorization')
@@ -18,7 +19,7 @@ async function verifyApiKey(request: NextRequest): Promise<{ hotelId: string } |
   return { hotelId: data.hotel_id }
 }
 
-export async function PATCH(
+async function patchHandler(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
@@ -49,3 +50,5 @@ export async function PATCH(
 
   return NextResponse.json(data)
 }
+
+export const PATCH = withApiError(patchHandler)

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 // 이메일별 로그인 실패 횟수 추적
 const loginAttempts = new Map<string, { count: number; lockedUntil: number }>()
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const body = await request.json()
   const email = body.email as string
   const password = body.password as string
@@ -41,3 +42,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

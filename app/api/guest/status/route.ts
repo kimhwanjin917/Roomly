@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const sessionCookie = request.cookies.get('roomly_guest_session')
   if (!sessionCookie) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
@@ -31,3 +32,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

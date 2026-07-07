@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * 결제 내역 조회 (T-027)
  * 관리자 세션의 hotel_id 기준 최근 20건.
  */
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -25,3 +26,5 @@ export async function GET() {
 
   return NextResponse.json({ invoices: data ?? [] })
 }
+
+export const GET = withApiError(getHandler)

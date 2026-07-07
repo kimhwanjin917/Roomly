@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { withApiError } from '@/lib/api-error'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,7 +19,7 @@ function todayKST(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
 }
 
-export async function GET() {
+async function getHandler() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
@@ -99,3 +100,5 @@ export async function GET() {
 
   return NextResponse.json({ hotels: result, date })
 }
+
+export const GET = withApiError(getHandler)

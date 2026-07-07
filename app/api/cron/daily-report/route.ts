@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
 import { DailyReportEmail } from '@/emails/DailyReportEmail'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * AI-03: 일일 리포트 AI 요약 (ANTHROPIC_API_KEY 있을 때만).
@@ -34,7 +35,7 @@ async function generateAiSummary(stats: {
   }
 }
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -146,3 +147,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({ sent })
 }
+
+export const GET = withApiError(getHandler)

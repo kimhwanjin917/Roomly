@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/toss'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * 플랜 변경 (T-025)
@@ -10,7 +11,7 @@ import { chargeBillingKey, buildOrderId, PLAN_PRICES, PLAN_LABELS } from '@/lib/
 
 const PLAN_ORDER: Record<string, number> = { trial: 0, starter: 1, standard: 2, pro: 3 }
 
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -92,3 +93,5 @@ export async function POST(req: NextRequest) {
     effectiveAt: hotel.plan_expires_at,
   })
 }
+
+export const POST = withApiError(postHandler)

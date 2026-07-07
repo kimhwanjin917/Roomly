@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { randomUUID } from 'crypto'
 import { PLAN_PRICES } from '@/lib/toss'
+import { withApiError } from '@/lib/api-error'
 
 /**
  * Toss 빌링 인증 세션 생성 (T-096)
@@ -10,7 +11,7 @@ import { PLAN_PRICES } from '@/lib/toss'
  * 인증 성공 시 Toss가 successUrl로 authKey/customerKey를 붙여 리다이렉트 →
  * /api/billing/success 콜백에서 빌링키 발급 + 첫 결제 청구.
  */
-export async function POST(req: NextRequest) {
+async function postHandler(req: NextRequest) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
@@ -54,3 +55,5 @@ export async function POST(req: NextRequest) {
     failUrl: `${appUrl}/admin/billing?fail=true`,
   })
 }
+
+export const POST = withApiError(postHandler)
