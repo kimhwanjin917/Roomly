@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
+import { DndContext, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/core'
 
 type Room = {
   id: string
@@ -41,6 +42,41 @@ function isUrgent(room: Room, now: Date, alertMinutes: number) {
   if (room.status === 'done' || room.status === 'inspect') return false
   const alertAt = new Date(new Date(room.checkin_time).getTime() - alertMinutes * 60 * 1000)
   return now >= alertAt
+}
+
+// T-194: 체크인 시간이 이미 지난 미완료 방 — urgent(임박)와 별개 표시
+function isOverdue(room: Room, now: Date) {
+  if (!room.checkin_time) return false
+  if (room.status === 'done' || room.status === 'inspect') return false
+  return now >= new Date(room.checkin_time)
+}
+
+// T-199: 드래그 배정 — 직원 칩 (드래그 소스, 데스크탑 전용)
+function StaffDragChip({ id, name }: { id: string; name: string }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: `staff:${id}` })
+  return (
+    <button
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      style={transform ? { transform: `translate(${transform.x}px, ${transform.y}px)`, position: 'relative', zIndex: 40 } : undefined}
+      className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors touch-none select-none ${
+        isDragging
+          ? 'bg-blue-600 text-white border-blue-600 shadow-lg cursor-grabbing'
+          : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300 cursor-grab'
+      }`}
+    >{name}</button>
+  )
+}
+
+// T-199: 드래그 배정 — 객실 카드 드롭 타겟
+function RoomDropZone({ roomId, children }: { roomId: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `room:${roomId}` })
+  return (
+    <div ref={setNodeRef} className={`rounded-xl ${isOver ? 'ring-2 ring-blue-400' : ''}`}>
+      {children}
+    </div>
+  )
 }
 
 function fmtTime(iso: string | null) {
@@ -90,6 +126,12 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
 
   const [quickAssignRoom, setQuickAssignRoom] = useState<string | null>(null) // room.id
 
+  // 상태 일괄 변경 (T-198)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set())
+  const [bulkStatus, setBulkStatus] = useState<string>('dirty')
+  const [bulkApplying, setBulkApplying] = useState(false)
+
   // AI 스마트 배정 추천 (AI-02)
   const [aiLoading, setAiLoading] = useState(false)
   const [aiRecs, setAiRecs] = useState<AiRecommendation[] | null>(null)
@@ -128,12 +170,24 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
     }
   }, [hotelId])
 
+  // T-200: Realtime 연결 상태 — 끊김 감지 시 배너 표시, 복귀 시 refetch
+  const [realtimeDown, setRealtimeDown] = useState(false)
+
   useEffect(() => {
     const supabase = createClient()
     const ch = supabase.channel('admin-dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, refetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, refetch)
-      .subscribe()
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeDown(prev => {
+            if (prev) refetch() // 재연결 — 끊긴 동안의 변경분 반영
+            return false
+          })
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeDown(true)
+        }
+      })
     return () => { supabase.removeChannel(ch) }
   }, [refetch])
 
@@ -271,6 +325,47 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
     }
   }
 
+  // T-198: 일괄 변경 적용
+  async function applyBulkStatus() {
+    if (bulkSelected.size === 0) return
+    setBulkApplying(true)
+    try {
+      const res = await fetch('/api/admin/rooms/bulk-status', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomIds: Array.from(bulkSelected), status: bulkStatus }),
+      })
+      if (!res.ok) throw new Error()
+      const { updated } = await res.json() as { updated: number }
+      await refetch()
+      showToast(`${updated}개 객실 상태를 변경했습니다`, 'success')
+      setBulkSelected(new Set())
+      setBulkMode(false)
+    } catch {
+      showToast('일괄 변경에 실패했습니다.')
+    } finally {
+      setBulkApplying(false)
+    }
+  }
+
+  function toggleBulkSelect(roomId: string) {
+    setBulkSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(roomId)) next.delete(roomId)
+      else next.add(roomId)
+      return next
+    })
+  }
+
+  // T-199: 직원 칩을 객실 카드에 드롭 → 배정
+  function handleDragEnd(e: DragEndEvent) {
+    const activeId = String(e.active.id)
+    if (!activeId.startsWith('staff:') || !e.over) return
+    const staffId = activeId.slice('staff:'.length)
+    const roomId = String(e.over.id).slice('room:'.length)
+    quickAssign(roomId, staffId)
+  }
+
   async function quickAssign(roomId: string, staffId: string | null, isGuest = false) {
     try {
       await fetch('/api/admin/assign', {
@@ -346,10 +441,18 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
     : null
 
   return (
+    <DndContext onDragEnd={handleDragEnd}>
     <div className="min-h-screen bg-slate-50">
       <AdminNav />
 
       <main className="max-w-7xl mx-auto px-4 py-5 pb-16 md:pb-5">
+        {/* Realtime 연결 상태 배너 (T-200) */}
+        {realtimeDown && (
+          <div className="flex items-center gap-2 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3 mb-4">
+            <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse shrink-0" />
+            <p className="text-sm font-medium text-yellow-800">실시간 연결이 끊겼습니다. 재연결 중...</p>
+          </div>
+        )}
         {/* 무료체험 배너 */}
         {trialDaysLeft !== null && (
           <div className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 mb-4 ${
@@ -444,6 +547,15 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
               }}
               className="px-3 py-1.5 text-xs border border-slate-200 bg-white rounded-lg text-slate-600 hover:bg-slate-50"
             >체크인 일괄</button>
+            <button
+              onClick={() => {
+                setBulkMode(!bulkMode)
+                setBulkSelected(new Set())
+              }}
+              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                bulkMode ? 'bg-blue-600 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >{bulkMode ? '일괄 변경 종료' : '상태 일괄'}</button>
             <div className="flex rounded-lg border border-slate-200 overflow-hidden bg-white">
               <button
                 onClick={() => setViewMode('table')}
@@ -456,6 +568,44 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
             </div>
           </div>
         </div>
+
+        {/* 상태 일괄 변경 툴바 (T-198) */}
+        {bulkMode && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 mb-4">
+            <span className="text-sm font-medium text-blue-800">{bulkSelected.size}개 선택됨</span>
+            <button
+              onClick={() => setBulkSelected(new Set(filtered.map(r => r.id)))}
+              className="px-2.5 py-1 text-xs bg-white border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition-colors"
+            >표시된 방 전체 선택</button>
+            {floors.map(f => (
+              <button
+                key={f}
+                onClick={() => setBulkSelected(new Set(rooms.filter(r => r.floor === f).map(r => r.id)))}
+                className="px-2.5 py-1 text-xs bg-white border border-blue-200 rounded-lg text-blue-700 hover:bg-blue-100 transition-colors"
+              >{f}층 전체</button>
+            ))}
+            <button
+              onClick={() => setBulkSelected(new Set())}
+              className="px-2.5 py-1 text-xs text-slate-500 hover:text-slate-700 transition-colors"
+            >해제</button>
+            <div className="flex items-center gap-2 ml-auto">
+              <select
+                value={bulkStatus}
+                onChange={e => setBulkStatus(e.target.value)}
+                className="px-3 py-1.5 rounded-lg text-xs border border-blue-200 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {Object.entries(STATUS_CONFIG).map(([key, cfg]) => (
+                  <option key={key} value={key}>{cfg.label}</option>
+                ))}
+              </select>
+              <button
+                onClick={applyBulkStatus}
+                disabled={bulkApplying || bulkSelected.size === 0}
+                className="px-4 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-50 transition-colors"
+              >{bulkApplying ? '적용 중...' : '적용'}</button>
+            </div>
+          </div>
+        )}
 
         {/* 객실 없음 — 빈 상태 (T-053) */}
         {rooms.length === 0 && (
@@ -488,18 +638,31 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
                 {filtered.map(room => {
                   const a = assignments.find(a => a.room_id === room.id)
                   const urgent = isUrgent(room, now, checkinAlertMinutes)
+                  const overdue = isOverdue(room, now)
                   const cfg = STATUS_CONFIG[room.status]
                   const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+                  const bulkChecked = bulkSelected.has(room.id)
                   return (
                     <tr
                       key={room.id}
-                      onClick={() => openModal(room)}
-                      className={`cursor-pointer transition-colors hover:bg-slate-50 ${urgent ? 'bg-red-50 hover:bg-red-50' : ''}`}
+                      onClick={() => bulkMode ? toggleBulkSelect(room.id) : openModal(room)}
+                      className={`cursor-pointer transition-colors ${
+                        bulkMode && bulkChecked
+                          ? 'bg-blue-50 hover:bg-blue-100'
+                          : urgent ? 'bg-red-50 hover:bg-red-50' : 'hover:bg-slate-50'
+                      }`}
                     >
                       <td className="px-4 py-3 font-bold text-slate-900">
                         <div className="flex items-center gap-1.5">
+                          {bulkMode && (
+                            <span className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] ${
+                              bulkChecked ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-slate-300'
+                            }`}>{bulkChecked ? '✓' : ''}</span>
+                          )}
                           {room.number}호
-                          {urgent && <span className="text-red-500 text-xs">⚠</span>}
+                          {overdue
+                            ? <span className="text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded">초과</span>
+                            : urgent && <span className="text-red-500 text-xs">⚠</span>}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-slate-500">{room.floor}층</td>
@@ -561,24 +724,39 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
 
         {/* 카드 그리드 뷰 */}
         {rooms.length > 0 && viewMode === 'grid' && (
+          <>
+          {/* T-199: 직원 드래그 배정 스트립 (데스크탑 전용) */}
+          {staffList.length > 0 && !bulkMode && (
+            <div className="hidden md:flex items-center gap-2 mb-3 flex-wrap">
+              <span className="text-xs text-slate-400">드래그해서 배정:</span>
+              {staffList.map(s => <StaffDragChip key={s.id} id={s.id} name={s.name} />)}
+              <StaffDragChip id="guest" name="게스트" />
+            </div>
+          )}
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
             {filtered.map(room => {
               const a = assignments.find(a => a.room_id === room.id)
               const urgent = isUrgent(room, now, checkinAlertMinutes)
+              const overdue = isOverdue(room, now)
               const cfg = STATUS_CONFIG[room.status]
               const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+              const bulkChecked = bulkSelected.has(room.id)
 
               return (
+                <RoomDropZone key={room.id} roomId={room.id}>
                 <button
-                  key={room.id}
-                  onClick={() => openModal(room)}
-                  className={`relative bg-white rounded-xl p-3 text-left border transition-all hover:shadow-md active:scale-95 ${
-                    urgent ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200 hover:border-slate-300'
+                  onClick={() => bulkMode ? toggleBulkSelect(room.id) : openModal(room)}
+                  className={`relative w-full bg-white rounded-xl p-3 text-left border transition-all hover:shadow-md active:scale-95 ${
+                    bulkMode && bulkChecked
+                      ? 'border-blue-400 ring-2 ring-blue-300'
+                      : urgent ? 'border-red-300 ring-1 ring-red-200' : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
                   <div className="flex items-start justify-between mb-2">
                     <span className="font-bold text-slate-900 text-lg leading-none">{room.number}</span>
-                    {urgent && <span className="text-red-500 text-base leading-none">⚠</span>}
+                    {overdue
+                      ? <span className="text-[10px] font-bold text-white bg-red-500 px-1.5 py-0.5 rounded leading-none">초과</span>
+                      : urgent && <span className="text-red-500 text-base leading-none">⚠</span>}
                   </div>
                   <div className="flex items-center gap-1.5 mb-2">
                     <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
@@ -616,12 +794,14 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
                     )}
                   </div>
                 </button>
+                </RoomDropZone>
               )
             })}
             {filtered.length === 0 && (
               <p className="col-span-full text-center py-20 text-slate-400 text-sm">객실이 없습니다</p>
             )}
           </div>
+          </>
         )}
       </main>
 
@@ -896,5 +1076,6 @@ export default function AdminDashboard({ hotelId, hotelName, checkinAlertMinutes
         </div>
       )}
     </div>
+    </DndContext>
   )
 }
