@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/next'
+import { NextIntlClientProvider } from 'next-intl'
+import { getLocale } from 'next-intl/server'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -62,17 +64,22 @@ export const viewport: Viewport = {
   userScalable: false,
 }
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+  // T-100: 쿠키 기반 로케일 (i18n/request.ts) — 기본 'ko'
+  const locale = await getLocale()
   return (
-    <html lang="ko">
+    <html lang={locale}>
       <body>
-        {children}
-        <Analytics />
-        <SpeedInsights />
+        {/* 메시지/로케일은 서버 요청 설정에서 자동 상속 (next-intl v4) */}
+        <NextIntlClientProvider>
+          {children}
+          <Analytics />
+          <SpeedInsights />
+        </NextIntlClientProvider>
       </body>
     </html>
   )

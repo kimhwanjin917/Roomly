@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useLocale } from 'next-intl'
+import { useRouter } from 'next/navigation'
+import { useLocale, useTranslations } from 'next-intl'
 import { createClientWithToken } from '@/lib/supabase/client'
 
 type Room = {
@@ -48,9 +49,10 @@ function writeQueue(items: QueuedChange[]) {
   }
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  single: '싱글', double: '더블', suite: '스위트', other: '기타',
-}
+// T-100: 로케일 코드 → Intl 로케일 매핑
+const DATE_LOCALES: Record<string, string> = { ko: 'ko-KR', en: 'en-US', vi: 'vi-VN' }
+
+const ROOM_TYPES = ['single', 'double', 'suite', 'other'] as const
 
 const ALERT_MINUTES = Number(process.env.NEXT_PUBLIC_CHECKIN_ALERT_MINUTES ?? 120)
 
@@ -61,9 +63,9 @@ function isUrgent(room: Room, now: Date) {
   return now >= alertAt
 }
 
-function fmtTime(iso: string | null) {
+function fmtTime(iso: string | null, dateLocale: string) {
   if (!iso) return null
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })
 }
 
 interface Props {
@@ -78,6 +80,9 @@ type PushState = 'idle' | 'subscribed' | 'denied' | 'unsupported'
 
 export default function WorkerDashboard({ staffId, hotelId, staffName, initialAssignments, token }: Props) {
   const locale = useLocale()
+  const t = useTranslations('worker')
+  const router = useRouter()
+  const dateLocale = DATE_LOCALES[locale] ?? 'ko-KR'
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
@@ -192,7 +197,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
       }
     }
     if (sent > 0) {
-      showToast(`오프라인 중 변경 ${sent}건을 전송했습니다`, 'success')
+      showToast(t('offlineQueue.sent', { count: sent }), 'success')
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -238,11 +243,11 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         }),
       })
       if (!res.ok) throw new Error()
-      showToast('신고가 접수되었습니다', 'success')
+      showToast(t('maintenance.success'), 'success')
       setMaintenanceRoom(null)
       setMaintenanceDesc('')
     } catch {
-      showToast('신고 접수에 실패했습니다.')
+      showToast(t('maintenance.error'))
     } finally {
       setMaintenanceSaving(false)
     }
@@ -260,7 +265,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
       setAssignments(prev => prev.map(a =>
         a.rooms.id === roomId ? { ...a, rooms: { ...a.rooms, status: status as Room['status'] } } : a
       ))
-      showToast('오프라인 — 온라인 복귀 시 자동 전송됩니다', 'info')
+      showToast(t('offlineQueue.queued'), 'info')
       return
     }
 
@@ -274,7 +279,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
       if (!res.ok) throw new Error()
       await refetch()
     } catch {
-      showToast('저장에 실패했습니다.', 'error', () => changeStatus(assignment, status, memoText))
+      showToast(t('errors.saveFailed'), 'error', () => changeStatus(assignment, status, memoText))
     } finally {
       setLoading(l => ({ ...l, [roomId]: false }))
     }
@@ -303,15 +308,15 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         <div className="flex items-start justify-between">
           <div className="flex items-start gap-2">
             <div>
-              <p className="text-xs text-slate-400 mb-1">{now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}</p>
-              <p className="text-xl font-bold text-slate-900">안녕하세요, {staffName}님</p>
+              <p className="text-xs text-slate-400 mb-1">{now.toLocaleDateString(dateLocale, { month: 'long', day: 'numeric', weekday: 'short' })}</p>
+              <p className="text-xl font-bold text-slate-900">{t('greeting', { name: staffName })}</p>
             </div>
             {pushState !== 'unsupported' && (
               <div className="relative mt-1">
                 <button
                   onClick={pushState === 'idle' ? subscribePush : pushState === 'subscribed' ? unsubscribePush : undefined}
                   disabled={pushState === 'denied'}
-                  title={pushState === 'denied' ? '브라우저 알림이 차단됨' : undefined}
+                  title={pushState === 'denied' ? t('push.denied') : undefined}
                   className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors ${
                     pushState === 'idle' ? 'text-slate-400 hover:bg-slate-100' :
                     pushState === 'subscribed' ? 'text-slate-700 hover:bg-slate-100' :
@@ -348,7 +353,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ locale: loc }),
                     })
-                    window.location.reload()
+                    router.refresh()
                   }}
                   className={`text-xs px-2 py-1 rounded-md transition-colors ${
                     locale === loc ? 'bg-blue-100 text-blue-700 font-medium' : 'text-slate-400 hover:bg-slate-100'
@@ -362,7 +367,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
           {totalCount > 0 && (
             <div className="text-right">
               <p className="text-2xl font-bold text-slate-900">{doneCount}<span className="text-base text-slate-400 font-normal">/{totalCount}</span></p>
-              <p className="text-xs text-slate-400">완료</p>
+              <p className="text-xs text-slate-400">{t('completed')}</p>
             </div>
           )}
         </div>
@@ -379,7 +384,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
       {/* 오프라인 배너 */}
       {!isOnline && (
         <div className="bg-amber-500 text-white text-sm font-medium text-center py-2 px-4">
-          오프라인 상태입니다. 마지막 데이터를 표시 중입니다.
+          {t('offline')}
         </div>
       )}
 
@@ -388,8 +393,8 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         {sorted.length === 0 && (
           <div className="text-center py-24">
             <p className="text-3xl mb-3">🧺</p>
-            <p className="text-slate-500 text-sm font-medium">오늘 배정된 방이 없습니다.</p>
-            <p className="text-slate-400 text-xs mt-1">잠시 후 다시 확인해주세요.</p>
+            <p className="text-slate-500 text-sm font-medium">{t('noAssignments')}</p>
+            <p className="text-slate-400 text-xs mt-1">{t('noAssignmentsHint')}</p>
           </div>
         )}
 
@@ -416,32 +421,32 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
               <div className="px-4 pt-4 pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2.5">
-                    <span className="text-2xl font-bold text-slate-900">{room.number}호</span>
+                    <span className="text-2xl font-bold text-slate-900">{t('roomNumber', { number: room.number })}</span>
                     <div className="flex flex-col">
                       {urgent && (
-                        <span className="text-xs font-semibold text-red-500 leading-tight">긴급</span>
+                        <span className="text-xs font-semibold text-red-500 leading-tight">{t('status.urgent')}</span>
                       )}
                       {isDone && (
-                        <span className="text-xs font-semibold text-emerald-600 leading-tight">완료</span>
+                        <span className="text-xs font-semibold text-emerald-600 leading-tight">{t('status.done')}</span>
                       )}
                       {isInspect && (
-                        <span className="text-xs font-semibold text-violet-600 leading-tight">점검대기</span>
+                        <span className="text-xs font-semibold text-violet-600 leading-tight">{t('status.inspect')}</span>
                       )}
                       {!finished && !urgent && (
-                        <span className="text-xs text-slate-400 leading-tight">{room.status === 'cleaning' ? '청소중' : '대기'}</span>
+                        <span className="text-xs text-slate-400 leading-tight">{room.status === 'cleaning' ? t('status.cleaning') : t('status.dirty')}</span>
                       )}
                     </div>
                   </div>
                   {room.checkin_time && (
                     <div className="text-right">
-                      <p className="text-xs text-slate-400">체크인</p>
+                      <p className="text-xs text-slate-400">{t('checkin')}</p>
                       <p className={`text-sm font-bold leading-tight ${urgent ? 'text-red-500' : 'text-slate-700'}`}>
-                        {fmtTime(room.checkin_time)}
+                        {fmtTime(room.checkin_time, dateLocale)}
                       </p>
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-1">{room.floor}층 · {TYPE_LABELS[room.type] ?? room.type}</p>
+                <p className="text-xs text-slate-400 mt-1">{t('floor', { floor: room.floor })} · {(ROOM_TYPES as readonly string[]).includes(room.type) ? t(`types.${room.type as typeof ROOM_TYPES[number]}`) : room.type}</p>
               </div>
 
               {/* 액션 버튼 */}
@@ -453,7 +458,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                       disabled={isLoading}
                       className="w-full py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
                     >
-                      {isLoading ? '처리 중...' : '청소 시작'}
+                      {isLoading ? t('actions.processing') : t('actions.startCleaning')}
                     </button>
                   )}
                   {room.status === 'cleaning' && (
@@ -471,22 +476,22 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                           }}
                           disabled={isLoading}
                           className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
-                        >완료</button>
+                        >{t('actions.done')}</button>
                         <button
                           onClick={() => changeStatus(assignment, 'inspect')}
                           disabled={isLoading}
                           className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
-                        >점검 필요</button>
+                        >{t('actions.inspectNeeded')}</button>
                       </div>
                       <button
                         onClick={() => changeStatus(assignment, 'dirty')}
                         disabled={isLoading}
                         className="w-full py-2.5 border border-slate-200 text-slate-500 rounded-xl text-xs hover:bg-slate-50 disabled:opacity-40 transition-colors"
-                      >대기중으로 되돌리기</button>
+                      >{t('actions.revertDirty')}</button>
                       <button
                         onClick={(e) => { e.stopPropagation(); setMaintenanceRoom(assignment); setMaintenanceDesc('') }}
                         className="w-full py-2 border border-slate-200 text-slate-400 rounded-xl text-xs hover:bg-slate-50 hover:text-slate-600 transition-colors"
-                      >🔧 수리 신고</button>
+                      >🔧 {t('actions.maintenanceReport')}</button>
                     </>
                   )}
                 </div>
@@ -497,7 +502,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                   <button
                     onClick={() => { setMaintenanceRoom(assignment); setMaintenanceDesc('') }}
                     className="w-full py-2 border border-dashed border-slate-200 text-slate-400 rounded-xl text-xs hover:bg-slate-50 transition-colors"
-                  >🔧 수리 신고</button>
+                  >🔧 {t('actions.maintenanceReport')}</button>
                 </div>
               )}
             </div>
@@ -510,19 +515,19 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-20" onClick={() => setMemoRoom(null)}>
           <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-10" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-            <h2 className="font-bold text-slate-900 text-base mb-0.5">{memoRoom.rooms.number}호 완료 처리</h2>
-            <p className="text-xs text-slate-400 mb-4">특이사항이 있으면 메모를 남겨주세요 (선택)</p>
+            <h2 className="font-bold text-slate-900 text-base mb-0.5">{t('memo.title', { number: memoRoom.rooms.number })}</h2>
+            <p className="text-xs text-slate-400 mb-4">{t('memo.subtitle')}</p>
             <textarea
               value={memo}
               onChange={e => setMemo(e.target.value)}
-              placeholder="예: 욕실 수건 추가 요청, 미니바 비어있음..."
+              placeholder={t('memo.placeholder')}
               rows={3}
               autoFocus
               className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
             />
             {supplies.length > 0 && (
               <div className="mt-3">
-                <p className="text-xs text-slate-500 font-medium mb-2">비품 사용 기록 (선택)</p>
+                <p className="text-xs text-slate-500 font-medium mb-2">{t('supplies.title')}</p>
                 <div className="space-y-1.5 max-h-40 overflow-y-auto">
                   {supplies.map(s => (
                     <div key={s.id} className="flex items-center gap-2">
@@ -545,7 +550,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
               </div>
             )}
             <div className="flex gap-2 mt-4">
-              <button onClick={() => setMemoRoom(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">취소</button>
+              <button onClick={() => setMemoRoom(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">{t('memo.cancel')}</button>
               <button
                 onClick={async () => {
                   if (!memoRoom) return
@@ -566,7 +571,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                   setMemoRoom(null)
                 }}
                 className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors"
-              >완료 확인</button>
+              >{t('memo.confirm')}</button>
             </div>
           </div>
         </div>
@@ -577,12 +582,12 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
         <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-30" onClick={() => setMaintenanceRoom(null)}>
           <div className="bg-white rounded-t-3xl w-full max-w-lg p-5 pb-10" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-            <h2 className="font-bold text-slate-900 text-base mb-0.5">{maintenanceRoom.rooms.number}호 수리 신고</h2>
-            <p className="text-xs text-slate-400 mb-4">고장·파손 내용을 간단히 설명해주세요</p>
+            <h2 className="font-bold text-slate-900 text-base mb-0.5">{t('maintenance.title', { number: maintenanceRoom.rooms.number })}</h2>
+            <p className="text-xs text-slate-400 mb-4">{t('maintenance.subtitle')}</p>
             <textarea
               value={maintenanceDesc}
               onChange={e => setMaintenanceDesc(e.target.value)}
-              placeholder="예: 욕실 수도꼭지 물 새는 중, TV 리모컨 분실..."
+              placeholder={t('maintenance.placeholder')}
               rows={3}
               autoFocus
               className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"

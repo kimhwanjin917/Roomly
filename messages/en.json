@@ -54,6 +54,31 @@
     "errors": {
       "saveFailed": "Failed to save. Please try again."
     },
+    "roomNumber": "Room {number}",
+    "noAssignmentsHint": "Please check back soon.",
+    "retry": "Retry",
+    "offlineQueue": {
+      "queued": "Offline — changes will be sent automatically when back online",
+      "sent": "Sent {count} changes made while offline"
+    },
+    "iosGuide": {
+      "title": "🔔 Add to Home Screen to get notifications",
+      "subtitle": "On iPhone/iPad Safari, you must add this app to your Home Screen to receive new assignment notifications.",
+      "step1": "Tap the <b>Share button</b> <icon></icon> at the bottom",
+      "step2": "➕ Select <b>‘Add to Home Screen’</b>",
+      "step3": "🏠 Open from the Home Screen icon to enable notifications",
+      "close": "Close"
+    },
+    "dirty": {
+      "role": "Checkout duty · Tap a clean/inspect room to mark it as checkout",
+      "clickable": "Available",
+      "noRooms": "No rooms registered",
+      "markedSuccess": "Room {number} marked as checkout",
+      "confirmTitle": "Room {number} — Mark as Checkout",
+      "confirmSubtitle": "Current status: {status} → the room will be marked as needing cleaning after checkout",
+      "cancel": "Cancel",
+      "confirmAction": "Mark as Checkout"
+    },
     "language": "Language"
   }
 }

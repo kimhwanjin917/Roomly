@@ -54,6 +54,31 @@
     "errors": {
       "saveFailed": "Lưu thất bại. Vui lòng thử lại."
     },
+    "roomNumber": "Phòng {number}",
+    "noAssignmentsHint": "Vui lòng kiểm tra lại sau.",
+    "retry": "Thử lại",
+    "offlineQueue": {
+      "queued": "Ngoại tuyến — thay đổi sẽ tự động gửi khi có mạng trở lại",
+      "sent": "Đã gửi {count} thay đổi khi ngoại tuyến"
+    },
+    "iosGuide": {
+      "title": "🔔 Thêm vào Màn hình chính để nhận thông báo",
+      "subtitle": "Trên Safari của iPhone/iPad, bạn cần thêm ứng dụng vào Màn hình chính để nhận thông báo phân công mới.",
+      "step1": "Nhấn <b>nút Chia sẻ</b> <icon></icon> ở cuối màn hình",
+      "step2": "➕ Chọn <b>‘Thêm vào Màn hình chính’</b>",
+      "step3": "🏠 Mở từ biểu tượng trên Màn hình chính để bật thông báo",
+      "close": "Đóng"
+    },
+    "dirty": {
+      "role": "Phụ trách phòng trả · Nhấn phòng sạch/kiểm tra để chuyển sang trả phòng",
+      "clickable": "Có thể xử lý",
+      "noRooms": "Chưa có phòng nào được đăng ký",
+      "markedSuccess": "Đã chuyển phòng {number} sang trả phòng",
+      "confirmTitle": "Phòng {number} — Chuyển sang trả phòng",
+      "confirmSubtitle": "Trạng thái hiện tại: {status} → phòng sẽ chuyển thành cần dọn sau khi trả phòng",
+      "cancel": "Hủy",
+      "confirmAction": "Chuyển trả phòng"
+    },
     "language": "Ngôn ngữ"
   }
 }
