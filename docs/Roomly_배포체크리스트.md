@@ -8,8 +8,8 @@
 ## 1. Vercel 프로덕션 배포 설정 (T-160)
 
 ### 프로젝트 설정
-- [ ] Vercel 프로젝트가 GitHub 저장소와 연결되어 있고 `main` 브랜치 → Production 배포로 설정
-- [ ] Node.js 버전 확인 (Settings → General)
+- [x] Vercel 프로젝트가 GitHub 저장소와 연결되어 있고 `main` 브랜치 → Production 배포로 설정 (2026-07-09 확인 — push 자동 배포 정상)
+- [x] Node.js 버전 확인 (Settings → General) — 24.x (2026-07-09 확인)
 - [ ] 프로덕션 도메인 연결 (현재 코드에 하드코딩된 URL: `https://roomly-plum-eight.vercel.app` — 커스텀 도메인 사용 시 `app/admin/settings/page.tsx`의 `WEBHOOK_URL`과 `NEXT_PUBLIC_APP_URL` 함께 변경)
 
 ### 환경 변수 (Settings → Environment Variables, Production)
@@ -57,7 +57,7 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 >    `Authorization: Bearer $CRON_SECRET` 헤더로 호출
 
 ### 배포 후 스모크 테스트
-- [ ] `/` 랜딩 페이지 로드
+- [x] `/` 랜딩 페이지 로드 (2026-07-09 확인 — /login, /terms, /privacy, manifest.json도 200)
 - [ ] 회원가입 → 온보딩 → 현황판 진입
 - [ ] 직원 QR 로그인 → 상태 변경 → 관리자 현황판 실시간 반영 (Realtime)
 - [ ] 언어 전환 (한/EN/VI) 동작
