@@ -1,0 +1,45 @@
+# T-163: Supabase 보조 백업 — 주 1회 pg_dump (docs/Roomly_배포체크리스트.md §3)
+# 필요 시크릿: SUPABASE_DB_URL (Supabase → Settings → Database → Connection string, Direct)
+# 산출물은 프라이빗 저장소의 Actions 아티팩트로 30일 보관된다.
+# 장기 보관이 필요해지면 S3/GCS/Vercel Blob 업로드 스텝으로 교체할 것.
+name: DB Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * 0' # 일요일 18:00 UTC = 월요일 03:00 KST
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check secret
+        run: |
+          if [ -z "${{ secrets.SUPABASE_DB_URL }}" ]; then
+            echo "::error::SUPABASE_DB_URL 시크릿이 없습니다. Settings → Secrets → Actions에 등록하세요."
+            exit 1
+          fi
+
+      - name: Install postgresql-client 17
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo apt-key add -
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: pg_dump
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          pg_dump "$SUPABASE_DB_URL" \
+            --no-owner --no-privileges \
+            --schema public \
+            -Fc -f "roomly_$(date +%Y%m%d).dump"
+          ls -lh roomly_*.dump
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: roomly-db-backup-${{ github.run_id }}
+          path: roomly_*.dump
+          retention-days: 30

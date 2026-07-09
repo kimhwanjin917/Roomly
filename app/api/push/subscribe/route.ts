@@ -6,20 +6,33 @@ import { withApiError } from '@/lib/api-error'
 
 async function postHandler(request: NextRequest) {
   const body = await request.json() as {
-    subscription: {
+    subscription?: {
       endpoint: string
       keys: { p256dh: string; auth: string }
     }
+    // T-205: 네이티브 앱(Capacitor)은 Web Push 구독 대신 FCM 토큰을 보낸다
+    fcmToken?: string
     staffId?: string
     isAdmin?: boolean
     hotelId: string
   }
 
-  const { subscription, staffId, isAdmin, hotelId } = body
+  const { subscription, fcmToken, staffId, isAdmin, hotelId } = body
 
-  if (!subscription?.endpoint || !hotelId) {
+  if ((!subscription?.endpoint && !fcmToken) || !hotelId) {
     return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
   }
+
+  // FCM 구독은 endpoint에 'fcm:{token}'을 저장해 UNIQUE(endpoint) 중복 방지를 재사용
+  const subscriptionFields = fcmToken
+    ? { endpoint: `fcm:${fcmToken}`, p256dh: null, auth: null, platform: 'fcm', fcm_token: fcmToken }
+    : {
+        endpoint: subscription!.endpoint,
+        p256dh: subscription!.keys.p256dh,
+        auth: subscription!.keys.auth,
+        platform: 'web',
+        fcm_token: null,
+      }
 
   const service = createServiceClient()
 
@@ -33,9 +46,7 @@ async function postHandler(request: NextRequest) {
         hotel_id: hotelId,
         staff_id: null,
         is_admin: true,
-        endpoint: subscription.endpoint,
-        p256dh: subscription.keys.p256dh,
-        auth: subscription.keys.auth,
+        ...subscriptionFields,
       },
       { onConflict: 'endpoint' }
     )
@@ -64,9 +75,7 @@ async function postHandler(request: NextRequest) {
         hotel_id: hotelId,
         staff_id: staffId,
         is_admin: false,
-        endpoint: subscription.endpoint,
-        p256dh: subscription.keys.p256dh,
-        auth: subscription.keys.auth,
+        ...subscriptionFields,
       },
       { onConflict: 'endpoint' }
     )
@@ -76,8 +85,8 @@ async function postHandler(request: NextRequest) {
 }
 
 async function deleteHandler(request: NextRequest) {
-  const body = await request.json() as { endpoint: string }
-  const { endpoint } = body
+  const body = await request.json() as { endpoint?: string; fcmToken?: string }
+  const endpoint = body.endpoint ?? (body.fcmToken ? `fcm:${body.fcmToken}` : null)
 
   if (!endpoint) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 

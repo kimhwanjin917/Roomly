@@ -42,3 +42,9 @@ public/sw.js.map
 public/workbox-*.js.map
 
 .vercel
+
+# 네이티브 앱 (T-204~206) — 시크릿/키는 커밋 금지
+android/app/google-services.json
+ios/App/App/GoogleService-Info.plist
+*.keystore
+*.jks

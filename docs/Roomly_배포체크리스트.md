@@ -32,6 +32,7 @@
 | `RESEND_API_KEY` / `EMAIL_FROM` | 이메일 발송 | 도메인 인증 후 실제 발신 주소로 |
 | `ANTHROPIC_API_KEY` | AI 기능 (AI-01~04) | 없으면 AI 기능만 비활성 |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Rate limit (T-070) | 없으면 인메모리 폴백 (멀티 인스턴스에서 부정확) |
+| `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` | 네이티브 앱 FCM 푸시 (T-205) | 없으면 네이티브 푸시만 비활성 — docs/Roomly_네이티브앱.md |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | 에러 추적 (T-170) | AUTH_TOKEN은 소스맵 업로드용 |
 
 ### Cron (vercel.json에 이미 정의됨 — 배포 후 동작 확인)
@@ -69,7 +70,7 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 ## 2. 외부 서비스 연동 완료 (T-095)
 
 ### Supabase
-- [ ] 프로덕션 프로젝트에 `supabase/migrations/001~014` 전부 순서대로 실행
+- [ ] 프로덕션 프로젝트에 `supabase/migrations/001~016` 전부 순서대로 실행 (016 = 네이티브 푸시 T-205)
 - [ ] `rls_audit.sql` 실행해 RLS 정책 검증 (T-161에서 정책 자체는 검증 완료)
 - [ ] Realtime 활성화: `rooms`, `assignments` + Phase 3 테이블 (`supply_requests`, `maintenance_requests`) — Database → Replication
 - [ ] Auth 설정: Site URL = 프로덕션 도메인, Redirect URLs에 `/auth/callback` 추가
@@ -118,7 +119,8 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 ### 체크리스트
 - [ ] Supabase 프로젝트를 Pro 플랜으로 업그레이드 (Free 플랜은 자동 백업 없음)
 - [ ] Database → Backups에서 일일 백업 활성 상태 확인
-- [ ] 보조 백업: GitHub Actions 주간 `pg_dump` 워크플로 추가 (선택 — 아래 참고)
+- [x] 보조 백업: GitHub Actions 주간 `pg_dump` 워크플로 추가 — `.github/workflows/db-backup.yml` (2026-07-09)
+  - [ ] repo secret `SUPABASE_DB_URL` 등록 후 workflow_dispatch로 1회 수동 실행해 확인
 - [ ] 분기 1회 복구 리허설: 백업에서 스테이징 프로젝트로 복원해 로그인·현황판 확인
 
 ### 보조 pg_dump 백업 (선택)

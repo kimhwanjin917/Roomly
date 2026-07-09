@@ -123,3 +123,9 @@ console.log('Created icon-512.png')
 // Apple touch icon (180x180)
 fs.writeFileSync(path.join(publicDir, 'apple-touch-icon.png'), createIcon(180))
 console.log('Created apple-touch-icon.png')
+
+// T-206: @capacitor/assets 소스 이미지 — assets/logo.png(1024)에서 네이티브 아이콘/스플래시 생성
+const assetsDir = path.join(__dirname, '..', 'assets')
+if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir)
+fs.writeFileSync(path.join(assetsDir, 'logo.png'), createIcon(1024))
+console.log('Created assets/logo.png')

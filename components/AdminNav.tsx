@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { isNativeApp, getNativePushPermission, hasNativeFcmToken, subscribeNativePush, unsubscribeNativePush } from '@/lib/native-push'
 
 const BoxIcon = () => (
   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -55,11 +56,17 @@ export default function AdminNav() {
 
   // T-014: 관리자 푸시 알림 (WorkerDashboard의 PushState 패턴 재사용)
   useEffect(() => {
-    if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
+    // T-205: 네이티브 앱은 Web Push 대신 FCM 경로
+    if (isNativeApp()) {
+      getNativePushPermission().then(perm => {
+        if (perm === 'denied') setPushState('denied')
+        else if (perm === 'granted' && hasNativeFcmToken()) setPushState('subscribed')
+        else setPushState('idle')
+      }).catch(() => setPushState('unsupported'))
+    } else if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
       setPushState('unsupported')
       return
-    }
-    if (Notification.permission === 'granted') {
+    } else if (Notification.permission === 'granted') {
       setPushState('subscribed')
     } else if (Notification.permission === 'denied') {
       setPushState('denied')
@@ -74,6 +81,11 @@ export default function AdminNav() {
 
   async function subscribePush() {
     try {
+      if (isNativeApp()) {
+        const ok = await subscribeNativePush({ hotelId, isAdmin: true })
+        setPushState(ok ? 'subscribed' : 'denied')
+        return
+      }
       const permission = await Notification.requestPermission()
       if (permission !== 'granted') { setPushState('denied'); return }
       const reg = await navigator.serviceWorker.ready
@@ -94,6 +106,11 @@ export default function AdminNav() {
 
   async function unsubscribePush() {
     try {
+      if (isNativeApp()) {
+        await unsubscribeNativePush()
+        setPushState('idle')
+        return
+      }
       const reg = await navigator.serviceWorker.ready
       const sub = await reg.pushManager.getSubscription()
       if (sub) {

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { createClientWithToken } from '@/lib/supabase/client'
+import { isNativeApp, getNativePushPermission, hasNativeFcmToken, subscribeNativePush, unsubscribeNativePush } from '@/lib/native-push'
 
 type Room = {
   id: string
@@ -143,6 +144,15 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
   }, [])
 
   useEffect(() => {
+    // T-205: 네이티브 앱은 Web Push 대신 FCM 경로
+    if (isNativeApp()) {
+      getNativePushPermission().then(perm => {
+        if (perm === 'denied') setPushState('denied')
+        else if (perm === 'granted' && hasNativeFcmToken()) setPushState('subscribed')
+        else setPushState('idle')
+      }).catch(() => setPushState('unsupported'))
+      return
+    }
     if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
       setPushState('unsupported')
       return
@@ -157,6 +167,11 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
   }, [])
 
   async function subscribePush() {
+    if (isNativeApp()) {
+      const ok = await subscribeNativePush({ staffId, hotelId, isAdmin: false })
+      setPushState(ok ? 'subscribed' : 'denied')
+      return
+    }
     const permission = await Notification.requestPermission()
     if (permission !== 'granted') { setPushState('denied'); return }
     const reg = await navigator.serviceWorker.ready
@@ -173,6 +188,11 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
   }
 
   async function unsubscribePush() {
+    if (isNativeApp()) {
+      await unsubscribeNativePush()
+      setPushState('idle')
+      return
+    }
     const reg = await navigator.serviceWorker.ready
     const sub = await reg.pushManager.getSubscription()
     if (sub) {
