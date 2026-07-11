@@ -33,7 +33,8 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
-          pg_dump "$SUPABASE_DB_URL" \
+          # 러너에 PG16 클라이언트가 선점돼 있어 /usr/bin/pg_dump는 16이 잡힌다 — 17 바이너리를 직접 지정
+          /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
             --no-owner --no-privileges \
             --schema public \
             -Fc -f "roomly_$(date +%Y%m%d).dump"
