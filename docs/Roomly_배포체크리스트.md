@@ -122,7 +122,7 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 - [ ] Supabase 프로젝트를 Pro 플랜으로 업그레이드 (Free 플랜은 자동 백업 없음) — **유료 고객 발생 시점으로 연기 (2026-07-11 결정)**
 - [ ] Database → Backups에서 일일 백업 활성 상태 확인 (Pro 전환 후)
 - [x] 보조 백업: GitHub Actions **일일** `pg_dump` 워크플로 — `.github/workflows/db-backup.yml` (2026-07-09 추가, 07-11 주간→일일 변경)
-  - [ ] repo secret `SUPABASE_DB_URL` 등록 후 workflow_dispatch로 1회 수동 실행해 확인
+  - [x] repo secret `SUPABASE_DB_URL` 등록 후 workflow_dispatch로 1회 수동 실행해 확인 (2026-07-11 — Session pooler URL 사용, pg_dump 17 지정 후 성공, 아티팩트 10.7KB. **T-163 Done 처리**)
 - [ ] 분기 1회 복구 리허설: 백업에서 스테이징 프로젝트로 복원해 로그인·현황판 확인
 
 ### 보조 pg_dump 백업 (선택)
