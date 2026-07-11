@@ -71,8 +71,8 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 ## 2. 외부 서비스 연동 완료 (T-095)
 
 ### Supabase
-- [ ] 프로덕션 프로젝트에 `supabase/migrations/001~016` 전부 순서대로 실행 (016 = 네이티브 푸시 T-205)
-  - ⚠️ 2026-07-11 확인: **001~015는 적용됨, 016만 미적용** (`push_subscriptions.platform`/`fcm_token` 컬럼 없음). 이 때문에 `/api/push/subscribe`가 웹 구독 저장에도 실패 중 — **푸시 신규 구독이 프로덕션에서 깨져 있음**. Supabase SQL Editor에서 `016_native_push.sql` 내용 실행하면 즉시 해결 (IF NOT EXISTS라 재실행 안전).
+- [x] 프로덕션 프로젝트에 `supabase/migrations/001~016` 전부 순서대로 실행 (016 = 네이티브 푸시 T-205)
+  - 2026-07-11: 016 미적용으로 푸시 신규 구독이 깨져 있던 것을 발견 → SQL Editor에서 016 실행, `platform`/`fcm_token` 컬럼 생성 확인 완료. 001~016 전체 적용됨.
 - [ ] `rls_audit.sql` 실행해 RLS 정책 검증 (T-161에서 정책 자체는 검증 완료)
 - [x] Realtime 활성화: `rooms`, `assignments` + Phase 3 테이블 (`supply_requests`, `maintenance_requests`) — Database → Replication (2026-07-11 확인 — 4개 테이블 모두 postgres_changes 구독 성공)
 - [ ] Auth 설정: Site URL = 프로덕션 도메인, Redirect URLs에 `/auth/callback` 추가
