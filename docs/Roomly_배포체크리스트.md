@@ -113,15 +113,15 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 ### 권장 정책
 | 항목 | 정책 |
 |---|---|
-| 자동 백업 | Supabase **Pro 플랜** 활성화 → 일일 자동 백업 (7일 보관) |
+| 자동 백업 | Supabase **Pro 플랜** 활성화 → 일일 자동 백업 (7일 보관) — **수익 발생 전까지 보류** |
 | PITR | 결제 데이터가 쌓이기 시작하면 Point-in-Time Recovery 애드온 검토 (분 단위 복구) |
-| 보조 백업 | 주 1회 `pg_dump` 오프사이트 백업 (아래 스크립트) |
+| 보조 백업 | ~~주 1회~~ → **일 1회** `pg_dump` (Free 플랜 동안은 이게 주 백업 — 2026-07-11 일일로 변경) |
 | 복구 목표 | RPO 24시간 (일일 백업 기준), RTO 1시간 |
 
 ### 체크리스트
-- [ ] Supabase 프로젝트를 Pro 플랜으로 업그레이드 (Free 플랜은 자동 백업 없음)
-- [ ] Database → Backups에서 일일 백업 활성 상태 확인
-- [x] 보조 백업: GitHub Actions 주간 `pg_dump` 워크플로 추가 — `.github/workflows/db-backup.yml` (2026-07-09)
+- [ ] Supabase 프로젝트를 Pro 플랜으로 업그레이드 (Free 플랜은 자동 백업 없음) — **유료 고객 발생 시점으로 연기 (2026-07-11 결정)**
+- [ ] Database → Backups에서 일일 백업 활성 상태 확인 (Pro 전환 후)
+- [x] 보조 백업: GitHub Actions **일일** `pg_dump` 워크플로 — `.github/workflows/db-backup.yml` (2026-07-09 추가, 07-11 주간→일일 변경)
   - [ ] repo secret `SUPABASE_DB_URL` 등록 후 workflow_dispatch로 1회 수동 실행해 확인
 - [ ] 분기 1회 복구 리허설: 백업에서 스테이징 프로젝트로 복원해 로그인·현황판 확인
 

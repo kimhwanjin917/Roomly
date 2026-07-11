@@ -1,4 +1,6 @@
-# T-163: Supabase 보조 백업 — 주 1회 pg_dump (docs/Roomly_배포체크리스트.md §3)
+# T-163: Supabase 보조 백업 — 매일 pg_dump (docs/Roomly_배포체크리스트.md §3)
+# Supabase Free 플랜(자동 백업 없음) 대응: 이 워크플로가 유일한 백업이므로 일 1회로 운영 (RPO 24h).
+# Pro 플랜 전환 후에는 주 1회('0 18 * * 0')로 낮춰도 된다.
 # 필요 시크릿: SUPABASE_DB_URL (Supabase → Settings → Database → Connection string, Direct)
 # 산출물은 프라이빗 저장소의 Actions 아티팩트로 30일 보관된다.
 # 장기 보관이 필요해지면 S3/GCS/Vercel Blob 업로드 스텝으로 교체할 것.
@@ -6,7 +8,7 @@ name: DB Backup
 
 on:
   schedule:
-    - cron: '0 18 * * 0' # 일요일 18:00 UTC = 월요일 03:00 KST
+    - cron: '0 18 * * *' # 매일 18:00 UTC = 다음날 03:00 KST
   workflow_dispatch:
 
 jobs:
