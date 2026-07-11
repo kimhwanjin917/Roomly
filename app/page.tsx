@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import Reveal from '@/components/landing/Reveal'
 
 export const metadata: Metadata = {
   title: 'Roomly — 호텔 객실 청소, 한 화면에서 실시간으로',
@@ -131,10 +132,13 @@ const MOCK_ROOMS: { no: string; status: RoomStatus; who?: string }[] = [
   { no: '405', status: 'done', who: '이' }, { no: '406', status: 'done', who: '박' },
 ]
 
-function RoomCard({ no, status, who }: { no: string; status: RoomStatus; who?: string }) {
+function RoomCard({ no, status, who, i = 0 }: { no: string; status: RoomStatus; who?: string; i?: number }) {
   const meta = STATUS_META[status]
   return (
-    <div className={`rounded-xl ring-1 px-2 py-2 sm:px-2.5 flex flex-col items-center gap-1.5 ${meta.chip}`}>
+    <div
+      className={`reveal-item rounded-xl ring-1 px-2 py-2 sm:px-2.5 flex flex-col items-center gap-1.5 ${meta.chip}`}
+      style={{ transitionDelay: `${i * 35}ms` }}
+    >
       <span className="text-[11px] sm:text-xs font-bold tabular-nums leading-none">{no}</span>
       <span className="flex items-center gap-1">
         <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
@@ -225,7 +229,7 @@ export default function LandingPage() {
         </div>
 
         <div className="max-w-3xl mx-auto text-center">
-          <div className="mb-7">
+          <Reveal className="mb-7">
             <span className="inline-flex items-center gap-2 rounded-full bg-white ring-1 ring-slate-200 shadow-sm text-xs font-bold text-slate-600 px-4 py-2">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
@@ -233,20 +237,20 @@ export default function LandingPage() {
               </span>
               호텔 하우스키핑 실시간 관리
             </span>
-          </div>
-          <h1 className="text-[2.6rem] sm:text-6xl font-extrabold tracking-[-0.03em] leading-[1.12] mb-6">
+          </Reveal>
+          <Reveal as="h1" delay={70} className="text-[2.6rem] sm:text-6xl font-extrabold tracking-[-0.03em] leading-[1.12] mb-6">
             호텔 객실 청소,
             <br />
             <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-sky-500 bg-clip-text text-transparent">
               한 화면
             </span>
             에서 실시간으로
-          </h1>
-          <p className="text-base sm:text-lg text-slate-500 leading-relaxed mb-9 max-w-xl mx-auto">
+          </Reveal>
+          <Reveal as="p" delay={140} className="text-base sm:text-lg text-slate-500 leading-relaxed mb-9 max-w-xl mx-auto">
             어느 방이 끝났는지 전화로 확인하지 마세요.
             배정하는 순간 직원 폰에 알림이 가고, 완료되는 순간 현황판에 나타납니다.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+          </Reveal>
+          <Reveal delay={210} className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link href="/signup" className={`${BTN_PRIMARY} px-7 py-3.5 text-[0.95rem]`}>
               무료로 시작하기
               <IconArrow className="w-4 h-4" />
@@ -257,14 +261,14 @@ export default function LandingPage() {
             >
               어떻게 작동하나요?
             </a>
-          </div>
-          <p className="mt-6 text-[0.83rem] text-slate-400 font-medium">
+          </Reveal>
+          <Reveal as="p" delay={280} className="mt-6 text-[0.83rem] text-slate-400 font-medium">
             3개월 무료 체험 · 신용카드 불필요 · 직원은 앱 설치 없이 QR로 접속
-          </p>
+          </Reveal>
         </div>
 
         {/* 제품 미리보기 */}
-        <div className="relative max-w-4xl mx-auto mt-16 sm:mt-20">
+        <Reveal delay={200} className="relative max-w-4xl mx-auto mt-16 sm:mt-20">
           {/* 뒤 글로우 */}
           <div aria-hidden className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-b from-blue-100/80 to-transparent blur-2xl" />
 
@@ -306,14 +310,14 @@ export default function LandingPage() {
                   <span className="text-[11px] font-extrabold text-blue-600 tabular-nums">12 / 18 객실</span>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
-                  <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-blue-500 to-sky-400" />
+                  <div className="landing-progress h-full rounded-full bg-gradient-to-r from-blue-500 to-sky-400" />
                 </div>
               </div>
 
               {/* 객실 그리드 */}
               <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
-                {MOCK_ROOMS.map((room) => (
-                  <RoomCard key={room.no} {...room} />
+                {MOCK_ROOMS.map((room, i) => (
+                  <RoomCard key={room.no} i={i} {...room} />
                 ))}
               </div>
               <div className="mt-4 flex items-center justify-between">
@@ -324,7 +328,10 @@ export default function LandingPage() {
           </div>
 
           {/* 플로팅: 완료 알림 */}
-          <div className="hidden sm:flex absolute -right-6 lg:-right-14 -bottom-7 items-center gap-3 bg-white/90 backdrop-blur rounded-2xl ring-1 ring-slate-900/10 shadow-xl px-4 py-3.5">
+          <div
+            className="reveal-item float-anim hidden sm:flex absolute -right-6 lg:-right-14 -bottom-7 items-center gap-3 bg-white/90 backdrop-blur rounded-2xl ring-1 ring-slate-900/10 shadow-xl px-4 py-3.5"
+            style={{ transitionDelay: '650ms' }}
+          >
             <div className="w-10 h-10 rounded-xl bg-emerald-500 shadow-md shadow-emerald-500/30 flex items-center justify-center shrink-0">
               <IconCheck className="w-5 h-5 text-white" />
             </div>
@@ -335,7 +342,10 @@ export default function LandingPage() {
           </div>
 
           {/* 플로팅: 새 배정 */}
-          <div className="hidden lg:flex absolute -left-14 top-16 items-center gap-3 bg-white/90 backdrop-blur rounded-2xl ring-1 ring-slate-900/10 shadow-xl px-4 py-3.5">
+          <div
+            className="reveal-item float-anim-delayed hidden lg:flex absolute -left-14 top-16 items-center gap-3 bg-white/90 backdrop-blur rounded-2xl ring-1 ring-slate-900/10 shadow-xl px-4 py-3.5"
+            style={{ transitionDelay: '800ms' }}
+          >
             <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-blue-500 to-blue-700 shadow-md shadow-blue-600/30 flex items-center justify-center shrink-0 text-white">
               <IconPing className="w-5 h-5" />
             </div>
@@ -344,41 +354,46 @@ export default function LandingPage() {
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">박미란 님에게 알림 전송</p>
             </div>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* 숫자로 보는 Roomly */}
       <section className="py-16 sm:py-24 px-4 sm:px-6">
-        <div className="max-w-4xl mx-auto grid grid-cols-3 divide-x divide-slate-100 rounded-3xl ring-1 ring-slate-200/80 bg-gradient-to-b from-white to-slate-50/60 shadow-sm">
+        <Reveal className="max-w-4xl mx-auto grid grid-cols-3 divide-x divide-slate-100 rounded-3xl ring-1 ring-slate-200/80 bg-gradient-to-b from-white to-slate-50/60 shadow-sm">
           {[
             { value: '0번', label: '완료 확인 전화' },
             { value: '5초', label: 'QR 스캔 후 접속까지' },
             { value: '0개', label: '직원이 설치할 앱' },
-          ].map((stat) => (
-            <div key={stat.label} className="py-8 sm:py-10 px-2 text-center">
+          ].map((stat, i) => (
+            <div
+              key={stat.label}
+              className="reveal-item py-8 sm:py-10 px-2 text-center"
+              style={{ transitionDelay: `${i * 120}ms` }}
+            >
               <p className="text-3xl sm:text-[2.6rem] font-extrabold tracking-tight bg-gradient-to-b from-slate-900 to-slate-600 bg-clip-text text-transparent leading-none">
                 {stat.value}
               </p>
               <p className="mt-2.5 text-[11px] sm:text-sm text-slate-500 font-semibold">{stat.label}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </section>
 
       {/* 핵심 기능 */}
       <section id="features" className="relative py-16 sm:py-28 px-4 sm:px-6">
         <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-white via-slate-50 to-white" />
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14 sm:mb-20">
+          <Reveal className="text-center mb-14 sm:mb-20">
             <Eyebrow>핵심 기능</Eyebrow>
             <h2 className="mt-5 text-[1.7rem] sm:text-4xl font-extrabold tracking-tight mb-4">
               필요한 것만, 바로 쓸 수 있게
             </h2>
             <p className="text-slate-500 text-sm sm:text-base">복잡한 설정도, 직원 교육도 필요 없습니다.</p>
-          </div>
+          </Reveal>
 
           <div className="space-y-7">
             {/* 실시간 현황판 */}
+            <Reveal>
             <div className="group grid sm:grid-cols-2 gap-8 sm:gap-12 items-center rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-xl hover:shadow-slate-200/60 transition-shadow duration-300 p-7 sm:p-12">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/25 ring-1 ring-inset ring-white/25 flex items-center justify-center mb-6">
@@ -394,8 +409,8 @@ export default function LandingPage() {
               </div>
               <div className="rounded-2xl ring-1 ring-slate-200/80 bg-gradient-to-b from-slate-50 to-white p-5 shadow-inner">
                 <div className="grid grid-cols-4 gap-2">
-                  {MOCK_ROOMS.slice(0, 8).map((room) => (
-                    <RoomCard key={room.no} {...room} />
+                  {MOCK_ROOMS.slice(0, 8).map((room, i) => (
+                    <RoomCard key={room.no} i={i} {...room} />
                   ))}
                 </div>
                 <div className="mt-4">
@@ -403,8 +418,10 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            </Reveal>
 
             {/* QR 접속 */}
+            <Reveal>
             <div className="group grid sm:grid-cols-2 gap-8 sm:gap-12 items-center rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-xl hover:shadow-slate-200/60 transition-shadow duration-300 p-7 sm:p-12">
               <div className="order-1 sm:order-2">
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/25 ring-1 ring-inset ring-white/25 flex items-center justify-center mb-6">
@@ -449,8 +466,10 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
+            </Reveal>
 
             {/* 자동 알림 */}
+            <Reveal>
             <div className="group grid sm:grid-cols-2 gap-8 sm:gap-12 items-center rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-xl hover:shadow-slate-200/60 transition-shadow duration-300 p-7 sm:p-12">
               <div>
                 <div className="w-12 h-12 rounded-2xl bg-gradient-to-b from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-600/25 ring-1 ring-inset ring-white/25 flex items-center justify-center mb-6">
@@ -468,10 +487,11 @@ export default function LandingPage() {
                 {[
                   { title: '새 배정 · 502호', sub: '체크아웃 완료 — 지금 청소 가능', time: '방금', active: true },
                   { title: '새 배정 · 503호', sub: '오후 2시까지 정비 요청', time: '1분 전', active: false },
-                ].map((n) => (
+                ].map((n, i) => (
                   <div
                     key={n.title}
-                    className={`flex items-start gap-3.5 rounded-2xl px-4 py-3.5 ring-1 ${
+                    style={{ transitionDelay: `${200 + i * 150}ms` }}
+                    className={`reveal-item flex items-start gap-3.5 rounded-2xl px-4 py-3.5 ring-1 ${
                       n.active
                         ? 'bg-white ring-blue-200 shadow-lg shadow-blue-100/80'
                         : 'bg-slate-50/80 ring-slate-200/70'
@@ -491,6 +511,7 @@ export default function LandingPage() {
                 ))}
               </div>
             </div>
+            </Reveal>
           </div>
         </div>
       </section>
@@ -498,13 +519,13 @@ export default function LandingPage() {
       {/* 시작 방법 */}
       <section id="how" className="py-16 sm:py-28 px-4 sm:px-6">
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14 sm:mb-16">
+          <Reveal className="text-center mb-14 sm:mb-16">
             <Eyebrow>시작 방법</Eyebrow>
             <h2 className="mt-5 text-[1.7rem] sm:text-4xl font-extrabold tracking-tight mb-4">
               오늘 가입하고, 오늘 바로 씁니다
             </h2>
             <p className="text-slate-500 text-sm sm:text-base">도입 컨설팅이나 설치 기간이 없습니다.</p>
-          </div>
+          </Reveal>
           <div className="relative grid sm:grid-cols-3 gap-6">
             {/* 연결선 */}
             <div aria-hidden className="hidden sm:block absolute top-[3.4rem] left-[18%] right-[18%] border-t-2 border-dashed border-slate-200" />
@@ -512,10 +533,10 @@ export default function LandingPage() {
               { icon: IconRooms, step: '1', title: '객실 등록', desc: '층과 호수를 입력하면 현황판이 자동으로 만들어집니다.' },
               { icon: IconPrint, step: '2', title: 'QR 출력', desc: '직원용 QR을 출력해 사무실 벽에 붙이면 초대 끝.' },
               { icon: IconSend, step: '3', title: '배정 시작', desc: '객실을 배정하면 알림이 가고, 진행 상황이 실시간으로 보입니다.' },
-            ].map((s) => (
+            ].map((s, i) => (
+              <Reveal key={s.step} delay={i * 130}>
               <div
-                key={s.step}
-                className="relative rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-lg hover:shadow-slate-200/60 hover:-translate-y-1 transition-all duration-300 p-8 text-center"
+                className="relative h-full rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-lg hover:shadow-slate-200/60 hover:-translate-y-1 transition-all duration-300 p-8 text-center"
               >
                 <div className="relative inline-flex mb-6">
                   <div className="w-[4.2rem] h-[4.2rem] rounded-2xl bg-gradient-to-b from-slate-50 to-white ring-1 ring-slate-200 shadow-sm flex items-center justify-center text-blue-600">
@@ -528,6 +549,7 @@ export default function LandingPage() {
                 <h3 className="text-lg font-extrabold tracking-tight mb-2.5">{s.title}</h3>
                 <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
               </div>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -537,7 +559,7 @@ export default function LandingPage() {
       <section id="pricing" className="relative py-16 sm:py-28 px-4 sm:px-6">
         <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-white via-slate-50 to-white" />
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-14 sm:mb-16">
+          <Reveal className="text-center mb-14 sm:mb-16">
             <Eyebrow>요금제</Eyebrow>
             <h2 className="mt-5 text-[1.7rem] sm:text-4xl font-extrabold tracking-tight mb-4">
               객실 수에 맞게, 부담 없이
@@ -545,7 +567,7 @@ export default function LandingPage() {
             <p className="text-slate-500 text-sm sm:text-base">
               모든 요금제 3개월 무료 체험. 신용카드 없이 시작하고 언제든 해지할 수 있습니다.
             </p>
-          </div>
+          </Reveal>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 items-stretch">
             {[
               {
@@ -569,12 +591,12 @@ export default function LandingPage() {
                 features: ['실시간 현황판', 'QR 직원 접속', '배정 알림', '전담 매니저', '맞춤 연동'],
                 highlight: false,
               },
-            ].map((plan) =>
+            ].map((plan, i) =>
               plan.highlight ? (
                 /* 추천 플랜: 그라디언트 보더 */
+                <Reveal key={plan.name} delay={i * 130}>
                 <div
-                  key={plan.name}
-                  className="relative rounded-3xl p-[1.5px] bg-gradient-to-b from-blue-500 via-blue-400 to-sky-300 shadow-xl shadow-blue-600/15"
+                  className="relative h-full rounded-3xl p-[1.5px] bg-gradient-to-b from-blue-500 via-blue-400 to-sky-300 shadow-xl shadow-blue-600/15"
                 >
                   <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10 bg-gradient-to-b from-blue-500 to-blue-700 text-white text-xs font-extrabold px-4 py-1.5 rounded-full shadow-md shadow-blue-600/30 ring-1 ring-inset ring-white/25 whitespace-nowrap">
                     가장 많이 선택
@@ -598,10 +620,11 @@ export default function LandingPage() {
                     </Link>
                   </div>
                 </div>
+                </Reveal>
               ) : (
+                <Reveal key={plan.name} delay={i * 130}>
                 <div
-                  key={plan.name}
-                  className="rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-lg hover:shadow-slate-200/60 transition-shadow duration-300 p-8 flex flex-col"
+                  className="h-full rounded-3xl bg-white ring-1 ring-slate-200/80 shadow-sm hover:shadow-lg hover:shadow-slate-200/60 transition-shadow duration-300 p-8 flex flex-col"
                 >
                   <h3 className="text-lg font-extrabold tracking-tight mb-1">{plan.name}</h3>
                   <p className="text-sm text-slate-500 mb-7">{plan.target}</p>
@@ -623,6 +646,7 @@ export default function LandingPage() {
                     무료로 시작하기
                   </Link>
                 </div>
+                </Reveal>
               )
             )}
           </div>
@@ -632,10 +656,10 @@ export default function LandingPage() {
       {/* FAQ */}
       <section className="py-16 sm:py-28 px-4 sm:px-6">
         <div className="max-w-3xl mx-auto">
-          <div className="text-center mb-12">
+          <Reveal className="text-center mb-12">
             <Eyebrow>FAQ</Eyebrow>
             <h2 className="mt-5 text-[1.7rem] sm:text-3xl font-extrabold tracking-tight">자주 묻는 질문</h2>
-          </div>
+          </Reveal>
           <div className="space-y-3">
             {[
               {
@@ -654,9 +678,9 @@ export default function LandingPage() {
                 q: '해지는 어떻게 하나요?',
                 a: '설정 화면에서 클릭 한 번으로 해지됩니다. 위약금이나 최소 계약 기간이 없습니다.',
               },
-            ].map((item) => (
+            ].map((item, i) => (
+              <Reveal key={item.q} delay={i * 70}>
               <details
-                key={item.q}
                 className="group rounded-2xl bg-white ring-1 ring-slate-200/80 open:ring-slate-300 open:shadow-md open:shadow-slate-200/50 transition-all px-6 py-5"
               >
                 <summary className="flex items-center justify-between cursor-pointer list-none font-bold text-sm sm:text-[0.95rem] tracking-tight [&::-webkit-details-marker]:hidden">
@@ -667,6 +691,7 @@ export default function LandingPage() {
                 </summary>
                 <p className="mt-3.5 text-sm text-slate-500 leading-[1.75] pr-10">{item.a}</p>
               </details>
+              </Reveal>
             ))}
           </div>
         </div>
@@ -674,7 +699,7 @@ export default function LandingPage() {
 
       {/* 하단 CTA */}
       <section className="px-4 sm:px-6 pb-20 sm:pb-28">
-        <div className="relative max-w-5xl mx-auto rounded-[2rem] bg-slate-950 text-white text-center px-6 py-16 sm:py-24 overflow-hidden ring-1 ring-white/10">
+        <Reveal className="relative max-w-5xl mx-auto rounded-[2rem] bg-slate-950 text-white text-center px-6 py-16 sm:py-24 overflow-hidden ring-1 ring-white/10">
           {/* 배경 텍스처 */}
           <div
             aria-hidden
@@ -697,7 +722,7 @@ export default function LandingPage() {
               <IconArrow className="w-4 h-4" />
             </Link>
           </div>
-        </div>
+        </Reveal>
       </section>
 
       {/* 푸터 */}

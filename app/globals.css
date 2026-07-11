@@ -6,9 +6,86 @@
   html {
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
+    /* sticky 헤더(4rem)에 가려지지 않게 앵커 이동 여백 확보 */
+    scroll-padding-top: 5rem;
   }
   body {
     /* 한글 단어 단위 줄바꿈 */
     word-break: keep-all;
+  }
+}
+
+/* ===== 랜딩 스크롤 리빌 =====
+   Reveal 컴포넌트가 뷰포트 진입 시 .is-visible을 붙인다. */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* .is-visible 컨테이너 안에서 순차 등장하는 자식 (transition-delay는 인라인으로 지정) */
+.reveal-item {
+  opacity: 0;
+  transform: translateY(14px) scale(0.97);
+  transition:
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.is-visible .reveal-item {
+  opacity: 1;
+  transform: none;
+}
+
+/* 현황판 목업 진행률 바: 리빌 시 0 → 2/3 로 차오름 */
+.landing-progress {
+  width: 0;
+  transition: width 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.4s;
+}
+.is-visible .landing-progress {
+  width: 66.666%;
+}
+
+/* 플로팅 알림 카드의 은은한 부유 모션 */
+@keyframes landing-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-7px);
+  }
+}
+.float-anim {
+  animation: landing-float 5.5s ease-in-out infinite;
+}
+.float-anim-delayed {
+  animation: landing-float 6.5s ease-in-out 1.2s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal,
+  .reveal-item {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .landing-progress,
+  .is-visible .landing-progress {
+    width: 66.666%;
+    transition: none;
+  }
+  .float-anim,
+  .float-anim-delayed {
+    animation: none;
   }
 }
