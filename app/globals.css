@@ -69,15 +69,15 @@
   animation: landing-float 6.5s ease-in-out 1.2s infinite;
 }
 
+/* 모션 최소화 사용자: 이동·부유·스크롤 모션은 끄되, 안전한 opacity 페이드는 유지 */
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
   .reveal,
   .reveal-item {
-    opacity: 1;
     transform: none;
-    transition: none;
+    transition: opacity 0.5s ease;
   }
   .landing-progress,
   .is-visible .landing-progress {
