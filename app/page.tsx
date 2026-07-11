@@ -109,6 +109,71 @@ function IconArrow({ className }: { className?: string }) {
   )
 }
 
+/* ================= 히어로: 밤의 호텔 스카이라인 =================
+   창문 하나하나가 객실 상태(불 켜짐·완료·청소 중)로 빛나는 CSS 일러스트 */
+
+type WindowKind = 'a' | 'd' | 'e' | 'b' // a=불 켜짐(웜), d=꺼짐, e=완료(그린), b=청소 중(블루)
+
+const WINDOW_STYLE: Record<WindowKind, string> = {
+  a: 'bg-amber-200/90 shadow-[0_0_7px_rgba(253,230,138,0.55)]',
+  d: 'bg-slate-700/50',
+  e: 'bg-emerald-400 shadow-[0_0_9px_rgba(52,211,153,0.75)] animate-pulse',
+  b: 'bg-sky-400 shadow-[0_0_9px_rgba(56,189,248,0.75)] animate-pulse',
+}
+
+function Building({
+  rows,
+  width,
+  cols,
+  sign,
+  className,
+}: {
+  rows: string[]
+  width: string
+  cols: string
+  sign?: boolean
+  className?: string
+}) {
+  return (
+    <div className={`${width} ${className ?? ''}`}>
+      {sign && (
+        <div className="flex justify-center mb-2">
+          <span className="rounded-md bg-sky-400/10 ring-1 ring-sky-300/40 px-2.5 py-1 text-[9px] font-extrabold tracking-[0.35em] text-sky-300 [text-shadow:0_0_10px_rgba(125,211,252,0.9)]">
+            HOTEL
+          </span>
+        </div>
+      )}
+      <div className="rounded-t-xl bg-slate-800/90 ring-1 ring-white/10 p-2 sm:p-2.5 shadow-[0_-8px_40px_-12px_rgba(56,120,255,0.15)]">
+        <div className={`grid ${cols} gap-1 sm:gap-1.5`}>
+          {rows.join('').split('').map((w, i) => (
+            <span
+              key={i}
+              className={`aspect-[4/5] rounded-[3px] ${WINDOW_STYLE[w as WindowKind]}`}
+            />
+          ))}
+        </div>
+        {/* 입구 */}
+        <div className="mt-1.5 flex justify-center">
+          <span className="w-1/3 h-2.5 sm:h-3 rounded-t-md bg-amber-100/80 shadow-[0_0_10px_rgba(253,230,138,0.5)]" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const STARS = {
+  backgroundImage: [
+    'radial-gradient(1.5px 1.5px at 12% 25%, rgba(255,255,255,0.7) 50%, transparent 100%)',
+    'radial-gradient(1px 1px at 28% 12%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+    'radial-gradient(1.5px 1.5px at 45% 20%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+    'radial-gradient(1px 1px at 62% 8%, rgba(255,255,255,0.6) 50%, transparent 100%)',
+    'radial-gradient(1.5px 1.5px at 75% 28%, rgba(255,255,255,0.5) 50%, transparent 100%)',
+    'radial-gradient(1px 1px at 88% 15%, rgba(255,255,255,0.6) 50%, transparent 100%)',
+    'radial-gradient(1px 1px at 54% 35%, rgba(255,255,255,0.35) 50%, transparent 100%)',
+    'radial-gradient(1px 1px at 8% 45%, rgba(255,255,255,0.4) 50%, transparent 100%)',
+  ].join(','),
+} as const
+
 /* ================= 현황판 목업 데이터 ================= */
 
 type RoomStatus = 'waiting' | 'cleaning' | 'done'
@@ -124,11 +189,6 @@ const MOCK_ROOMS: { no: string; status: RoomStatus; who?: string }[] = [
   { no: '203', status: 'cleaning', who: '박' }, { no: '204', status: 'waiting' },
   { no: '205', status: 'done', who: '이' }, { no: '206', status: 'done', who: '이' },
   { no: '301', status: 'done', who: '박' }, { no: '302', status: 'cleaning', who: '이' },
-  { no: '303', status: 'done', who: '김' }, { no: '304', status: 'done', who: '박' },
-  { no: '305', status: 'waiting' }, { no: '306', status: 'done', who: '이' },
-  { no: '401', status: 'waiting' }, { no: '402', status: 'done', who: '김' },
-  { no: '403', status: 'done', who: '김' }, { no: '404', status: 'cleaning', who: '박' },
-  { no: '405', status: 'done', who: '이' }, { no: '406', status: 'done', who: '박' },
 ]
 
 function RoomCard({ no, status, who }: { no: string; status: RoomStatus; who?: string }) {
@@ -212,136 +272,114 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative pt-16 sm:pt-24 pb-10 px-4 sm:px-6">
-        {/* 배경 레이어: 도트 그리드 + 블러 블롭 */}
-        <div aria-hidden className="absolute inset-0 -z-10 overflow-hidden">
-          <div
-            className="absolute inset-x-0 top-0 h-[560px] [mask-image:linear-gradient(to_bottom,black_20%,transparent)]"
-            style={DOT_GRID}
-          />
-          <div className="absolute -top-40 left-1/2 -translate-x-[70%] w-[560px] h-[560px] rounded-full bg-blue-200/40 blur-[120px]" />
-          <div className="absolute -top-24 left-1/2 translate-x-[10%] w-[480px] h-[480px] rounded-full bg-sky-100/60 blur-[100px]" />
-        </div>
-
-        <div className="max-w-3xl mx-auto text-center">
-          <div className="mb-7">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white ring-1 ring-slate-200 shadow-sm text-xs font-bold text-slate-600 px-4 py-2">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
-              호텔 하우스키핑 실시간 관리
-            </span>
-          </div>
-          <h1 className="text-[2.6rem] sm:text-6xl font-extrabold tracking-[-0.03em] leading-[1.12] mb-6">
-            호텔 객실 청소,
-            <br />
-            <span className="bg-gradient-to-r from-blue-600 via-blue-500 to-sky-500 bg-clip-text text-transparent">
-              한 화면
-            </span>
-            에서 실시간으로
-          </h1>
-          <p className="text-base sm:text-lg text-slate-500 leading-relaxed mb-9 max-w-xl mx-auto">
-            어느 방이 끝났는지 전화로 확인하지 마세요.
-            배정하는 순간 직원 폰에 알림이 가고, 완료되는 순간 현황판에 나타납니다.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link href="/signup" className={`${BTN_PRIMARY} px-7 py-3.5 text-[0.95rem]`}>
-              무료로 시작하기
-              <IconArrow className="w-4 h-4" />
-            </Link>
-            <a
-              href="#how"
-              className="inline-flex items-center gap-2 text-slate-700 font-semibold px-7 py-3.5 rounded-xl bg-white ring-1 ring-slate-200 shadow-sm hover:ring-slate-300 hover:shadow transition-all duration-200 text-[0.95rem]"
-            >
-              어떻게 작동하나요?
-            </a>
-          </div>
-          <p className="mt-6 text-[0.83rem] text-slate-400 font-medium">
-            3개월 무료 체험 · 신용카드 불필요 · 직원은 앱 설치 없이 QR로 접속
-          </p>
-        </div>
-
-        {/* 제품 미리보기 */}
-        <div className="relative max-w-4xl mx-auto mt-16 sm:mt-20">
-          {/* 뒤 글로우 */}
-          <div aria-hidden className="absolute -inset-6 -z-10 rounded-[2rem] bg-gradient-to-b from-blue-100/80 to-transparent blur-2xl" />
-
-          <div className="rounded-2xl bg-white ring-1 ring-slate-900/10 shadow-[0_24px_60px_-16px_rgb(15_23_42/0.18),0_4px_16px_-8px_rgb(15_23_42/0.1)] overflow-hidden">
-            {/* 윈도 바 */}
-            <div className="flex items-center gap-1.5 px-4 py-3 border-b border-slate-100 bg-gradient-to-b from-slate-50 to-white">
-              <span className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-              <span className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-              <span className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
-              <span className="ml-3 inline-flex items-center gap-1.5 text-[11px] text-slate-400 font-semibold bg-slate-100 rounded-md px-2.5 py-1">
-                <svg viewBox="0 0 24 24" className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-                roomly.app/dashboard
-              </span>
+      {/* Hero: 밤의 호텔 */}
+      <section className="px-3 sm:px-6 pt-3 sm:pt-5">
+        <div className="relative max-w-6xl mx-auto rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden bg-gradient-to-b from-[#050914] via-[#0a1230] to-[#12235c] ring-1 ring-white/10">
+          {/* 하늘: 별 + 달 + 오로라 글로우 */}
+          <div aria-hidden className="absolute inset-0" style={STARS} />
+          <div aria-hidden className="absolute top-14 right-[12%] sm:right-[18%]">
+            <div className="relative w-10 h-10 sm:w-14 sm:h-14 rounded-full bg-slate-100 shadow-[0_0_50px_rgba(226,232,240,0.45)]">
+              <div className="absolute -top-1 -right-1 w-8 h-8 sm:w-11 sm:h-11 rounded-full bg-[#0a1230]" />
             </div>
-            <div className="p-4 sm:p-6">
-              {/* 상단 요약 */}
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <div>
-                  <p className="text-sm sm:text-base font-extrabold tracking-tight">오늘의 객실 현황</p>
-                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">7월 12일 (일) · 그랜드서울호텔</p>
+          </div>
+          <div aria-hidden className="absolute -bottom-40 left-1/2 -translate-x-1/2 w-[720px] h-[420px] rounded-full bg-blue-500/25 blur-[110px]" />
+
+          <div className="relative pt-16 sm:pt-24 px-6 text-center">
+            <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.07] ring-1 ring-white/15 text-slate-300 text-[11px] sm:text-xs font-bold px-4 py-1.5 backdrop-blur">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
+              </span>
+              HOTEL HOUSEKEEPING
+            </span>
+            <h1 className="mt-6 text-4xl sm:text-6xl lg:text-[4.2rem] font-extrabold tracking-[-0.03em] leading-[1.1] text-white">
+              호텔 객실 관리의
+              <br />
+              <span className="bg-gradient-to-r from-sky-300 via-blue-300 to-indigo-300 bg-clip-text text-transparent">
+                새로운 기준
+              </span>
+            </h1>
+            <p className="mt-5 text-sm sm:text-lg text-slate-400 font-medium">
+              배정 · 청소 · 확인까지, 한 화면에서 실시간으로.
+            </p>
+            <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link href="/signup" className={`${BTN_PRIMARY} px-7 py-3.5 text-[0.95rem]`}>
+                무료로 시작하기
+                <IconArrow className="w-4 h-4" />
+              </Link>
+              <a
+                href="#features"
+                className="inline-flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl bg-white/[0.07] ring-1 ring-white/15 hover:bg-white/[0.12] backdrop-blur transition-colors text-[0.95rem]"
+              >
+                기능 살펴보기
+              </a>
+            </div>
+            <p className="mt-5 text-xs text-slate-500 font-medium">
+              3개월 무료 체험 · 신용카드 불필요
+            </p>
+          </div>
+
+          {/* 호텔 스카이라인 */}
+          <div className="relative mt-10 sm:mt-14 h-[280px] sm:h-[360px]">
+            <div className="absolute inset-x-0 bottom-0 flex items-end justify-center gap-3 sm:gap-5 px-6">
+              <Building
+                width="w-24 sm:w-32"
+                cols="grid-cols-3"
+                rows={['ada', 'aae', 'daa', 'ada', 'baa', 'aad']}
+                className="hidden sm:block"
+              />
+              <Building
+                width="w-40 sm:w-52"
+                cols="grid-cols-4"
+                sign
+                rows={['adaa', 'aada', 'aaea', 'adaa', 'aaab', 'aada', 'eaaa', 'adaa', 'aada']}
+              />
+              <Building
+                width="w-28 sm:w-36"
+                cols="grid-cols-3"
+                rows={['aad', 'ada', 'eaa', 'ada', 'aab', 'daa', 'ada']}
+              />
+            </div>
+            {/* 지면 */}
+            <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
+
+            {/* 플로팅: 청소 완료 */}
+            <div className="absolute right-4 sm:right-[8%] lg:right-[14%] top-2 sm:top-8 animate-float">
+              <div className="flex items-center gap-3 bg-white/95 backdrop-blur rounded-2xl shadow-2xl shadow-black/40 px-4 py-3">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500 shadow-md shadow-emerald-500/40 flex items-center justify-center shrink-0">
+                  <IconCheck className="w-4 h-4 text-white" />
                 </div>
-                <div className="flex items-center gap-1.5 text-[10px] sm:text-[11px] font-bold">
-                  <span className="inline-flex items-center gap-1.5 bg-amber-50 ring-1 ring-amber-200/60 text-amber-800 px-2.5 py-1 rounded-full">
-                    대기 3
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 bg-blue-50 ring-1 ring-blue-200/60 text-blue-800 px-2.5 py-1 rounded-full">
-                    청소 중 3
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 bg-emerald-50 ring-1 ring-emerald-200/60 text-emerald-800 px-2.5 py-1 rounded-full">
-                    완료 12
-                  </span>
+                <div>
+                  <p className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-900">403호 청소 완료</p>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">김지은 · 방금 전</p>
                 </div>
               </div>
+            </div>
 
-              {/* 진행률 바 */}
-              <div className="mb-5">
-                <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-[11px] font-bold text-slate-500">전체 진행률</span>
-                  <span className="text-[11px] font-extrabold text-blue-600 tabular-nums">12 / 18 객실</span>
+            {/* 플로팅: 새 배정 */}
+            <div className="absolute left-4 sm:left-[8%] lg:left-[14%] top-16 sm:top-24 animate-float-slow">
+              <div className="flex items-center gap-3 bg-white/95 backdrop-blur rounded-2xl shadow-2xl shadow-black/40 px-4 py-3">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-b from-blue-500 to-blue-700 shadow-md shadow-blue-600/40 flex items-center justify-center shrink-0 text-white">
+                  <IconPing className="w-5 h-5" />
                 </div>
-                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div>
+                  <p className="text-[13px] font-extrabold leading-tight tracking-tight text-slate-900">502호 배정됨</p>
+                  <p className="text-[10px] text-slate-400 font-semibold mt-0.5">박미란 님에게 알림 전송</p>
+                </div>
+              </div>
+            </div>
+
+            {/* 플로팅: 진행률 */}
+            <div className="hidden lg:block absolute right-[6%] bottom-16 animate-float-slow [animation-delay:1.2s]">
+              <div className="bg-white/95 backdrop-blur rounded-2xl shadow-2xl shadow-black/40 px-4 py-3.5 w-44">
+                <div className="flex items-baseline justify-between mb-1.5">
+                  <span className="text-[10px] font-extrabold text-slate-500">오늘 진행률</span>
+                  <span className="text-[10px] font-extrabold text-blue-600 tabular-nums">12/18</span>
+                </div>
+                <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
                   <div className="h-full w-2/3 rounded-full bg-gradient-to-r from-blue-500 to-sky-400" />
                 </div>
               </div>
-
-              {/* 객실 그리드 */}
-              <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
-                {MOCK_ROOMS.map((room) => (
-                  <RoomCard key={room.no} {...room} />
-                ))}
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <StatusLegend />
-                <span className="text-[10px] text-slate-300 font-semibold">실시간 동기화 중</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 플로팅: 완료 알림 */}
-          <div className="hidden sm:flex absolute -right-6 lg:-right-14 -bottom-7 items-center gap-3 bg-white/90 backdrop-blur rounded-2xl ring-1 ring-slate-900/10 shadow-xl px-4 py-3.5">
-            <div className="w-10 h-10 rounded-xl bg-emerald-500 shadow-md shadow-emerald-500/30 flex items-center justify-center shrink-0">
-              <IconCheck className="w-5 h-5 text-white" />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold leading-tight tracking-tight">403호 청소 완료</p>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">김지은 · 방금 전</p>
-            </div>
-          </div>
-
-          {/* 플로팅: 새 배정 */}
-          <div className="hidden lg:flex absolute -left-14 top-16 items-center gap-3 bg-white/90 backdrop-blur rounded-2xl ring-1 ring-slate-900/10 shadow-xl px-4 py-3.5">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-blue-500 to-blue-700 shadow-md shadow-blue-600/30 flex items-center justify-center shrink-0 text-white">
-              <IconPing className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold leading-tight tracking-tight">502호 배정됨</p>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">박미란 님에게 알림 전송</p>
             </div>
           </div>
         </div>
@@ -394,7 +432,7 @@ export default function LandingPage() {
               </div>
               <div className="rounded-2xl ring-1 ring-slate-200/80 bg-gradient-to-b from-slate-50 to-white p-5 shadow-inner">
                 <div className="grid grid-cols-4 gap-2">
-                  {MOCK_ROOMS.slice(0, 8).map((room) => (
+                  {MOCK_ROOMS.map((room) => (
                     <RoomCard key={room.no} {...room} />
                   ))}
                 </div>
