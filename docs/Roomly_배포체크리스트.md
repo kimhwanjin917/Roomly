@@ -49,6 +49,7 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 | `/api/cron/cleanup` | `0 16 * * *` | 01:00 | 만료 게스트 코드 정리 |
 
 - [ ] 배포 후 각 크론 잡 최초 실행 로그 확인 (Vercel → Logs, 401이 나오면 CRON_SECRET 불일치)
+  - 2026-07-11 확인: 5개 크론 라우트 모두 배포됨 + 무단 호출 401 정상 (인증 동작 확인). 실제 스케줄 실행 로그는 Hobby 로그 보존(1시간) 제한으로 원격 확인 불가 — 대시보드 Settings → Cron Jobs에서 최근 실행 확인 필요.
 
 > ⚠️ **Hobby 플랜 제약**: 크론이 하루 1회로 제한되어 checkin-alert를 일 1회(07:00 KST)로 낮춰 배포함.
 > 체크인 긴급/초과 알림을 원래 설계(10분 주기)로 돌리려면 둘 중 하나:
@@ -71,8 +72,9 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 
 ### Supabase
 - [ ] 프로덕션 프로젝트에 `supabase/migrations/001~016` 전부 순서대로 실행 (016 = 네이티브 푸시 T-205)
+  - ⚠️ 2026-07-11 확인: **001~015는 적용됨, 016만 미적용** (`push_subscriptions.platform`/`fcm_token` 컬럼 없음). 이 때문에 `/api/push/subscribe`가 웹 구독 저장에도 실패 중 — **푸시 신규 구독이 프로덕션에서 깨져 있음**. Supabase SQL Editor에서 `016_native_push.sql` 내용 실행하면 즉시 해결 (IF NOT EXISTS라 재실행 안전).
 - [ ] `rls_audit.sql` 실행해 RLS 정책 검증 (T-161에서 정책 자체는 검증 완료)
-- [ ] Realtime 활성화: `rooms`, `assignments` + Phase 3 테이블 (`supply_requests`, `maintenance_requests`) — Database → Replication
+- [x] Realtime 활성화: `rooms`, `assignments` + Phase 3 테이블 (`supply_requests`, `maintenance_requests`) — Database → Replication (2026-07-11 확인 — 4개 테이블 모두 postgres_changes 구독 성공)
 - [ ] Auth 설정: Site URL = 프로덕션 도메인, Redirect URLs에 `/auth/callback` 추가
 - [ ] Auth 이메일 템플릿 (비밀번호 재설정) 한글화 확인
 - [ ] JWT Secret 값을 Vercel `JWT_SECRET`과 일치시킴
@@ -93,7 +95,7 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 - [ ] REST URL/TOKEN을 Vercel 환경 변수에 설정
 
 ### Sentry
-- [ ] 프로덕션 프로젝트 생성, DSN을 Vercel에 설정
+- [ ] 프로덕션 프로젝트 생성, DSN을 Vercel에 설정 (2026-07-11 확인: 클라이언트 번들에 DSN 없음 → `NEXT_PUBLIC_SENTRY_DSN` 미설정 상태)
 - [ ] `SENTRY_AUTH_TOKEN` 설정 (소스맵 업로드)
 - [ ] 알림 규칙: 신규 이슈 발생 시 이메일/슬랙
 
