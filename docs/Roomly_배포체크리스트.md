@@ -95,13 +95,13 @@ Vercel의 Cron 요청은 `CRON_SECRET` 환경 변수가 설정된 경우 자동�
 - [ ] REST URL/TOKEN을 Vercel 환경 변수에 설정
 
 ### Sentry
-- [ ] 프로덕션 프로젝트 생성, DSN을 Vercel에 설정 (2026-07-11 확인: 클라이언트 번들에 DSN 없음 → `NEXT_PUBLIC_SENTRY_DSN` 미설정 상태)
+- [x] 프로덕션 프로젝트 생성, DSN을 Vercel에 설정 (2026-07-12 완료 — SENTRY_DSN/NEXT_PUBLIC_SENTRY_DSN 설정, 번들 반영 확인)
 - [ ] `SENTRY_AUTH_TOKEN` 설정 (소스맵 업로드)
 - [ ] 알림 규칙: 신규 이슈 발생 시 이메일/슬랙
 
 ### 웹 푸시 (VAPID)
-- [ ] 프로덕션용 VAPID 키 쌍 생성 (`npx web-push generate-vapid-keys`)
-- [ ] ⚠️ 키를 바꾸면 기존 구독이 전부 무효화되므로 배포 전에 한 번만 생성
+- [x] 프로덕션용 VAPID 키 쌍 생성 (2026-07-12 완료 — Vercel 설정·재배포됨. 키 사본: 로컬 `.env.vapid.local`, 커밋 금지)
+- [x] ⚠️ 키를 바꾸면 기존 구독이 전부 무효화되므로 배포 전에 한 번만 생성 (완료 — 이후 변경 금지)
 
 ### Anthropic (AI 기능)
 - [ ] 프로덕션 API 키 발급 + 사용량 한도(spend limit) 설정
