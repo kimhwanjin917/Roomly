@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import RoomlyMark from '@/components/RoomlyMark'
 
 type Mode = 'checking' | 'request' | 'update'
 
@@ -73,8 +74,8 @@ export default function ResetPasswordPage() {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl mb-4">
-            <span className="text-white font-bold text-xl">R</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <RoomlyMark size={48} />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Roomly</h1>
           <p className="text-sm text-slate-500 mt-1">비밀번호 재설정</p>

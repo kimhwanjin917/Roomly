@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import RoomlyMark from '@/components/RoomlyMark'
 
 type Tab = 'hotels' | 'licenses'
 
@@ -108,8 +109,8 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-12 h-12 bg-slate-900 rounded-xl mb-4">
-            <span className="text-white font-bold text-xl">R</span>
+          <div className="inline-flex items-center justify-center mb-4">
+            <RoomlyMark size={48} />
           </div>
           <h1 className="text-2xl font-bold text-slate-900">Roomly</h1>
           <p className="text-sm text-slate-500 mt-1">운영자 전용 관리 콘솔</p>
@@ -185,9 +186,7 @@ function Dashboard() {
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-3">
-        <div className="flex items-center justify-center w-8 h-8 bg-slate-900 rounded-lg">
-          <span className="text-white font-bold text-sm">R</span>
-        </div>
+        <RoomlyMark size={32} />
         <div>
           <h1 className="text-base font-semibold text-slate-900">Roomly 운영자 콘솔</h1>
           <p className="text-xs text-slate-400">Super Admin Dashboard</p>

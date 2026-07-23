@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import RoomlyMark from '@/components/RoomlyMark'
 import { useToast } from '@/lib/hooks/useToast'
 import { useNow, useOnlineStatus, useRealtimeRefetch } from '@/lib/hooks/useLive'
 import { isUrgent, isFinished, fmtTime, typeLabel } from '@/lib/rooms'
@@ -79,9 +80,7 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <div className="w-5 h-5 bg-blue-600 rounded flex items-center justify-center shrink-0">
-                <span className="text-white font-bold text-[10px]">R</span>
-              </div>
+              <RoomlyMark size={20} />
               <p className="text-xs text-slate-400">일일 근무자</p>
             </div>
             <p className="text-xl font-bold text-slate-900">오늘의 청소 목록</p>

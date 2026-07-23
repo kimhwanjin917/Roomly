@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import RoomlyMark from '@/components/RoomlyMark'
 
 interface ErrorPageProps {
   error: Error
@@ -11,8 +12,8 @@ export default function ErrorPage({ error, reset }: ErrorPageProps) {
   return (
     <div className="min-h-screen bg-white flex items-center justify-center px-4">
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-xl mb-4">
-          <span className="text-white font-bold text-xl">R</span>
+        <div className="inline-flex items-center justify-center mb-4">
+          <RoomlyMark size={48} />
         </div>
         <h1 className="text-2xl font-bold text-slate-900 mb-1">Roomly</h1>
         <p className="text-sm text-slate-500 mb-10">하우스키핑 관리 시스템</p>

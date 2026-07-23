@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
+import RoomlyMark from '@/components/RoomlyMark'
 
 export const metadata: Metadata = {
   title: '이용약관 — Roomly',
@@ -11,9 +12,7 @@ export default function TermsPage() {
       <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl" style={{ borderBottom: '1px solid #F2F4F6' }}>
         <div className="max-w-3xl mx-auto px-5 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-[#3182F6] rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-sm">R</span>
-            </div>
+            <RoomlyMark size={32} />
             <span className="text-lg font-bold text-[#191919] tracking-tight">Roomly</span>
           </Link>
           <Link href="/login" className="text-sm font-semibold text-[#6B7684] hover:text-[#191919] transition-colors">

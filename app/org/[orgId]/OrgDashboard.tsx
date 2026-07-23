@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import RoomlyMark from '@/components/RoomlyMark'
 
 type HotelStat = {
   hotelId: string
@@ -83,9 +84,7 @@ export default function OrgDashboard({ orgName }: { orgName: string }) {
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="inline-flex items-center justify-center w-9 h-9 bg-blue-600 rounded-lg">
-              <span className="text-white font-bold text-sm">R</span>
-            </div>
+            <RoomlyMark size={36} />
             <div>
               <h1 className="text-base font-bold text-slate-900">{orgName}</h1>
               <p className="text-xs text-slate-500">체인 호텔 통합 현황판</p>

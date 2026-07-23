@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import RoomlyMark from '@/components/RoomlyMark'
 
 type Hotel = {
   id: string
@@ -40,8 +41,8 @@ export default async function OrgDashboardPage({ params }: { params: { orgId: st
       <div className="bg-white border-b border-[#F2F4F6] px-5 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Link href="/" className="w-8 h-8 bg-[#3182F6] rounded-xl flex items-center justify-center">
-              <span className="text-white font-bold text-sm">R</span>
+            <Link href="/" className="flex items-center justify-center">
+              <RoomlyMark size={32} />
             </Link>
             <div>
               <p className="text-xs text-[#6B7684]">법인 관리</p>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import RoomlyMark from '@/components/RoomlyMark'
 
 type AddedRoom = { id: string; number: string; floor: number; type: string }
 type AddedStaff = { id: string; name: string }
@@ -105,9 +106,7 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-start px-4 pt-16 pb-20">
       {/* 로고 */}
       <div className="flex items-center gap-2 mb-10">
-        <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center">
-          <span className="text-white font-bold text-sm">R</span>
-        </div>
+        <RoomlyMark size={32} />
         <span className="font-semibold text-slate-800">{hotelName}</span>
       </div>
 
