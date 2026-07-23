@@ -5,20 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import QRCode from 'qrcode'
 import AdminNav from '@/components/AdminNav'
-
-const C = {
-  bg:      '#0B1215',
-  surface: '#17171B',
-  card:    '#1A1C20',
-  border:  '#212427',
-  text:    '#F2F3F4',
-  textMid: '#8A8F98',
-  textDim: '#4A4F58',
-  accent:  '#5e6ad2',
-  amber:   '#fbbf24',
-  red:     '#f87171',
-  green:   '#34d399',
-}
+import { C } from '@/lib/theme'
 
 type Staff = { id: string; name: string; phone_number: string | null; qr_version: number; role: string }
 type GuestCode = { code: string; expiresAt: string }

@@ -1,35 +1,28 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
-
-const C = {
-  bg:      '#0B1215',
-  bgMid:   '#111518',
-  surface: '#17171B',
-  card:    '#1A1C20',
-  border:  '#212427',
-  borderHi:'#2a2d32',
-  text:    '#F2F3F4',
-  textMid: '#8A8F98',
-  textDim: '#4A4F58',
-  accent:  '#5e6ad2',
-  green:   '#34d399',
-  amber:   '#fbbf24',
-  red:     '#f87171',
-  violet:  '#818cf8',
-}
+import { C, inputSt, selectSt, chipSt } from '@/lib/theme'
+import { useToast } from '@/lib/hooks/useToast'
+import {
+  STATUS_CONFIG,
+  isUrgent,
+  fmtTime,
+  toDatetimeLocal,
+  predictedMinutes,
+} from '@/lib/rooms'
+import type { RoomStatus } from '@/lib/constants'
 
 type Room = {
   id: string
   number: string
   floor: number
   type: string
-  status: 'dirty' | 'cleaning' | 'done' | 'inspect'
+  status: RoomStatus
   checkin_time: string | null
   hotel_id: string
 }
@@ -44,22 +37,10 @@ type Assignment = {
 }
 
 type Staff = { id: string; name: string }
-type Toast = { msg: string; type: 'error' | 'success' }
 type ViewMode = 'grid' | 'table'
 type RtStatus = 'connected' | 'disconnected'
 
-const PREDICTED_MINUTES: Record<string, number> = {
-  single: 20, double: 30, suite: 45, other: 25,
-}
-
-const STATUS_CONFIG = {
-  dirty:   { label: '더티',     bg: 'rgba(74,79,88,0.18)',      text: C.textMid,  dot: C.textDim  },
-  cleaning:{ label: '청소중',   bg: 'rgba(251,191,36,0.10)',    text: C.amber,    dot: C.amber    },
-  done:    { label: '완료',     bg: 'rgba(52,211,153,0.10)',    text: C.green,    dot: C.green    },
-  inspect: { label: '점검대기', bg: 'rgba(129,140,248,0.10)',   text: C.violet,   dot: C.violet   },
-}
-
-const ALERT_MINUTES = Number(process.env.NEXT_PUBLIC_CHECKIN_ALERT_MINUTES ?? 120)
+const STATUS_KEYS = Object.keys(STATUS_CONFIG) as RoomStatus[]
 
 function DraggableStaffChip({ id, name }: { id: string; name: string }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
@@ -109,25 +90,7 @@ function DroppableRoomCard({ roomId, isOver, children, onClick }: { roomId: stri
   )
 }
 
-function isUrgent(room: Room, now: Date) {
-  if (!room.checkin_time) return false
-  if (room.status === 'done' || room.status === 'inspect') return false
-  const alertAt = new Date(new Date(room.checkin_time).getTime() - ALERT_MINUTES * 60 * 1000)
-  return now >= alertAt
-}
-
-function fmtTime(iso: string | null) {
-  if (!iso) return null
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-}
-
-function toDatetimeLocal(iso: string) {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
-function StatusBadge({ status }: { status: keyof typeof STATUS_CONFIG }) {
+function StatusBadge({ status }: { status: RoomStatus }) {
   const cfg = STATUS_CONFIG[status]
   return (
     <span style={{
@@ -153,17 +116,6 @@ interface Props {
   trialEndsAt?: string | null
 }
 
-const inputSt: React.CSSProperties = {
-  width: '100%', padding: '11px 14px',
-  background: C.card, border: `1px solid ${C.border}`,
-  borderRadius: 10, fontSize: 13, color: C.text,
-  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
-  transition: 'border-color 0.15s',
-}
-const selectSt: React.CSSProperties = {
-  ...inputSt, cursor: 'pointer',
-}
-
 export default function AdminDashboard({ hotelId, hotelName, initialRooms, initialAssignments, staffList }: Props) {
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
@@ -180,20 +132,13 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   const [modalCheckinTime, setModalCheckinTime] = useState<string>('')
   const [modalMemo, setModalMemo]           = useState('')
   const [saving, setSaving]                 = useState(false)
-  const [toast, setToast]                   = useState<Toast | null>(null)
-  const toastTimer                          = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const { toast, showToast }                = useToast()
   const [rtStatus, setRtStatus]             = useState<RtStatus>('connected')
   const [smartAssigns, setSmartAssigns]     = useState<{ roomId: string; staffId: string; reason: string }[]>([])
   const [smartLoading, setSmartLoading]     = useState(false)
   const [showSmartAssign, setShowSmartAssign] = useState(false)
   const [dragMode, setDragMode]             = useState(false)
   const [overRoomId, setOverRoomId]         = useState<string | null>(null)
-
-  function showToast(msg: string, type: Toast['type'] = 'error') {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
-  }
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 60_000)
@@ -332,12 +277,6 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     inspect:  rooms.filter(r => r.status === 'inspect').length,
   }
 
-  const chipBase: React.CSSProperties = {
-    padding: '5px 12px', borderRadius: 999, fontSize: 11, fontWeight: 600,
-    cursor: 'pointer', border: `1px solid ${C.border}`, transition: 'all 0.15s',
-    fontFamily: 'inherit',
-  }
-
   return (
     <div style={{ minHeight: '100vh', background: C.bg, color: C.text }} className="md:pl-[220px]">
       <AdminNav />
@@ -361,7 +300,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
         {/* 상태 카운터 카드 */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
-          {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => {
+          {STATUS_KEYS.map(s => {
             const cfg = STATUS_CONFIG[s]
             const active = filterStatus === s
             return (
@@ -393,7 +332,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             <button
               onClick={() => setFilterFloor(null)}
               style={{
-                ...chipBase,
+                ...chipSt,
                 background: filterFloor === null ? C.text : C.card,
                 color: filterFloor === null ? C.bg : C.textMid,
                 borderColor: filterFloor === null ? 'transparent' : C.border,
@@ -404,7 +343,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                 key={f}
                 onClick={() => setFilterFloor(filterFloor === f ? null : f)}
                 style={{
-                  ...chipBase,
+                  ...chipSt,
                   background: filterFloor === f ? C.text : C.card,
                   color: filterFloor === f ? C.bg : C.textMid,
                   borderColor: filterFloor === f ? 'transparent' : C.border,
@@ -417,7 +356,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             value={filterStaff ?? ''}
             onChange={e => setFilterStaff(e.target.value || null)}
             style={{
-              ...chipBase, padding: '5px 10px',
+              ...chipSt, padding: '5px 10px',
               background: C.card, color: C.textMid,
             }}
           >
@@ -431,7 +370,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             <button
               onClick={() => setDragMode(d => !d)}
               style={{
-                ...chipBase,
+                ...chipSt,
                 background: dragMode ? C.accent : C.card,
                 color: dragMode ? '#fff' : C.textMid,
                 borderColor: dragMode ? 'transparent' : C.border,
@@ -447,7 +386,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
               onClick={handleSmartAssign}
               disabled={smartLoading}
               style={{
-                ...chipBase,
+                ...chipSt,
                 background: 'rgba(129,140,248,0.08)',
                 color: C.violet,
                 borderColor: 'rgba(129,140,248,0.2)',
@@ -587,7 +526,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                       </td>
                       <td style={{ padding: '12px 16px' }} className="hidden lg:table-cell">
                         {(room.status === 'dirty' || room.status === 'cleaning') && (
-                          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>~{PREDICTED_MINUTES[room.type] ?? 30}분</span>
+                          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>~{predictedMinutes(room.type)}분</span>
                         )}
                       </td>
                       <td style={{ padding: '12px 16px', textAlign: 'right' }}>
@@ -764,7 +703,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                 <h2 style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>{selectedRoom.number}호</h2>
                 <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{selectedRoom.floor}층 · {selectedRoom.type}</p>
               </div>
-              <StatusBadge status={selectedRoom.status as keyof typeof STATUS_CONFIG}/>
+              <StatusBadge status={selectedRoom.status}/>
             </div>
 
             <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -813,7 +752,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
               <div>
                 <p style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 7, letterSpacing: '0.04em', textTransform: 'uppercase' }}>상태 변경</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                  {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => {
+                  {STATUS_KEYS.map(s => {
                     const cfg = STATUS_CONFIG[s]
                     const active = modalStatus === s
                     return (

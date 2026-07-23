@@ -1,42 +1,55 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { withApiError } from '@/lib/api-error'
+import { requireAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
 
 async function getHandler() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
 
-  const service = createServiceClient()
-  const { data } = await service.from('supplies').select('*').eq('hotel_id', hotelId).order('name')
+  const { data } = await service
+    .from('supplies')
+    .select('*')
+    .eq('hotel_id', hotelId)
+    .order('name')
+
   return NextResponse.json(data ?? [])
 }
 
 async function postHandler(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
 
+  // hotel_id는 클라이언트 값이 아니라 세션에서만 결정된다 (마지막에 덮어씀)
   const body = await request.json()
-  const service = createServiceClient()
-  const { data, error } = await service.from('supplies').insert({ ...body, hotel_id: hotelId }).select().single()
-  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
+  const { data, error } = await service
+    .from('supplies')
+    .insert({ ...body, hotel_id: hotelId })
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[admin/supplies POST]', error)
+    throw ApiError.internal()
+  }
   return NextResponse.json(data)
 }
 
 async function putHandler(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
 
-  const body = await request.json()
-  const { id, ...rest } = body
-  const service = createServiceClient()
-  const { data, error } = await service.from('supplies').update(rest).eq('id', id).eq('hotel_id', hotelId).select().single()
-  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
+  const { id, hotel_id: _ignored, ...rest } = await request.json()
+  if (!id) throw ApiError.badRequest('비품 ID가 필요합니다.')
+
+  const { data, error } = await service
+    .from('supplies')
+    .update(rest)
+    .eq('id', id)
+    .eq('hotel_id', hotelId)
+    .select()
+    .single()
+
+  if (error) {
+    console.error('[admin/supplies PUT]', error)
+    throw ApiError.internal()
+  }
   return NextResponse.json(data)
 }
 

@@ -1,27 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
+import { requireRoom } from '@/lib/guards'
 import { sendPushToStaff } from '@/lib/push'
-import { withApiError } from '@/lib/api-error'
+import { ApiError, withApiError } from '@/lib/api-error'
 
 async function postHandler(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
   const { roomId, staffId, isGuest, unassign } = await request.json()
 
-  if (!roomId) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
+  if (!roomId) throw ApiError.badRequest('객실을 선택해주세요.')
 
-  const service = createServiceClient()
-
-  // 해당 방이 내 호텔 소속인지 확인
-  const { data: room } = await service
-    .from('rooms').select('id, number').eq('id', roomId).eq('hotel_id', hotelId).single()
-  if (!room) return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
+  const room = await requireRoom(service, roomId, hotelId)
 
   // 기존 활성 배정 취소
-  await service.from('assignments')
+  await service
+    .from('assignments')
     .update({ cancelled_at: new Date().toISOString() })
     .eq('room_id', roomId)
     .is('completed_at', null)
@@ -32,16 +25,19 @@ async function postHandler(request: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
-  // 새 배정 생성
-  const { data: assignment, error } = await service.from('assignments').insert({
-    room_id: roomId,
-    staff_id: staffId ?? null,
-    is_guest: isGuest ?? false,
-  }).select('id').single()
+  const { data: assignment, error } = await service
+    .from('assignments')
+    .insert({ room_id: roomId, staff_id: staffId ?? null, is_guest: isGuest ?? false })
+    .select('id')
+    .single()
 
-  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
+  if (error) {
+    console.error('[admin/assign POST]', error)
+    throw ApiError.internal()
+  }
 
   if (staffId) {
+    // 푸시 실패가 배정을 막지 않도록 비차단 발송
     sendPushToStaff(staffId, {
       title: `${room.number}호 배정됨`,
       body: '청소를 시작해주세요',

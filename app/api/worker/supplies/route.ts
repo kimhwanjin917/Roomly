@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import * as jwt from 'jsonwebtoken'
+import { requireWorker } from '@/lib/auth'
 import { withApiError } from '@/lib/api-error'
 
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
+
+
 async function getHandler(request: NextRequest) {
-  const sessionCookie = request.cookies.get('roomly_worker_session')
-  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
+  const { hotelId, service } = await requireWorker(request)
 
-  let payload: jwt.JwtPayload
-  try {
-    payload = jwt.verify(sessionCookie.value, process.env.JWT_SECRET!) as jwt.JwtPayload
-  } catch {
-    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  }
-
-  const hotelId = payload.app_metadata?.hotel_id as string
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-
-  const service = createServiceClient()
   const { data } = await service
     .from('supplies')
     .select('id, name, unit')

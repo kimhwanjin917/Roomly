@@ -1,18 +1,21 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { createClientWithToken } from '@/lib/supabase/client'
+import { useState, useCallback } from 'react'
+import { useToast } from '@/lib/hooks/useToast'
+import { useNow, useOnlineStatus, useRealtimeRefetch } from '@/lib/hooks/useLive'
+import { isFinished } from '@/lib/rooms'
+import type { RoomStatus } from '@/lib/constants'
 
 type Room = {
   id: string
   number: string
   floor: number
   type: string
-  status: 'dirty' | 'cleaning' | 'done' | 'inspect'
+  status: RoomStatus
   checkin_time: string | null
 }
 
-type Toast = { msg: string; type: 'error' | 'success' }
+const WATCHED_TABLES = ['rooms'] as const
 
 const STATUS_LABELS: Record<Room['status'], string> = {
   dirty: '대기', cleaning: '청소중', done: '완료', inspect: '점검대기',
@@ -35,23 +38,11 @@ interface Props {
 
 export default function DirtyDashboard({ staffId, hotelId, staffName, initialRooms, token }: Props) {
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
-  const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [confirmRoom, setConfirmRoom] = useState<Room | null>(null)
-  const [toast, setToast] = useState<Toast | null>(null)
-  const [isOnline, setIsOnline] = useState(true)
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function showToast(msg: string, type: Toast['type'] = 'error') {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
-  }
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(t)
-  }, [])
+  const now = useNow()
+  const { toast, showToast } = useToast()
 
   const refetch = useCallback(async () => {
     try {
@@ -66,24 +57,8 @@ export default function DirtyDashboard({ staffId, hotelId, staffName, initialRoo
     }
   }, [])
 
-  useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); refetch() }
-    const handleOffline = () => setIsOnline(false)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [refetch])
-
-  useEffect(() => {
-    const supabase = createClientWithToken(token)
-    const channel = supabase.channel('dirty-worker-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, refetch)
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [refetch, token])
+  const isOnline = useOnlineStatus(refetch)
+  useRealtimeRefetch({ channel: 'dirty-worker-realtime', tables: WATCHED_TABLES, onChange: refetch, token })
 
   async function markDirty(room: Room) {
     setLoading(l => ({ ...l, [room.id]: true }))
@@ -110,7 +85,7 @@ export default function DirtyDashboard({ staffId, hotelId, staffName, initialRoo
 
   // 층별 그룹핑 (높은 층부터)
   const floors = Array.from(new Set(rooms.map(r => r.floor))).sort((a, b) => b - a)
-  const clickableCount = rooms.filter(r => r.status === 'done' || r.status === 'inspect').length
+  const clickableCount = rooms.filter(r => isFinished(r.status)).length
 
   return (
     <div className="min-h-screen bg-slate-50 pb-10">
@@ -147,7 +122,7 @@ export default function DirtyDashboard({ staffId, hotelId, staffName, initialRoo
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">{floor}층</p>
             <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
               {rooms.filter(r => r.floor === floor).map(room => {
-                const clickable = room.status === 'done' || room.status === 'inspect'
+                const clickable = isFinished(room.status)
                 const isLoading = loading[room.id]
                 return (
                   <button

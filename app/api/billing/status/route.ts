@@ -1,33 +1,30 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { withApiError } from '@/lib/api-error'
+import { requireAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { toBillingInterval } from '@/lib/toss'
 
-/**
- * 현재 구독 상태 조회 (billing 페이지용)
- */
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
+
+
+/** 현재 구독 상태 조회 (billing 페이지용) */
 async function getHandler() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
+  const { hotelId, service } = await requireAdmin()
 
-  const hotelId = user.app_metadata?.hotel_id as string | undefined
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-
-  const service = createServiceClient()
   const { data: hotel, error } = await service
     .from('hotels')
     .select('subscription_plan, pending_plan, plan_expires_at, toss_billing_key, billing_interval')
     .eq('id', hotelId)
     .single()
 
-  if (error || !hotel) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
+  if (error || !hotel) throw ApiError.internal()
 
   return NextResponse.json({
     plan: hotel.subscription_plan,
     pendingPlan: hotel.pending_plan,
     planExpiresAt: hotel.plan_expires_at,
     hasBillingKey: !!hotel.toss_billing_key,
-    billingInterval: hotel.billing_interval ?? 'monthly',
+    billingInterval: toBillingInterval(hotel.billing_interval),
   })
 }
 

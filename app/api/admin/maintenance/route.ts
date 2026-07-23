@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { withApiError } from '@/lib/api-error'
+import { requireAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
+
+const VALID_STATUSES = ['open', 'in_progress', 'resolved'] as const
 
 async function getHandler() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
 
-  const service = createServiceClient()
   const { data } = await service
     .from('maintenance_requests')
     .select('*, rooms(number, floor), staff(name)')
@@ -19,14 +17,14 @@ async function getHandler() {
 }
 
 async function patchHandler(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
 
-  const { id, status } = await request.json() as { id: string; status: string }
+  const { id, status } = await request.json() as { id?: string; status?: string }
+  if (!id) throw ApiError.badRequest('요청 ID가 필요합니다.')
+  if (!status || !(VALID_STATUSES as readonly string[]).includes(status)) {
+    throw ApiError.badRequest('유효하지 않은 상태입니다.', 'invalid_status')
+  }
 
-  const service = createServiceClient()
   const update: Record<string, unknown> = { status }
   if (status === 'resolved') update.resolved_at = new Date().toISOString()
 
@@ -38,7 +36,10 @@ async function patchHandler(request: NextRequest) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
+  if (error) {
+    console.error('[admin/maintenance PATCH]', error)
+    throw ApiError.internal()
+  }
   return NextResponse.json(data)
 }
 

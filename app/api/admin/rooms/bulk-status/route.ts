@@ -1,31 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { withApiError } from '@/lib/api-error'
+import { requireAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { isRoomStatus } from '@/lib/constants'
 
-const VALID_STATUSES = ['dirty', 'cleaning', 'done', 'inspect']
+/** 한 번에 상태를 바꿀 수 있는 최대 객실 수 */
+const MAX_BATCH = 500
 
 /**
  * 객실 상태 일괄 변경 (T-198)
- * body: { roomIds: string[], status: 'dirty' | 'cleaning' | 'done' | 'inspect' }
+ * body: { roomIds: string[], status: RoomStatus }
  */
 async function patchHandler(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
+  const { hotelId, service } = await requireAdmin()
 
-  const hotelId = user.app_metadata?.hotel_id as string
   const { roomIds, status } = await request.json() as { roomIds?: string[]; status?: string }
 
-  if (!Array.isArray(roomIds) || roomIds.length === 0 || !status || !VALID_STATUSES.includes(status)) {
-    return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
+  if (!Array.isArray(roomIds) || roomIds.length === 0) {
+    throw ApiError.badRequest('변경할 객실을 선택해주세요.')
   }
-  if (roomIds.length > 500) {
-    return NextResponse.json({ error: 'too_many_rooms', code: 'invalid_request' }, { status: 400 })
+  if (!isRoomStatus(status)) {
+    throw ApiError.badRequest('유효하지 않은 상태입니다.', 'invalid_status')
+  }
+  if (roomIds.length > MAX_BATCH) {
+    throw ApiError.badRequest(`한 번에 최대 ${MAX_BATCH}개까지 변경할 수 있습니다.`, 'too_many_rooms')
   }
 
-  const service = createServiceClient()
-
-  // 내 호텔 객실만 대상 (타 호텔 ID가 섞여 있어도 무시됨)
+  // hotel_id 조건이 타 호텔 ID를 자동으로 걸러낸다
   const { data: updated, error } = await service
     .from('rooms')
     .update({ status })
@@ -34,16 +34,14 @@ async function patchHandler(request: NextRequest) {
     .is('deleted_at', null)
     .select('id')
 
-  if (error) return NextResponse.json({ error: 'server_error', code: 'server_error' }, { status: 500 })
+  if (error) {
+    console.error('[admin/rooms/bulk-status PATCH]', error)
+    throw ApiError.internal()
+  }
 
-  // 변경 이력 기록
   if (updated?.length) {
     await service.from('room_logs').insert(
-      updated.map(r => ({
-        room_id: r.id,
-        status,
-        changed_by: 'admin-bulk',
-      }))
+      updated.map(r => ({ room_id: r.id, status, changed_by: 'admin-bulk' })),
     )
   }
 

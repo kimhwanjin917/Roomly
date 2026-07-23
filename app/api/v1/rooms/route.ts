@@ -1,33 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import crypto from 'crypto'
+import { requireApiKey } from '@/lib/auth'
+import { withApiError } from '@/lib/api-error'
 
-async function verifyApiKey(req: NextRequest): Promise<string | null> {
-  const auth = req.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) return null
-  const rawKey = auth.slice(7)
-  const hash = crypto.createHash('sha256').update(rawKey).digest('hex')
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
 
-  const service = createServiceClient()
-  const { data } = await service
-    .from('api_keys')
-    .select('hotel_id')
-    .eq('key_hash', hash)
-    .is('revoked_at', null)
-    .single()
 
-  if (!data) return null
+async function getHandler(request: NextRequest) {
+  const { hotelId, service } = await requireApiKey(request)
 
-  // last_used 갱신 (비차단)
-  service.from('api_keys').update({ last_used: new Date().toISOString() }).eq('key_hash', hash)
-  return data.hotel_id
-}
-
-export async function GET(req: NextRequest) {
-  const hotelId = await verifyApiKey(req)
-  if (!hotelId) return NextResponse.json({ error: 'Invalid API key' }, { status: 401 })
-
-  const service = createServiceClient()
   const { data } = await service
     .from('rooms')
     .select('id, number, floor, type, status, checkin_time')
@@ -38,3 +19,5 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({ rooms: data ?? [] })
 }
+
+export const GET = withApiError(getHandler)

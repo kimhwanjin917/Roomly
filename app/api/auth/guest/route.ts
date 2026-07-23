@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import * as jwt from 'jsonwebtoken'
 import { randomUUID } from 'crypto'
-import { withApiError } from '@/lib/api-error'
+import * as jwt from 'jsonwebtoken'
+import { createServiceClient } from '@/lib/supabase/server'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { COOKIES } from '@/lib/constants'
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** 일일 근무자(게스트) 코드 로그인 — 코드는 당일 자정(KST)에 만료된다. */
 async function postHandler(request: NextRequest) {
   const { hotelId, code } = await request.json()
 
-  if (!hotelId || !code) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
-  if (!/^[0-9a-f-]{36}$/.test(hotelId)) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
+  if (!hotelId || !code) throw ApiError.badRequest('호텔과 코드를 입력해주세요.')
+  if (!UUID_RE.test(String(hotelId))) throw ApiError.badRequest('호텔 정보가 올바르지 않습니다.')
 
   const service = createServiceClient()
-
   const { data: guestCode } = await service
     .from('guest_codes')
     .select('id, expires_at')
@@ -20,11 +23,11 @@ async function postHandler(request: NextRequest) {
     .gt('expires_at', new Date().toISOString())
     .single()
 
-  if (!guestCode) return NextResponse.json({ error: 'invalid_code', code: 'invalid_code' }, { status: 401 })
+  if (!guestCode) {
+    throw ApiError.unauthorized('코드가 올바르지 않거나 만료되었습니다.', 'invalid_code')
+  }
 
   const expiresAt = new Date(guestCode.expires_at)
-  const expiresInSec = Math.floor((expiresAt.getTime() - Date.now()) / 1000)
-
   const token = jwt.sign(
     {
       sub: randomUUID(),
@@ -35,16 +38,16 @@ async function postHandler(request: NextRequest) {
       app_metadata: { hotel_id: hotelId, role: 'guest' },
     },
     process.env.JWT_SECRET!,
-    { algorithm: 'HS256' }
+    { algorithm: 'HS256' },
   )
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('roomly_guest_session', token, {
+  response.cookies.set(COOKIES.guest, token, {
     httpOnly: true,
     path: '/',
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: expiresInSec,
+    maxAge: Math.floor((expiresAt.getTime() - Date.now()) / 1000),
   })
   return response
 }

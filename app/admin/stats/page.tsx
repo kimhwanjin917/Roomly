@@ -4,21 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
-
-const C = {
-  bg:      '#0B1215',
-  surface: '#17171B',
-  card:    '#1A1C20',
-  border:  '#212427',
-  text:    '#F2F3F4',
-  textMid: '#8A8F98',
-  textDim: '#4A4F58',
-  accent:  '#5e6ad2',
-  green:   '#34d399',
-  amber:   '#fbbf24',
-  red:     '#f87171',
-  violet:  '#818cf8',
-}
+import { C } from '@/lib/theme'
 
 type Period = 'daily' | 'weekly' | 'monthly'
 

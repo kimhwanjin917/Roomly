@@ -1,14 +1,15 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth'
 import { withApiError } from '@/lib/api-error'
 
-async function getHandler() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ count: 0 })
-  const hotelId = user.app_metadata?.hotel_id as string
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
 
-  const service = createServiceClient()
+
+/** 네비게이션 뱃지용 미해결 유지보수 요청 수 */
+async function getHandler() {
+  const { hotelId, service } = await requireAdmin()
+
   const { count } = await service
     .from('maintenance_requests')
     .select('*', { count: 'exact', head: true })

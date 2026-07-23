@@ -1,25 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { requireCron } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { daysAgo } from '@/lib/date'
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
 
-  const service = createServiceClient()
 
-  // 만료 후 7일 지난 게스트 코드 삭제
+const RETENTION_DAYS = 7
+
+/** 만료 후 7일이 지난 게스트 코드를 삭제한다. */
+async function getHandler(request: NextRequest) {
+  const { service } = requireCron(request)
+
   const { error, count } = await service
     .from('guest_codes')
     .delete({ count: 'exact' })
-    .lt('expires_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
+    .lt('expires_at', daysAgo(RETENTION_DAYS).toISOString())
 
   if (error) {
-    console.error('[cron/cleanup] guest_codes 삭제 실패:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    console.error('[cron/cleanup] guest_codes 삭제 실패', error)
+    throw ApiError.internal()
   }
 
-  console.log(`[cron/cleanup] guest_codes ${count}건 삭제 완료`)
-  return NextResponse.json({ deleted: { guest_codes: count } })
+  return NextResponse.json({ deleted: { guest_codes: count ?? 0 } })
 }
+
+export const GET = withApiError(getHandler)

@@ -2,24 +2,9 @@
 
 import Link from 'next/link'
 import { useEffect } from 'react'
+import { C } from '@/lib/theme'
 
 /* ── Palette ─────────────────────────────────────────────────── */
-const C = {
-  bg:      '#0B1215',
-  bgMid:   '#111518',
-  surface: '#17171B',
-  card:    '#1A1C20',
-  border:  '#212427',
-  borderHi:'#262626',
-  text:    '#F2F3F4',
-  textMid: '#8A8F98',
-  textDim: '#4A4F58',
-  accent:  '#5e6ad2',
-  accentHi:'#818cf8',
-  gold:    '#C9A465',
-  green:   '#34d399',
-  amber:   '#fbbf24',
-}
 
 /* ══════════════════════════════════════════════════════════════
    Logo mark — 3×2 grid, checkerboard pattern (✓ · ✓ / · ✓ ·)
@@ -198,7 +183,7 @@ function DashboardMockup({ activeFeature = 0 }: { activeFeature?: number }) {
     { id: '202', status: 'waiting', name: '' },
     { id: '203', status: 'active',  name: '박민수' },
   ]
-  const sColor = { done: C.green, active: C.amber, waiting: C.borderHi }
+  const sColor = { done: C.green, active: C.amber, waiting: C.borderAlt }
   const sLabel = { done: '완료', active: '청소 중', waiting: '대기' }
   const trans = 'opacity 0.45s cubic-bezier(0.16,1,0.3,1), transform 0.45s cubic-bezier(0.16,1,0.3,1)'
 
@@ -366,7 +351,7 @@ function DashboardMockup({ activeFeature = 0 }: { activeFeature?: number }) {
               <div key={i} style={{
                 padding: '12px 13px', borderRadius: 10,
                 background: n.unread ? C.surface : C.card,
-                border: `1px solid ${n.unread ? C.borderHi : C.border}`,
+                border: `1px solid ${n.unread ? C.borderAlt : C.border}`,
                 opacity: n.unread ? 1 : 0.5,
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
@@ -544,19 +529,19 @@ export default function LandingPage() {
 
       {/* ── Letterbox bars (cinematic open) ─────────────── */}
       <div aria-hidden style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 90,
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 90, pointerEvents: 'none',
         height: 90, background: '#000', transformOrigin: 'top',
-        animation: 'letterboxClose 1.5s cubic-bezier(0.76, 0, 0.24, 1) 0.15s forwards',
+        animation: 'letterboxClose 0.9s cubic-bezier(0.76, 0, 0.24, 1) 0.1s forwards',
       }}/>
       <div aria-hidden style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 90,
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 90, pointerEvents: 'none',
         height: 90, background: '#000', transformOrigin: 'bottom',
-        animation: 'letterboxClose 1.5s cubic-bezier(0.76, 0, 0.24, 1) 0.15s forwards',
+        animation: 'letterboxClose 0.9s cubic-bezier(0.76, 0, 0.24, 1) 0.1s forwards',
       }}/>
 
       {/* ── Ambient glows ───────────────────────────────── */}
       <div aria-hidden style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
-        <div style={{
+        <div className="motion-loop" style={{
           position: 'absolute', top: -250, left: '28%',
           width: 1000, height: 700, borderRadius: '50%',
           background: `radial-gradient(ellipse, ${C.accent}1a 0%, transparent 65%)`,
@@ -577,7 +562,7 @@ export default function LandingPage() {
           background: `rgba(11,18,21,0.72)`,
           backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
           borderBottom: `1px solid ${C.border}`,
-          animation: 'fadeIn 0.6s ease 1.3s both',
+          animation: 'fadeIn 0.5s ease 0.7s both',
         }}>
           <div style={{
             maxWidth: 1200, margin: '0 auto', padding: '0 32px',
@@ -619,7 +604,7 @@ export default function LandingPage() {
             padding: '6px 16px', marginBottom: 52,
             fontSize: 11, fontWeight: 600, color: C.textMid,
             letterSpacing: '0.05em', textTransform: 'uppercase',
-            animation: 'fadeIn 0.8s ease 1.7s both',
+            animation: 'fadeIn 0.6s ease 0.95s both',
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}` }}/>
             하우스키핑 디지털화 · 무료 체험 중
@@ -634,22 +619,22 @@ export default function LandingPage() {
             <div style={{ marginBottom: '0.06em' }}>
               <WordReveal
                 text="체크인 지연을"
-                startDelay={1.0}
+                startDelay={0.55}
                 gradient={`linear-gradient(160deg, ${C.text} 40%, ${C.textMid} 100%)`}
               />
             </div>
             <div style={{ marginBottom: '0.06em' }}>
               <WordReveal
                 text="없애는"
-                startDelay={1.22}
-                wordDelay={0.1}
+                startDelay={0.72}
+                wordDelay={0.07}
                 gradient={`linear-gradient(135deg, ${C.accentHi} 30%, ${C.gold} 100%)`}
               />
             </div>
             <div>
               <WordReveal
                 text="가장 빠른 방법"
-                startDelay={1.42}
+                startDelay={0.85}
                 gradient={`linear-gradient(160deg, ${C.text} 40%, ${C.textMid} 100%)`}
               />
             </div>
@@ -659,7 +644,7 @@ export default function LandingPage() {
             fontSize: 'clamp(15px, 1.8vw, 18px)',
             color: C.textMid, lineHeight: 1.75, maxWidth: 460,
             margin: '0 auto 56px', letterSpacing: '-0.02em',
-            animation: 'fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.75s both',
+            animation: 'fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.0s both',
           }}>
             객실 배정·청소·완료 확인까지 실시간으로.<br/>
             단톡방은 이제 필요 없습니다.
@@ -668,7 +653,7 @@ export default function LandingPage() {
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             gap: 12, flexWrap: 'wrap',
-            animation: 'fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.95s both',
+            animation: 'fadeInUp 0.7s cubic-bezier(0.16, 1, 0.3, 1) 1.15s both',
           }}>
             <Link href="/signup" style={{
               display: 'inline-flex', alignItems: 'center', gap: 10,
@@ -695,7 +680,7 @@ export default function LandingPage() {
 
           <p style={{
             marginTop: 24, fontSize: 12, color: C.textDim,
-            animation: 'fadeIn 0.6s ease 2.3s both',
+            animation: 'fadeIn 0.5s ease 1.3s both',
           }}>
             3개월 무료 · 신용카드 불필요 · 언제든 취소
           </p>
@@ -704,10 +689,10 @@ export default function LandingPage() {
           <div style={{
             position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
-            animation: 'fadeIn 0.6s ease 2.5s both',
+            animation: 'fadeIn 0.5s ease 1.4s both',
           }}>
             <span style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase' }}>스크롤</span>
-            <svg viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth={1.5}
+            <svg className="motion-loop" viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth={1.5}
               style={{ width: 17, height: 17, animation: 'scrollBounce 2s ease-in-out infinite' }}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
             </svg>
@@ -720,9 +705,9 @@ export default function LandingPage() {
           borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
           padding: '16px 0', background: C.surface,
         }}>
-          <div style={{
+          <div className="ticker-track" style={{
             display: 'flex', gap: 40, width: 'max-content',
-            animation: 'marquee 30s linear infinite',
+            animation: 'marquee 90s linear infinite',
           }}>
             {[...ticker, ...ticker].map((item, i) => (
               <span key={i} style={{

@@ -3,36 +3,6 @@
 
 import type { PmsRoomEvent } from './mews'
 
-type CloudbedsWebhook = {
-  type: string
-  reservation: {
-    reservation_id: string
-    checkout_date?: string
-    checkin_date?: string
-    status?: string
-  }
-}
-
-export function parseCloudbedsEvent(body: CloudbedsWebhook): PmsRoomEvent | null {
-  const res = body.reservation
-  if (!res?.reservation_id) return null
-
-  if (body.type === 'reservation.checkout') {
-    return { externalRoomId: res.reservation_id, action: 'checkout' }
-  }
-  if (body.type === 'reservation.confirmed' && res.checkin_date) {
-    return {
-      externalRoomId: res.reservation_id,
-      action: 'checkin',
-      checkinTime: new Date(res.checkin_date).toISOString(),
-    }
-  }
-  if (body.type === 'reservation.cancelled') {
-    return { externalRoomId: res.reservation_id, action: 'cancel' }
-  }
-  return null
-}
-
 export type CloudbedsWebhookEvent = {
   type: string
   room_number?: string
@@ -46,42 +16,45 @@ export type CloudbedsWebhookEvent = {
   }
 }
 
-type ConvertedEvent = {
-  event: 'checkout' | 'checkin_updated'
-  room_number: string
-  checkin_time?: string
-} | null
-
-export function convertCloudbedsEvent(body: CloudbedsWebhookEvent): ConvertedEvent {
-  const roomNumber =
+/** Cloudbeds는 페이로드 형태에 따라 호수를 세 위치 중 하나에 담아 보낸다. */
+function extractRoomNumber(body: CloudbedsWebhookEvent): string | null {
+  return (
     body.room_number ??
     body.room?.room_number ??
-    body.reservation?.rooms?.[0]?.room_number
-
-  if (!roomNumber) return null
-
-  if (body.type === 'reservation.checkout') {
-    return { event: 'checkout', room_number: roomNumber }
-  }
-  if (
-    (body.type === 'reservation.confirmed' || body.type === 'reservation.checkin') &&
-    body.reservation?.checkin_date
-  ) {
-    return {
-      event: 'checkin_updated',
-      room_number: roomNumber,
-      checkin_time: new Date(body.reservation.checkin_date).toISOString(),
-    }
-  }
-  return null
+    body.reservation?.rooms?.[0]?.room_number ??
+    null
+  )
 }
 
-export function verifyCloudbedsSignature(
-  rawBody: string,
-  signature: string,
-  secret: string,
-): boolean {
-  const crypto = require('crypto')
-  const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+/**
+ * Cloudbeds 웹훅을 표준 PmsRoomEvent로 정규화한다.
+ *
+ * externalRoomId는 rooms.number와 매칭되므로 예약 ID가 아니라 반드시 호수여야 한다.
+ * 처리 대상이 아닌 이벤트는 null을 반환한다.
+ */
+export function parseCloudbedsEvent(body: CloudbedsWebhookEvent): PmsRoomEvent | null {
+  const externalRoomId = extractRoomNumber(body)
+  if (!externalRoomId) return null
+
+  switch (body.type) {
+    case 'reservation.checkout':
+      return { externalRoomId, action: 'checkout' }
+
+    case 'reservation.confirmed':
+    case 'reservation.checkin': {
+      const checkinDate = body.reservation?.checkin_date
+      if (!checkinDate) return null
+      return {
+        externalRoomId,
+        action: 'checkin',
+        checkinTime: new Date(checkinDate).toISOString(),
+      }
+    }
+
+    case 'reservation.cancelled':
+      return { externalRoomId, action: 'cancel' }
+
+    default:
+      return null
+  }
 }

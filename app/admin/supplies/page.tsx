@@ -4,6 +4,26 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
+import { C } from '@/lib/theme'
+
+const inputSt: React.CSSProperties = {
+  width: '100%', padding: '12px 14px',
+  background: C.surface, border: `1px solid ${C.border}`,
+  borderRadius: 10, fontSize: 13, color: C.text,
+  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+}
+
+const modalOverlay: React.CSSProperties = {
+  position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
+  display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 20,
+}
+const modalBox: React.CSSProperties = {
+  background: C.surface, border: `1px solid ${C.border}`,
+  width: '100%', maxWidth: 420,
+  borderRadius: '20px 20px 0 0',
+  boxShadow: '0 -24px 80px rgba(0,0,0,0.6)',
+  overflow: 'hidden',
+}
 
 type Supply = {
   id: string
@@ -92,27 +112,38 @@ export default function SuppliesPage() {
     setRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'fulfilled' } : r))
   }
 
-  if (loading) return <div className="min-h-screen bg-toss-bg md:pl-[220px] flex items-center justify-center"><div className="w-6 h-6 border-2 border-toss-blue border-t-transparent rounded-full animate-spin" /></div>
+  if (loading) return (
+    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="md:pl-[220px]">
+      <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.accent, animation: 'spin 0.7s linear infinite' }}/>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  )
 
   return (
-    <div className="min-h-screen bg-toss-bg md:pl-[220px]">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif" }} className="md:pl-[220px]">
       <AdminNav />
-      <main className="max-w-4xl mx-auto px-4 py-5 pb-20">
-        <div className="flex items-center justify-between mb-5">
-          <h1 className="text-xl font-bold text-[#191919]">비품 관리</h1>
+      <main style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px 80px', display: 'flex', flexDirection: 'column', gap: 14 }} className="md:pb-6">
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em' }}>비품 관리</h1>
           <button
             onClick={() => setShowAdd(true)}
-            className="px-4 py-2 bg-toss-blue text-white text-sm font-bold rounded-xl"
+            style={{ padding: '8px 16px', background: C.accent, color: '#fff', fontSize: 13, fontWeight: 700, border: 'none', borderRadius: 10, cursor: 'pointer', fontFamily: 'inherit', boxShadow: `0 0 18px ${C.accent}44` }}
           >+ 비품 추가</button>
         </div>
 
         {/* 탭 */}
-        <div className="flex gap-1 mb-4 bg-white rounded-2xl p-1 shadow-card">
+        <div style={{ display: 'flex', gap: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4, width: 'fit-content' }}>
           {(['requests', 'stock'] as const).map(t => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`flex-1 py-2 rounded-xl text-sm font-bold transition-colors ${tab === t ? 'bg-[#191919] text-white' : 'text-[#6B7684]'}`}
+              style={{
+                padding: '7px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8,
+                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: tab === t ? C.text : 'transparent',
+                color: tab === t ? C.bg : C.textMid,
+                transition: 'all 0.15s',
+              }}
             >
               {t === 'requests' ? `요청 목록 (${requests.filter(r => r.status === 'pending').length})` : '재고 현황'}
             </button>
@@ -121,28 +152,28 @@ export default function SuppliesPage() {
 
         {/* 요청 목록 */}
         {tab === 'requests' && (
-          <div className="space-y-3">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {requests.length === 0 && (
-              <div className="bg-white rounded-2xl shadow-card p-12 text-center text-[#B0B8C1] text-sm">직원 요청이 없습니다</div>
+              <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: '48px 0', textAlign: 'center', color: C.textDim, fontSize: 13 }}>직원 요청이 없습니다</div>
             )}
             {requests.map(r => (
-              <div key={r.id} className={`bg-white rounded-2xl shadow-card p-4 ${r.status === 'fulfilled' ? 'opacity-50' : ''}`}>
-                <div className="flex items-center justify-between">
+              <div key={r.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, opacity: r.status === 'fulfilled' ? 0.5 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div>
-                    <p className="font-bold text-[#191919]">{r.supplies?.name} × {r.qty}{r.supplies?.unit}</p>
-                    <p className="text-xs text-[#6B7684] mt-0.5">
+                    <p style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{r.supplies?.name} × {r.qty}{r.supplies?.unit}</p>
+                    <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>
                       {r.staff?.name ?? '게스트'} · {r.rooms?.number ? `${r.rooms.number}호` : '—'} · {new Date(r.requested_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
-                    {r.note && <p className="text-xs text-[#B0B8C1] mt-1">{r.note}</p>}
+                    {r.note && <p style={{ fontSize: 11, color: C.textDim, marginTop: 4 }}>{r.note}</p>}
                   </div>
                   {r.status === 'pending' && (
                     <button
                       onClick={() => fulfillRequest(r.id)}
-                      className="px-3 py-1.5 bg-toss-success text-white text-xs font-bold rounded-lg"
+                      style={{ padding: '6px 12px', background: 'rgba(52,211,153,0.12)', color: C.green, fontSize: 11, fontWeight: 700, border: '1px solid rgba(52,211,153,0.25)', borderRadius: 8, cursor: 'pointer', fontFamily: 'inherit' }}
                     >완료</button>
                   )}
                   {r.status === 'fulfilled' && (
-                    <span className="text-xs text-toss-success font-bold">처리됨</span>
+                    <span style={{ fontSize: 11, color: C.green, fontWeight: 700 }}>처리됨</span>
                   )}
                 </div>
               </div>
@@ -152,27 +183,27 @@ export default function SuppliesPage() {
 
         {/* 재고 현황 */}
         {tab === 'stock' && (
-          <div className="bg-white rounded-2xl shadow-card overflow-hidden">
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden' }}>
             {supplies.length === 0 && (
-              <div className="p-12 text-center text-[#B0B8C1] text-sm">등록된 비품이 없습니다</div>
+              <div style={{ padding: '48px 0', textAlign: 'center', color: C.textDim, fontSize: 13 }}>등록된 비품이 없습니다</div>
             )}
             {supplies.map((s, idx) => (
               <div
                 key={s.id}
-                className={`flex items-center justify-between px-5 py-4 ${idx < supplies.length - 1 ? 'border-b border-[#F2F4F6]' : ''}`}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: idx < supplies.length - 1 ? `1px solid ${C.border}` : 'none' }}
               >
                 <div>
-                  <p className="font-bold text-[#191919]">{s.name}</p>
-                  <p className="text-xs text-[#6B7684]">최소 재고: {s.low_stock}{s.unit}</p>
+                  <p style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{s.name}</p>
+                  <p style={{ fontSize: 11, color: C.textDim }}>최소 재고: {s.low_stock}{s.unit}</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   {s.stock <= s.low_stock && (
-                    <span className="text-xs bg-[#FFF0F0] text-toss-error font-bold px-2 py-0.5 rounded-full">부족</span>
+                    <span style={{ fontSize: 11, background: 'rgba(248,113,113,0.12)', color: C.red, fontWeight: 700, padding: '2px 9px', borderRadius: 999 }}>부족</span>
                   )}
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => updateStock(s.id, -1)} className="w-7 h-7 rounded-full bg-[#F2F4F6] text-[#191919] font-bold text-sm flex items-center justify-center">−</button>
-                    <span className="w-10 text-center font-bold text-[#191919]">{s.stock}{s.unit}</span>
-                    <button onClick={() => updateStock(s.id, 1)} className="w-7 h-7 rounded-full bg-[#F2F4F6] text-[#191919] font-bold text-sm flex items-center justify-center">+</button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => updateStock(s.id, -1)} style={{ width: 28, height: 28, borderRadius: '50%', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>−</button>
+                    <span style={{ width: 40, textAlign: 'center', fontWeight: 700, color: C.text, fontSize: 13 }}>{s.stock}{s.unit}</span>
+                    <button onClick={() => updateStock(s.id, 1)} style={{ width: 28, height: 28, borderRadius: '50%', background: C.surface, border: `1px solid ${C.border}`, color: C.text, fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>+</button>
                   </div>
                 </div>
               </div>
@@ -183,20 +214,25 @@ export default function SuppliesPage() {
 
       {/* 비품 추가 모달 */}
       {showAdd && (
-        <div className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-20" onClick={() => setShowAdd(false)}>
-          <div className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm p-6" onClick={e => e.stopPropagation()}>
-            <h2 className="font-bold text-[#191919] text-lg mb-5">비품 추가</h2>
-            <div className="space-y-3">
-              <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="비품명 (예: 타월)" className="w-full px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-toss-blue" />
-              <input value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} placeholder="단위 (예: 개, 롤)" className="w-full px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-toss-blue" />
-              <div className="flex gap-3">
-                <input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="현재 재고" className="flex-1 px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-toss-blue" />
-                <input type="number" value={form.low_stock} onChange={e => setForm(f => ({ ...f, low_stock: e.target.value }))} placeholder="최소 재고" className="flex-1 px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-toss-blue" />
-              </div>
+        <div style={modalOverlay} className="sm:items-center" onClick={() => setShowAdd(false)}>
+          <div style={modalBox} className="sm:rounded-2xl sm:max-w-sm" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }} className="sm:hidden">
+              <div style={{ width: 36, height: 4, background: C.border, borderRadius: 9999 }}/>
             </div>
-            <div className="flex gap-2 mt-5">
-              <button onClick={() => setShowAdd(false)} className="flex-1 py-3.5 bg-[#F2F4F6] rounded-xl text-sm font-bold text-[#191919]">취소</button>
-              <button onClick={addSupply} disabled={!form.name || saving} className="flex-1 py-3.5 bg-toss-blue text-white rounded-xl text-sm font-bold disabled:opacity-40">{saving ? '추가 중...' : '추가'}</button>
+            <div style={{ padding: '16px 20px 24px' }}>
+              <h2 style={{ fontWeight: 700, color: C.text, fontSize: 16, marginBottom: 20 }}>비품 추가</h2>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="비품명 (예: 타월)" style={inputSt} />
+                <input value={form.unit} onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} placeholder="단위 (예: 개, 롤)" style={inputSt} />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <input type="number" value={form.stock} onChange={e => setForm(f => ({ ...f, stock: e.target.value }))} placeholder="현재 재고" style={{ ...inputSt, flex: 1 }} />
+                  <input type="number" value={form.low_stock} onChange={e => setForm(f => ({ ...f, low_stock: e.target.value }))} placeholder="최소 재고" style={{ ...inputSt, flex: 1 }} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
+                <button onClick={() => setShowAdd(false)} style={{ flex: 1, padding: '13px 0', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}>취소</button>
+                <button onClick={addSupply} disabled={!form.name || saving} style={{ flex: 1, padding: '13px 0', background: C.accent, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: '#fff', cursor: saving ? 'not-allowed' : 'pointer', opacity: !form.name || saving ? 0.4 : 1, fontFamily: 'inherit' }}>{saving ? '추가 중...' : '추가'}</button>
+              </div>
             </div>
           </div>
         </div>

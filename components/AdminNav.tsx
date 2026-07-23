@@ -4,20 +4,9 @@ import { useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { NAV as C } from '@/lib/theme'
 
 // Linear exact design tokens
-const C = {
-  bg:          '#0f1011',
-  hover:       '#141516',
-  active:      '#1c1d1e',
-  border:      '#23252a',
-  text:        '#8a8f98',
-  textHover:   '#d0d6e0',
-  textActive:  '#f7f8f8',
-  iconDim:     '#4a4d54',
-  section:     '#3d4046',
-  accent:      '#5e6ad2',
-} as const
 
 const NAV_ITEMS = [
   {

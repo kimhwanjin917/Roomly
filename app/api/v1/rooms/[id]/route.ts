@@ -1,52 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHash } from 'crypto'
-import { createServiceClient } from '@/lib/supabase/server'
-import { withApiError } from '@/lib/api-error'
+import { requireApiKey } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { isRoomStatus } from '@/lib/constants'
 
-async function verifyApiKey(request: NextRequest): Promise<{ hotelId: string } | null> {
-  const auth = request.headers.get('authorization')
-  if (!auth?.startsWith('Bearer ')) return null
-
-  const rawKey = auth.slice(7)
-  const keyHash = createHash('sha256').update(rawKey).digest('hex')
-
-  const service = createServiceClient()
-  const { data } = await service.from('api_keys').select('hotel_id, id').eq('key_hash', keyHash).single()
-  if (!data) return null
-
-  service.from('api_keys').update({ last_used_at: new Date().toISOString() }).eq('id', data.id).then(() => {})
-
-  return { hotelId: data.hotel_id }
-}
-
-async function patchHandler(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  const auth = await verifyApiKey(request)
-  if (!auth) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
+async function patchHandler(request: NextRequest, { params }: { params: { id: string } }) {
+  const { hotelId, service } = await requireApiKey(request)
 
   const body = await request.json() as { status?: string; checkin_time?: string | null }
 
   // 허용된 필드만 업데이트
   const update: Record<string, unknown> = {}
-  if (body.status !== undefined) update.status = body.status
+  if (body.status !== undefined) {
+    if (!isRoomStatus(body.status)) {
+      throw ApiError.badRequest('유효하지 않은 상태입니다.', 'invalid_status')
+    }
+    update.status = body.status
+  }
   if ('checkin_time' in body) update.checkin_time = body.checkin_time
 
   if (Object.keys(update).length === 0) {
-    return NextResponse.json({ error: 'no_fields', code: 'no_fields' }, { status: 400 })
+    throw ApiError.badRequest('변경할 필드가 없습니다.', 'no_fields')
   }
 
-  const service = createServiceClient()
   const { data, error } = await service
     .from('rooms')
     .update(update)
     .eq('id', params.id)
-    .eq('hotel_id', auth.hotelId)
+    .eq('hotel_id', hotelId)
+    .is('deleted_at', null)
     .select('id, number, floor, type, status, checkinTime:checkin_time')
     .single()
 
-  if (error || !data) return NextResponse.json({ error: 'not_found', code: 'not_found' }, { status: 404 })
+  if (error || !data) throw ApiError.notFound('객실을 찾을 수 없습니다.')
 
   return NextResponse.json(data)
 }

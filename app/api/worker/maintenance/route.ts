@@ -1,30 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import * as jwt from 'jsonwebtoken'
+import { requireWorker } from '@/lib/auth'
+import { requireRoom } from '@/lib/guards'
+import { ApiError, withApiError } from '@/lib/api-error'
 
-function getWorkerToken(req: NextRequest) {
-  return req.cookies.get('roomly_worker_session')?.value ?? null
-}
+/** 직원 고장·유지보수 신고 (T-131) */
+async function postHandler(request: NextRequest) {
+  const { staffId, hotelId, service } = await requireWorker(request)
 
-export async function POST(req: NextRequest) {
-  const token = getWorkerToken(req)
-  if (!token) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
+  const { roomId, description } = await request.json()
+  if (!description?.trim()) throw ApiError.badRequest('내용을 입력해주세요.')
 
-  let payload: jwt.JwtPayload
-  try {
-    payload = jwt.verify(token, process.env.JWT_SECRET!) as jwt.JwtPayload
-  } catch {
-    return NextResponse.json({ error: '토큰 만료' }, { status: 401 })
-  }
+  // 객실을 지정했다면 내 호텔 객실인지 확인
+  if (roomId) await requireRoom(service, roomId, hotelId)
 
-  const staffId = payload.app_metadata?.staff_id
-  const hotelId = payload.app_metadata?.hotel_id
-  if (!staffId || !hotelId) return NextResponse.json({ error: '잘못된 토큰' }, { status: 401 })
-
-  const { roomId, description } = await req.json()
-  if (!description?.trim()) return NextResponse.json({ error: '내용을 입력해주세요.' }, { status: 400 })
-
-  const service = createServiceClient()
   const { error } = await service.from('maintenance_requests').insert({
     hotel_id: hotelId,
     staff_id: staffId,
@@ -32,6 +20,12 @@ export async function POST(req: NextRequest) {
     description: description.trim(),
   })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[worker/maintenance POST]', error)
+    throw ApiError.internal()
+  }
+
   return NextResponse.json({ ok: true }, { status: 201 })
 }
+
+export const POST = withApiError(postHandler)

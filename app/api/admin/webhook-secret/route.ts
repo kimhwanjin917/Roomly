@@ -1,34 +1,33 @@
 import { NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { randomBytes } from 'crypto'
+import { requireAdmin } from '@/lib/auth'
 import { withApiError } from '@/lib/api-error'
 
-async function postHandler() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
-
-  const secret = randomBytes(24).toString('hex')
-  const service = createServiceClient()
-  await service.from('hotels').update({ webhook_secret: secret }).eq('id', hotelId)
-
-  return NextResponse.json({ secret })
+/** 시크릿 전체는 발급 직후 한 번만 노출하고, 이후에는 마스킹해서만 보여준다. */
+function mask(secret: string): string {
+  return `${secret.slice(0, 6)}...${secret.slice(-4)}`
 }
 
 async function getHandler() {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  const hotelId = user.app_metadata?.hotel_id as string
+  const { hotelId, service } = await requireAdmin()
 
-  const service = createServiceClient()
-  const { data } = await service.from('hotels').select('webhook_secret').eq('id', hotelId).single()
-  // 시크릿이 있으면 마스킹해서 반환 (보안상 전체 노출 안 함)
-  const masked = data?.webhook_secret
-    ? data.webhook_secret.slice(0, 6) + '...' + data.webhook_secret.slice(-4)
-    : null
-  return NextResponse.json({ hasSec: !!data?.webhook_secret, masked })
+  const { data } = await service
+    .from('hotels')
+    .select('webhook_secret')
+    .eq('id', hotelId)
+    .single()
+
+  const secret = data?.webhook_secret as string | null | undefined
+  return NextResponse.json({ hasSec: !!secret, masked: secret ? mask(secret) : null })
+}
+
+async function postHandler() {
+  const { hotelId, service } = await requireAdmin()
+
+  const secret = randomBytes(24).toString('hex')
+  await service.from('hotels').update({ webhook_secret: secret }).eq('id', hotelId)
+
+  return NextResponse.json({ secret })
 }
 
 export const GET = withApiError(getHandler)

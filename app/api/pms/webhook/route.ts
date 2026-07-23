@@ -1,40 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { applyPmsEvent } from '@/lib/pms/apply'
 
-// PMS 어댑터별로 X-PMS-Source 헤더로 구분 (mews | cloudbeds | generic)
-export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-roomly-webhook-secret')
-  if (!process.env.PMS_WEBHOOK_SECRET || secret !== process.env.PMS_WEBHOOK_SECRET) {
-    return NextResponse.json({ error: 'invalid secret' }, { status: 401 })
+/**
+ * 표준 PMS 웹훅 — 이미 정규화된 이벤트를 받는다.
+ * 전역 PMS_WEBHOOK_SECRET으로 인증한다 (호텔별 시크릿은 어댑터 엔드포인트에서 검증).
+ */
+async function postHandler(request: NextRequest) {
+  const expected = process.env.PMS_WEBHOOK_SECRET
+  const provided = request.headers.get('x-roomly-webhook-secret')
+  if (!expected || provided !== expected) {
+    throw ApiError.unauthorized('웹훅 시크릿이 올바르지 않습니다.')
   }
 
-  const body = await req.json()
-  const { hotelId, externalRoomId, action, checkinTime } = body
-
+  const { hotelId, externalRoomId, action, checkinTime } = await request.json()
   if (!hotelId || !externalRoomId || !action) {
-    return NextResponse.json({ error: 'missing fields' }, { status: 400 })
+    throw ApiError.badRequest('hotelId, externalRoomId, action이 필요합니다.')
   }
 
-  const service = createServiceClient()
-
-  // external_room_id로 room 조회 (number 필드가 external ID로 매핑된다고 가정)
-  const { data: room } = await service
-    .from('rooms')
-    .select('id')
-    .eq('hotel_id', hotelId)
-    .eq('number', externalRoomId)
-    .is('deleted_at', null)
-    .single()
-
-  if (!room) return NextResponse.json({ error: 'room not found', externalRoomId }, { status: 404 })
-
-  if (action === 'checkout') {
-    await service.from('rooms').update({ status: 'dirty', checkin_time: null }).eq('id', room.id)
-  } else if (action === 'checkin' && checkinTime) {
-    await service.from('rooms').update({ checkin_time: checkinTime }).eq('id', room.id)
-  } else if (action === 'cancel') {
-    await service.from('rooms').update({ checkin_time: null }).eq('id', room.id)
-  }
+  await applyPmsEvent(createServiceClient(), hotelId, { externalRoomId, action, checkinTime })
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

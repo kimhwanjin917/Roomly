@@ -1,58 +1,32 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { createClientWithToken } from '@/lib/supabase/client'
+import { useState, useCallback } from 'react'
+import { useToast } from '@/lib/hooks/useToast'
+import { useNow, useOnlineStatus, useRealtimeRefetch } from '@/lib/hooks/useLive'
+import { isUrgent, isFinished, fmtTime, typeLabel } from '@/lib/rooms'
+import type { RoomStatus } from '@/lib/constants'
 
 type Room = {
   id: string
   number: string
   floor: number
   type: string
-  status: 'dirty' | 'cleaning' | 'done' | 'inspect'
+  status: RoomStatus
   checkin_time: string | null
 }
 
 type Assignment = { id: string; assigned_at: string; rooms: Room }
-type Toast = { msg: string; type: 'error' | 'success' }
 
-const TYPE_LABELS: Record<string, string> = {
-  single: '싱글', double: '더블', suite: '스위트', other: '기타',
-}
-
-const ALERT_MINUTES = Number(process.env.NEXT_PUBLIC_CHECKIN_ALERT_MINUTES ?? 120)
-
-function isUrgent(room: Room, now: Date) {
-  if (!room.checkin_time) return false
-  if (room.status === 'done' || room.status === 'inspect') return false
-  const alertAt = new Date(new Date(room.checkin_time).getTime() - ALERT_MINUTES * 60 * 1000)
-  return now >= alertAt
-}
-
-function fmtTime(iso: string | null) {
-  if (!iso) return null
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-}
+const WATCHED_TABLES = ['rooms', 'assignments'] as const
 
 export default function GuestDashboard({ initialAssignments, token }: { hotelId: string; initialAssignments: Assignment[]; token: string }) {
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
-  const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
-  const [toast, setToast] = useState<Toast | null>(null)
-  const [isOnline, setIsOnline] = useState(true)
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function showToast(msg: string, type: Toast['type'] = 'error') {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
-  }
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(t)
-  }, [])
+  const now = useNow()
+  const { toast, showToast } = useToast()
 
   const refetch = useCallback(async () => {
     try {
@@ -63,25 +37,8 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
     }
   }, [])
 
-  useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); refetch() }
-    const handleOffline = () => setIsOnline(false)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [refetch])
-
-  useEffect(() => {
-    const supabase = createClientWithToken(token)
-    const channel = supabase.channel('guest-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, refetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, refetch)
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [refetch, token])
+  const isOnline = useOnlineStatus(refetch)
+  useRealtimeRefetch({ channel: 'guest-realtime', tables: WATCHED_TABLES, onChange: refetch, token })
 
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id
@@ -103,8 +60,8 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
 
   const sorted = [...assignments].sort((a, b) => {
     const ra = a.rooms, rb = b.rooms
-    const doneA = ra.status === 'done' || ra.status === 'inspect'
-    const doneB = rb.status === 'done' || rb.status === 'inspect'
+    const doneA = isFinished(ra.status)
+    const doneB = isFinished(rb.status)
     if (doneA !== doneB) return doneA ? 1 : -1
     const urgA = isUrgent(ra, now), urgB = isUrgent(rb, now)
     if (urgA !== urgB) return urgA ? -1 : 1
@@ -112,7 +69,7 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
     return 0
   })
 
-  const doneCount = assignments.filter(a => a.rooms.status === 'done' || a.rooms.status === 'inspect').length
+  const doneCount = assignments.filter(a => isFinished(a.rooms.status)).length
   const totalCount = assignments.length
 
   return (
@@ -201,7 +158,7 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-slate-400 mt-1">{room.floor}층 · {TYPE_LABELS[room.type] ?? room.type}</p>
+                <p className="text-xs text-slate-400 mt-1">{room.floor}층 · {typeLabel(room.type)}</p>
               </div>
 
               {!finished && (

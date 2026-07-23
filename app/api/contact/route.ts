@@ -1,20 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { sendEmail } from '@/lib/email'
+import { ApiError, withApiError } from '@/lib/api-error'
 
-export async function POST(req: NextRequest) {
-  const { name, email, message } = await req.json()
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL ?? 'ouuoups@gmail.com'
+
+async function postHandler(request: NextRequest) {
+  const { name, email, message } = await request.json()
 
   if (!name?.trim() || !email?.trim() || !message?.trim()) {
-    return NextResponse.json({ error: '모든 항목을 입력해주세요.' }, { status: 400 })
+    throw ApiError.badRequest('모든 항목을 입력해주세요.')
   }
 
   const ok = await sendEmail({
-    to: 'ouuoups@gmail.com',
-    subject: `[Roomly 문의] ${name}`,
-    text: `이름: ${name}\n이메일: ${email}\n\n${message}`,
+    to: SUPPORT_EMAIL,
+    subject: `[Roomly 문의] ${name.trim()}`,
+    text: `이름: ${name.trim()}\n이메일: ${email.trim()}\n\n${message.trim()}`,
+    template: 'contact',
   })
 
-  if (!ok) return NextResponse.json({ error: '전송에 실패했습니다. 다시 시도해주세요.' }, { status: 500 })
+  if (!ok) throw ApiError.internal('전송에 실패했습니다. 다시 시도해주세요.')
 
   return NextResponse.json({ ok: true })
 }
+
+export const POST = withApiError(postHandler)

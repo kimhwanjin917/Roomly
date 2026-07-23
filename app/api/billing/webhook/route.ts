@@ -1,94 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { timingSafeEqual } from 'crypto'
+import { createServiceClient } from '@/lib/supabase/server'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { addMonths } from '@/lib/date'
+import { PLAN_PRICES } from '@/lib/toss'
 
-function getSupabaseAdmin() {
-  return createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
+/**
+ * Toss 결제 상태 웹훅 (T-082)
+ * 동일 paymentKey 중복 수신은 payment_logs로 멱등 처리한다.
+ */
+
+/** 결제 금액 → 플랜 역매핑 (PLAN_PRICES의 역방향, 단일 출처 유지) */
+const PLAN_BY_AMOUNT: Record<number, string> = Object.fromEntries(
+  Object.entries(PLAN_PRICES).map(([plan, amount]) => [amount, plan]),
+)
+
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a)
+  const bufB = Buffer.from(b)
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB)
 }
 
-// setMonth()는 월말 오버플로우 버그(1/31 → 3/3) 있음
-function addOneMonth(date: Date): Date {
-  const d = new Date(date)
-  const day = d.getDate()
-  d.setDate(1)
-  d.setMonth(d.getMonth() + 1)
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  d.setDate(Math.min(day, lastDay))
-  return d
-}
+async function postHandler(request: NextRequest) {
+  const expected = process.env.TOSS_PAYMENTS_WEBHOOK_SECRET
+  const provided = request.headers.get('x-toss-signature') ?? request.headers.get('authorization')
 
-const PLAN_AMOUNTS: Record<number, { plan: string; roomLimit: number }> = {
-  30000:  { plan: 'starter',  roomLimit: 50 },
-  70000:  { plan: 'standard', roomLimit: 150 },
-  150000: { plan: 'pro',      roomLimit: 9999 },
-}
-
-export async function POST(req: NextRequest) {
-  const secret = req.headers.get('x-toss-signature') ?? req.headers.get('authorization')
-  if (secret !== process.env.TOSS_PAYMENTS_WEBHOOK_SECRET) {
-    return NextResponse.json({ error: 'invalid signature' }, { status: 400 })
+  if (!expected || !provided || !safeEqual(provided, expected)) {
+    throw ApiError.badRequest('서명이 올바르지 않습니다.', 'invalid_signature')
   }
 
-  const event = await req.json()
-  const supabase = getSupabaseAdmin()
-
-  if (event.eventType === 'PAYMENT_STATUS_CHANGED') {
-    const payment = event.data
-    if (payment.status === 'DONE') {
-      // 멱등성 처리: 동일 paymentKey 중복 수신 방지 (T-082)
-      if (payment.paymentKey) {
-        const { data: existing } = await supabase
-          .from('payment_logs')
-          .select('id')
-          .eq('toss_payment_key', payment.paymentKey)
-          .single()
-        if (existing) return NextResponse.json({ received: true, duplicate: true })
-      }
-
-      const planInfo = PLAN_AMOUNTS[payment.totalAmount]
-      const customerKey = payment.metadata?.customerKey ?? payment.customerKey
-
-      if (customerKey && planInfo) {
-        const nextExpiry = addOneMonth(new Date())
-
-        // 결제 로그 기록
-        const { data: hotel } = await supabase
-          .from('hotels').select('id').eq('toss_customer_key', customerKey).single()
-        if (hotel && payment.paymentKey) {
-          await supabase.from('payment_logs').insert({
-            hotel_id: hotel.id,
-            toss_payment_key: payment.paymentKey,
-            amount: payment.totalAmount,
-            plan: planInfo.plan,
-            status: 'success',
-            next_billing_at: nextExpiry.toISOString(),
-            raw_event: event,
-          })
-        }
-
-        await supabase.from('hotels')
-          .update({
-            subscription_plan: planInfo.plan,
-            plan_expires_at: nextExpiry.toISOString(),
-          })
-          .eq('toss_customer_key', customerKey)
-      }
-    }
-
-    if (payment.status === 'CANCELED') {
-      const customerKey = payment.metadata?.customerKey ?? payment.customerKey
-      if (customerKey) {
-        await supabase.from('hotels')
-          .update({
-            subscription_plan: 'trial',
-            toss_billing_key: null,
-          })
-          .eq('toss_customer_key', customerKey)
-      }
-    }
+  const event = await request.json()
+  if (event.eventType !== 'PAYMENT_STATUS_CHANGED') {
+    return NextResponse.json({ received: true, ignored: true })
   }
+
+  const service = createServiceClient()
+  const payment = event.data ?? {}
+  const customerKey = payment.metadata?.customerKey ?? payment.customerKey
+
+  if (payment.status === 'CANCELED') {
+    if (customerKey) {
+      await service
+        .from('hotels')
+        .update({ subscription_plan: 'trial', toss_billing_key: null })
+        .eq('toss_customer_key', customerKey)
+    }
+    return NextResponse.json({ received: true })
+  }
+
+  if (payment.status !== 'DONE') return NextResponse.json({ received: true })
+
+  // 멱등성 — 같은 paymentKey를 이미 처리했으면 무시
+  if (payment.paymentKey) {
+    const { data: existing } = await service
+      .from('payment_logs')
+      .select('id')
+      .eq('toss_payment_key', payment.paymentKey)
+      .maybeSingle()
+    if (existing) return NextResponse.json({ received: true, duplicate: true })
+  }
+
+  const plan = PLAN_BY_AMOUNT[payment.totalAmount]
+  if (!customerKey || !plan) return NextResponse.json({ received: true, ignored: true })
+
+  const nextExpiry = addMonths(new Date(), 1)
+
+  const { data: hotel } = await service
+    .from('hotels')
+    .select('id')
+    .eq('toss_customer_key', customerKey)
+    .maybeSingle()
+
+  if (hotel && payment.paymentKey) {
+    await service.from('payment_logs').insert({
+      hotel_id: hotel.id,
+      toss_payment_key: payment.paymentKey,
+      amount: payment.totalAmount,
+      plan,
+      status: 'success',
+      next_billing_at: nextExpiry.toISOString(),
+      raw_event: event,
+    })
+  }
+
+  await service
+    .from('hotels')
+    .update({ subscription_plan: plan, plan_expires_at: nextExpiry.toISOString() })
+    .eq('toss_customer_key', customerKey)
 
   return NextResponse.json({ received: true })
 }
+
+export const POST = withApiError(postHandler)

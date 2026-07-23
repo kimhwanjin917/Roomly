@@ -1,11 +1,13 @@
 import {
   Html, Head, Body, Container, Heading, Text, Hr, Section,
 } from '@react-email/components'
+import { formatKoreanDate } from '@/lib/date'
 
 interface ReceiptEmailProps {
   hotelName: string
   planName: string
   amount: number
+  /** ISO 문자열 — 표시 형식은 이 컴포넌트가 결정한다 */
   paidAt: string
   nextBillingAt: string
 }
@@ -49,11 +51,11 @@ export default function ReceiptEmail({
                 </tr>
                 <tr>
                   <td style={{ color: '#374151', padding: '4px 0', fontSize: '14px' }}>결제 일시</td>
-                  <td style={{ color: '#374151', padding: '4px 0', fontSize: '14px', textAlign: 'right' }}>{paidAt}</td>
+                  <td style={{ color: '#374151', padding: '4px 0', fontSize: '14px', textAlign: 'right' }}>{formatKoreanDate(paidAt)}</td>
                 </tr>
                 <tr>
                   <td style={{ color: '#374151', padding: '4px 0', fontSize: '14px' }}>다음 결제일</td>
-                  <td style={{ color: '#374151', padding: '4px 0', fontSize: '14px', textAlign: 'right' }}>{nextBillingAt}</td>
+                  <td style={{ color: '#374151', padding: '4px 0', fontSize: '14px', textAlign: 'right' }}>{formatKoreanDate(nextBillingAt)}</td>
                 </tr>
               </tbody>
             </table>

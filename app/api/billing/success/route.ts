@@ -1,49 +1,68 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { issueBillingKey, chargeBillingKey, buildOrderId, getPlanAmount, PLAN_PRICES, PLAN_LABELS, INTERVAL_LABELS, type BillingInterval } from '@/lib/toss'
-import { withApiError } from '@/lib/api-error'
+import { requireAdmin } from '@/lib/auth'
+import { HttpError, withApiError } from '@/lib/api-error'
 import { sendEmail } from '@/lib/email'
+import { appUrl } from '@/lib/constants'
+import {
+  issueBillingKey,
+  chargeBillingKey,
+  buildOrderId,
+  buildOrderName,
+  getPlanAmount,
+  activateSubscription,
+  toBillingInterval,
+  PLAN_PRICES,
+  PLAN_LABELS,
+} from '@/lib/toss'
 import ReceiptEmail from '@/emails/ReceiptEmail'
+
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
+
 
 /**
  * Toss 빌링 인증 성공 콜백 (T-096)
- * requestBillingAuth 성공 시 Toss가 authKey/customerKey를 붙여 리다이렉트.
+ * requestBillingAuth 성공 시 Toss가 authKey/customerKey를 붙여 리다이렉트한다.
  * 빌링키 발급 → hotels.toss_billing_key 저장 → 첫 결제 즉시 청구.
+ *
+ * 브라우저 리다이렉트 흐름이므로 실패는 JSON이 아니라 billing 페이지로 되돌린다.
  */
-async function getHandler(req: NextRequest) {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
-  const failRedirect = (reason?: string) =>
-    NextResponse.redirect(
-      `${appUrl}/admin/billing?fail=true${reason ? `&reason=${encodeURIComponent(reason)}` : ''}`
-    )
+function failRedirect(reason: string) {
+  return NextResponse.redirect(
+    `${appUrl()}/admin/billing?fail=true&reason=${encodeURIComponent(reason)}`,
+  )
+}
 
-  const { searchParams } = new URL(req.url)
-  const authKey = searchParams.get('authKey')
-  const customerKey = searchParams.get('customerKey')
-  const plan = searchParams.get('plan') ?? ''
-  // T-201: 결제 주기 (yearly = 2개월 무료)
-  const interval: BillingInterval = searchParams.get('interval') === 'yearly' ? 'yearly' : 'monthly'
+async function getHandler(request: NextRequest) {
+  const params = request.nextUrl.searchParams
+  const authKey = params.get('authKey')
+  const customerKey = params.get('customerKey')
+  const plan = params.get('plan') ?? ''
+  const interval = toBillingInterval(params.get('interval'))
 
   if (!authKey || !customerKey || !PLAN_PRICES[plan]) {
     return failRedirect('잘못된 요청입니다.')
   }
 
-  // 관리자 세션 확인 (브라우저 리다이렉트이므로 쿠키 존재)
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.redirect(`${appUrl}/login`)
+  // 관리자 세션 확인 (브라우저 리다이렉트이므로 쿠키가 있다)
+  let ctx
+  try {
+    ctx = await requireAdmin()
+  } catch (err) {
+    if (err instanceof HttpError && err.status === 401) {
+      return NextResponse.redirect(`${appUrl()}/login`)
+    }
+    throw err
+  }
+  const { hotelId, email, service } = ctx
 
-  const hotelId = user.app_metadata?.hotel_id as string | undefined
-  if (!hotelId) return failRedirect('권한이 없습니다.')
-
-  const service = createServiceClient()
   const { data: hotel } = await service
     .from('hotels')
     .select('id, name, toss_customer_key')
     .eq('id', hotelId)
     .single()
 
-  // customerKey 위변조 방지
+  // customerKey 위변조 방지 — 저장된 값과 일치해야 한다
   if (!hotel || hotel.toss_customer_key !== customerKey) {
     return failRedirect('고객 정보가 일치하지 않습니다.')
   }
@@ -51,22 +70,23 @@ async function getHandler(req: NextRequest) {
   // 1) 빌링키 발급
   let billingKey: string
   try {
-    const issued = await issueBillingKey(authKey, customerKey)
-    billingKey = issued.billingKey
-  } catch (e) {
-    return failRedirect(e instanceof Error ? e.message : '빌링키 발급에 실패했습니다.')
+    ({ billingKey } = await issueBillingKey(authKey, customerKey))
+  } catch (err) {
+    return failRedirect(err instanceof Error ? err.message : '빌링키 발급에 실패했습니다.')
   }
 
   await service.from('hotels').update({ toss_billing_key: billingKey }).eq('id', hotelId)
 
   // 2) 첫 결제 즉시 청구
-  const amount = getPlanAmount(plan, interval)!
+  const amount = getPlanAmount(plan, interval)
+  if (!amount) return failRedirect('유효하지 않은 플랜입니다.')
+
   const result = await chargeBillingKey({
     billingKey,
     customerKey,
     amount,
     orderId: buildOrderId(hotelId),
-    orderName: `Roomly ${PLAN_LABELS[plan] ?? plan} 플랜 (${INTERVAL_LABELS[interval]})`,
+    orderName: buildOrderName(plan, interval),
     hotelId,
     plan,
   })
@@ -75,38 +95,27 @@ async function getHandler(req: NextRequest) {
     return failRedirect(result.failureReason ?? '결제에 실패했습니다.')
   }
 
-  // 3) 구독 활성화 (월간 1개월 / 연간 1년)
-  const expiresAt = new Date()
-  if (interval === 'yearly') expiresAt.setFullYear(expiresAt.getFullYear() + 1)
-  else expiresAt.setMonth(expiresAt.getMonth() + 1)
-  await service
-    .from('hotels')
-    .update({
-      subscription_plan: plan,
-      plan_expires_at: expiresAt.toISOString(),
-      pending_plan: null,
-      billing_interval: interval,
-    })
-    .eq('id', hotelId)
+  // 3) 구독 활성화
+  const expiresAt = await activateSubscription(service, { hotelId, plan, interval })
 
-  // T-197: 첫 결제 영수증 이메일 (비차단)
-  if (user.email) {
-    await sendEmail({
-      to: user.email,
+  // 4) 영수증 메일 (비차단 — 실패해도 결제는 완료된 것)
+  if (email) {
+    sendEmail({
+      to: email,
       subject: '[Roomly] 결제 영수증',
       react: ReceiptEmail({
         hotelName: hotel.name as string,
-        plan: PLAN_LABELS[plan] ?? plan,
+        planName: PLAN_LABELS[plan] ?? plan,
         amount,
-        nextBillingDate: expiresAt.toLocaleDateString('ko-KR', {
-          year: 'numeric', month: 'long', day: 'numeric',
-        }),
+        paidAt: new Date().toISOString(),
+        nextBillingAt: expiresAt.toISOString(),
       }),
       hotelId,
+      template: 'receipt',
     }).catch(() => {})
   }
 
-  return NextResponse.redirect(`${appUrl}/admin/billing?success=true`)
+  return NextResponse.redirect(`${appUrl()}/admin/billing?success=true`)
 }
 
 export const GET = withApiError(getHandler)

@@ -1,26 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import { createClient } from '@/lib/supabase/server'
-import crypto from 'crypto'
+import { randomBytes, createHash } from 'crypto'
+import { requireAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
 
+/** 평문 키는 발급 시 한 번만 반환하고, DB에는 SHA-256 해시만 저장한다. */
 function generateApiKey() {
-  const key = `rly_${crypto.randomBytes(24).toString('base64url')}`
-  const hash = crypto.createHash('sha256').update(key).digest('hex')
-  const prefix = key.slice(0, 10)
-  return { key, hash, prefix }
+  const key = `rly_${randomBytes(24).toString('base64url')}`
+  return {
+    key,
+    hash: createHash('sha256').update(key).digest('hex'),
+    prefix: key.slice(0, 10),
+  }
 }
 
-async function getHotelId(): Promise<string | null> {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  return (user?.app_metadata?.hotel_id as string) ?? null
-}
+async function getHandler() {
+  const { hotelId, service } = await requireAdmin()
 
-export async function GET() {
-  const hotelId = await getHotelId()
-  if (!hotelId) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
-
-  const service = createServiceClient()
   const { data } = await service
     .from('api_keys')
     .select('id, key_prefix, name, last_used, created_at')
@@ -31,32 +26,33 @@ export async function GET() {
   return NextResponse.json(data ?? [])
 }
 
-export async function POST(req: NextRequest) {
-  const hotelId = await getHotelId()
-  if (!hotelId) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
+async function postHandler(request: NextRequest) {
+  const { hotelId, service } = await requireAdmin()
 
-  const { name } = await req.json()
+  const { name } = await request.json().catch(() => ({ name: undefined }))
   const { key, hash, prefix } = generateApiKey()
 
-  const service = createServiceClient()
   const { error } = await service.from('api_keys').insert({
     hotel_id: hotelId,
     key_hash: hash,
     key_prefix: prefix,
-    name: name || 'Default',
+    name: name?.trim() || 'Default',
   })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[admin/api-keys POST]', error)
+    throw ApiError.internal()
+  }
 
   return NextResponse.json({ key }, { status: 201 })
 }
 
-export async function DELETE(req: NextRequest) {
-  const hotelId = await getHotelId()
-  if (!hotelId) return NextResponse.json({ error: '인증 필요' }, { status: 401 })
+async function deleteHandler(request: NextRequest) {
+  const { hotelId, service } = await requireAdmin()
 
-  const { id } = await req.json()
-  const service = createServiceClient()
+  const { id } = await request.json()
+  if (!id) throw ApiError.badRequest('삭제할 키 ID가 필요합니다.')
+
   await service
     .from('api_keys')
     .update({ revoked_at: new Date().toISOString() })
@@ -65,3 +61,7 @@ export async function DELETE(req: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export const GET = withApiError(getHandler)
+export const POST = withApiError(postHandler)
+export const DELETE = withApiError(deleteHandler)

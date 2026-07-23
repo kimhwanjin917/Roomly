@@ -1,32 +1,21 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { requireSuperAdmin } from '@/lib/auth'
 import { withApiError } from '@/lib/api-error'
 
-function verifySession() {
-  const cookieStore = cookies()
-  const session = cookieStore.get('super_admin_session')?.value
-  if (!session) return false
-  return session === process.env.SUPER_ADMIN_PASSWORD_HASH
-}
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
 
 async function getHandler() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
+  const { service } = requireSuperAdmin()
 
-  const { data: hotels } = await supabaseAdmin
-    .from('hotels')
-    .select('id, name, subscription_plan, created_at')
-    .order('created_at', { ascending: false })
-
-  const { data: rooms } = await supabaseAdmin
-    .from('rooms')
-    .select('hotel_id')
-    .is('deleted_at', null)
+  const [{ data: hotels }, { data: rooms }] = await Promise.all([
+    service
+      .from('hotels')
+      .select('id, name, subscription_plan, created_at')
+      .order('created_at', { ascending: false }),
+    service.from('rooms').select('hotel_id').is('deleted_at', null),
+  ])
 
   const roomCounts = (rooms ?? []).reduce<Record<string, number>>((acc, r) => {
     acc[r.hotel_id] = (acc[r.hotel_id] ?? 0) + 1
@@ -34,10 +23,7 @@ async function getHandler() {
   }, {})
 
   return NextResponse.json({
-    hotels: (hotels ?? []).map(h => ({
-      ...h,
-      roomCount: roomCounts[h.id] ?? 0,
-    })),
+    hotels: (hotels ?? []).map(h => ({ ...h, roomCount: roomCounts[h.id] ?? 0 })),
   })
 }
 

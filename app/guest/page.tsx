@@ -30,11 +30,8 @@ function GuestForm() {
     const data = await res.json()
 
     if (!res.ok) {
-      setError(
-        data.error === 'expired_code'
-          ? '오늘의 코드가 만료되었습니다. 관리자에게 문의하세요.'
-          : '코드가 올바르지 않습니다.'
-      )
+      // 서버가 사용자에게 보여줄 메시지를 내려준다 (code는 분기용)
+      setError(data.error ?? '코드가 올바르지 않습니다.')
       setLoading(false)
       return
     }

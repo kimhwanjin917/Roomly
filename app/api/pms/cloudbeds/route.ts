@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { convertCloudbedsEvent, type CloudbedsWebhookEvent } from '@/lib/pms/cloudbeds'
-import { withApiError } from '@/lib/api-error'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { parseCloudbedsEvent, type CloudbedsWebhookEvent } from '@/lib/pms/cloudbeds'
+import { applyPmsEvent, verifyPmsSecret } from '@/lib/pms/apply'
 
 /**
  * Cloudbeds PMS 어댑터 (T-202)
@@ -9,45 +10,16 @@ import { withApiError } from '@/lib/api-error'
  */
 async function postHandler(request: NextRequest) {
   const hotelId = request.headers.get('x-hotel-id')
-  const webhookSecret = request.headers.get('x-roomly-webhook-secret')
-
-  if (!hotelId || !webhookSecret) {
-    return NextResponse.json({ error: 'missing_headers', code: 'missing_headers' }, { status: 400 })
-  }
+  if (!hotelId) throw ApiError.badRequest('x-hotel-id 헤더가 필요합니다.', 'missing_headers')
 
   const service = createServiceClient()
-
-  // 시크릿 검증
-  const { data: hotel } = await service
-    .from('hotels')
-    .select('webhook_secret')
-    .eq('id', hotelId)
-    .single()
-
-  if (!hotel || hotel.webhook_secret !== webhookSecret) {
-    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  }
+  await verifyPmsSecret(service, hotelId, request.headers.get('x-roomly-webhook-secret'))
 
   const body = await request.json() as CloudbedsWebhookEvent
+  const event = parseCloudbedsEvent(body)
+  if (!event) return NextResponse.json({ ok: true, skipped: true })
 
-  const payload = convertCloudbedsEvent(body)
-  if (!payload) {
-    return NextResponse.json({ ok: true, skipped: true })
-  }
-
-  if (payload.event === 'checkout') {
-    await service
-      .from('rooms')
-      .update({ status: 'dirty', checkin_time: null })
-      .eq('hotel_id', hotelId)
-      .eq('number', payload.room_number)
-  } else if (payload.event === 'checkin_updated' && payload.checkin_time) {
-    await service
-      .from('rooms')
-      .update({ checkin_time: payload.checkin_time })
-      .eq('hotel_id', hotelId)
-      .eq('number', payload.room_number)
-  }
+  await applyPmsEvent(service, hotelId, event)
 
   return NextResponse.json({ ok: true })
 }

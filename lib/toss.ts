@@ -1,4 +1,6 @@
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createServiceClient } from '@/lib/supabase/server'
+import { addBillingInterval } from '@/lib/date'
 
 const TOSS_API_BASE = 'https://api.tosspayments.com/v1'
 
@@ -19,6 +21,16 @@ export type BillingInterval = 'monthly' | 'yearly'
 
 export function getPlanAmount(plan: string, interval: BillingInterval): number | undefined {
   return interval === 'yearly' ? PLAN_PRICES_YEARLY[plan] : PLAN_PRICES[plan]
+}
+
+/** 알 수 없는 값은 monthly로 정규화 */
+export function toBillingInterval(value: unknown): BillingInterval {
+  return value === 'yearly' ? 'yearly' : 'monthly'
+}
+
+/** 주문명 — 결제 화면과 영수증에 그대로 노출된다 */
+export function buildOrderName(plan: string, interval: BillingInterval): string {
+  return `Roomly ${PLAN_LABELS[plan] ?? plan} 플랜 (${INTERVAL_LABELS[interval]})`
 }
 
 export const INTERVAL_LABELS: Record<BillingInterval, string> = {
@@ -150,6 +162,31 @@ export async function chargeBillingKey({
   }
 
   return result
+}
+
+/**
+ * 결제 성공 후 구독 활성화 — 만료일 계산과 hotels 갱신을 한곳에서 처리한다.
+ * (success 콜백 / 플랜 변경 / 자동 청구 크론이 공유)
+ *
+ * 만료일은 addBillingInterval로 계산해 월말 오버플로우(1/31 + 1개월 → 3/3)를 피한다.
+ */
+export async function activateSubscription(
+  service: SupabaseClient,
+  params: { hotelId: string; plan: string; interval: BillingInterval; from?: Date },
+): Promise<Date> {
+  const expiresAt = addBillingInterval(params.from ?? new Date(), params.interval)
+
+  await service
+    .from('hotels')
+    .update({
+      subscription_plan: params.plan,
+      pending_plan: null,
+      plan_expires_at: expiresAt.toISOString(),
+      billing_interval: params.interval,
+    })
+    .eq('id', params.hotelId)
+
+  return expiresAt
 }
 
 /** 구독 결제용 orderId 생성 — 웹훅에서 hotel_id 역추출 가능하도록 포함 */

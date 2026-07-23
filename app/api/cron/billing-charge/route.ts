@@ -1,82 +1,81 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import { chargeBillingKey } from '@/lib/toss'
+import { requireCron } from '@/lib/auth'
+import { withApiError } from '@/lib/api-error'
 import { sendEmail } from '@/lib/email'
+import { appUrl } from '@/lib/constants'
+import {
+  chargeBillingKey,
+  buildOrderId,
+  buildOrderName,
+  getPlanAmount,
+  activateSubscription,
+  toBillingInterval,
+  PLAN_LABELS,
+} from '@/lib/toss'
 import PaymentFailedEmail from '@/emails/PaymentFailedEmail'
 import ReceiptEmail from '@/emails/ReceiptEmail'
 
-const PLAN_AMOUNTS: Record<string, number> = {
-  starter: 30000,
-  standard: 70000,
-  pro: 150000,
-}
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
 
-function addOneMonth(date: Date): Date {
-  const d = new Date(date)
-  const day = d.getDate()
-  d.setDate(1)
-  d.setMonth(d.getMonth() + 1)
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate()
-  d.setDate(Math.min(day, lastDay))
-  return d
-}
 
-export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get('authorization')
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
+/**
+ * 만료된 구독의 자동 청구.
+ * 성공 → 다음 주기로 연장 + 영수증 / 실패 → trial 강등 + 결제 실패 안내.
+ */
+async function getHandler(request: NextRequest) {
+  const { service } = requireCron(request)
 
-  const service = createServiceClient()
   const now = new Date()
-
   const { data: hotels } = await service
     .from('hotels')
-    .select('id, name, subscription_plan, toss_billing_key, toss_customer_key, plan_expires_at, admin_email')
-    .not('subscription_plan', 'in', '("trial")')
+    .select('id, name, subscription_plan, pending_plan, billing_interval, toss_billing_key, toss_customer_key, plan_expires_at, admin_email')
+    .neq('subscription_plan', 'trial')
     .not('toss_billing_key', 'is', null)
     .lte('plan_expires_at', now.toISOString())
 
-  if (!hotels?.length) return NextResponse.json({ charged: 0, failed: 0 })
+  if (!hotels?.length) return NextResponse.json({ charged: 0, failed: 0, skipped: 0 })
 
   let charged = 0
   let failed = 0
-
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://roomly.app'
+  let skipped = 0
 
   for (const hotel of hotels) {
-    const amount = PLAN_AMOUNTS[hotel.subscription_plan]
-    if (!amount || !hotel.toss_billing_key || !hotel.toss_customer_key) { failed++; continue }
+    // 청구 대상: pending_plan(업/다운그레이드 예약) 우선, 없으면 현재 플랜
+    const plan = (hotel.pending_plan ?? hotel.subscription_plan) as string
+    const interval = toBillingInterval(hotel.billing_interval)
+    const amount = getPlanAmount(plan, interval)
 
-    const adminEmail = hotel.admin_email
-    if (!adminEmail) { failed++; continue }
+    if (!amount || !hotel.toss_billing_key || !hotel.toss_customer_key || !hotel.admin_email) {
+      skipped++
+      continue
+    }
 
-    try {
-      const orderId = `roomly_${hotel.id}_${Date.now()}`
-      await chargeBillingKey({
-        billingKey: hotel.toss_billing_key,
-        customerKey: hotel.toss_customer_key,
-        amount,
-        orderId,
-        orderName: `Roomly ${hotel.subscription_plan} 플랜`,
-        customerEmail: adminEmail,
-        customerName: hotel.name,
+    const result = await chargeBillingKey({
+      billingKey: hotel.toss_billing_key,
+      customerKey: hotel.toss_customer_key,
+      amount,
+      orderId: buildOrderId(hotel.id),
+      orderName: buildOrderName(plan, interval),
+      hotelId: hotel.id,
+      plan,
+    })
+
+    if (result.success) {
+      const nextExpiry = await activateSubscription(service, {
+        hotelId: hotel.id,
+        plan,
+        interval,
+        from: now,
       })
-
-      const nextExpiry = addOneMonth(new Date(hotel.plan_expires_at))
-
-      await service.from('hotels').update({
-        plan_expires_at: nextExpiry.toISOString(),
-      }).eq('id', hotel.id)
-
       charged++
 
       await sendEmail({
-        to: adminEmail,
+        to: hotel.admin_email,
         subject: `[Roomly] ${hotel.name} 구독 결제가 완료되었습니다`,
         react: ReceiptEmail({
           hotelName: hotel.name,
-          planName: hotel.subscription_plan,
+          planName: PLAN_LABELS[plan] ?? plan,
           amount,
           paidAt: now.toISOString(),
           nextBillingAt: nextExpiry.toISOString(),
@@ -84,24 +83,24 @@ export async function GET(request: NextRequest) {
         hotelId: hotel.id,
         template: 'receipt',
       })
-    } catch (err) {
-      console.error(`[billing-charge] 결제 실패 hotel=${hotel.id}:`, err)
+    } else {
+      console.error(`[billing-charge] 결제 실패 hotel=${hotel.id}:`, result.failureReason)
       failed++
 
-      await service.from('hotels').update({
-        subscription_plan: 'trial',
-        toss_billing_key: null,
-      }).eq('id', hotel.id)
+      await service
+        .from('hotels')
+        .update({ subscription_plan: 'trial', toss_billing_key: null })
+        .eq('id', hotel.id)
 
       await sendEmail({
-        to: adminEmail,
+        to: hotel.admin_email,
         subject: '[Roomly] 자동 결제에 실패했습니다',
         react: PaymentFailedEmail({
           hotelName: hotel.name,
-          planName: hotel.subscription_plan,
+          planName: PLAN_LABELS[plan] ?? plan,
           amount,
           failedAt: now.toISOString(),
-          billingUrl: `${appUrl}/admin/billing`,
+          billingUrl: `${appUrl()}/admin/billing`,
         }),
         hotelId: hotel.id,
         template: 'payment_failed',
@@ -109,5 +108,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.json({ charged, failed })
+  return NextResponse.json({ charged, failed, skipped })
 }
+
+export const GET = withApiError(getHandler)

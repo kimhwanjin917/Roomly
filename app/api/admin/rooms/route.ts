@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { withApiError } from '@/lib/api-error'
+import { requireAdmin } from '@/lib/auth'
+import { assertRoomQuota } from '@/lib/guards'
+import { ApiError, withApiError } from '@/lib/api-error'
 
 async function postHandler(request: NextRequest) {
-  const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-
-  const hotelId = user.app_metadata?.hotel_id as string
-  if (!hotelId) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
+  const { hotelId, service } = await requireAdmin()
 
   const { number, floor, type } = await request.json()
-  if (!number?.trim() || !floor) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
+  if (!number?.trim() || !floor) throw ApiError.badRequest('호수와 층을 입력해주세요.')
 
-  const service = createServiceClient()
+  // 일괄 등록과 동일하게 플랜 한도를 적용한다
+  await assertRoomQuota(service, hotelId, 1)
+
   const { data, error } = await service
     .from('rooms')
     .insert({ hotel_id: hotelId, number: number.trim(), floor: Number(floor), type })
@@ -21,9 +19,9 @@ async function postHandler(request: NextRequest) {
     .single()
 
   if (error) {
-    console.error('[rooms POST]', error)
-    if (error.code === '23505') return NextResponse.json({ error: 'duplicate', code: 'duplicate' }, { status: 409 })
-    return NextResponse.json({ error: 'server_error', detail: error.message, code: error.code }, { status: 500 })
+    if (error.code === '23505') throw ApiError.conflict('이미 존재하는 호수입니다.', 'duplicate')
+    console.error('[admin/rooms POST]', error)
+    throw ApiError.internal()
   }
 
   return NextResponse.json(data)

@@ -1,135 +1,151 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import { sendPushToAdmin } from '@/lib/push'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import { requireCron } from '@/lib/auth'
 import { withApiError } from '@/lib/api-error'
+import { sendPushToAdmin } from '@/lib/push'
+import { DEFAULT_CHECKIN_ALERT_MINUTES } from '@/lib/constants'
+import { hoursAgo } from '@/lib/date'
 
-const DEFAULT_ALERT_MINUTES = 120
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
 
-async function getHandler(request: NextRequest) {
-  // Verify cron secret
-  const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
-  }
 
-  const service = createServiceClient()
-  const now = new Date()
+/**
+ * 체크인 임박/초과 알림 크론.
+ *
+ * 두 종류의 알림을 각각 1회씩만 보낸다. 중복 방지는 room_logs.alert_type을
+ * 발송 "전에" INSERT 해서 확보한다 (INSERT 실패 시 발송을 건너뛰고 다음 주기에 재시도).
+ * - urgent_2h: 호텔별 기준 시간(checkin_alert_minutes) 내로 체크인이 임박한 미완료 방
+ * - overdue  : 체크인 시각이 이미 지난 미완료 방 (최근 24시간 내 건만)
+ */
 
-  // 호텔별 알림 기준 시간 (hotels.checkin_alert_minutes, 기본 120분)
-  const { data: hotels } = await service
-    .from('hotels')
-    .select('id, checkin_alert_minutes')
+const UNFINISHED_STATUSES = ['dirty', 'cleaning']
+/** 오래된 미입력 데이터로 인한 알림 폭주를 막는 상한 */
+const OVERDUE_LOOKBACK_HOURS = 24
 
-  const alertMinutesByHotel = new Map<string, number>()
-  for (const h of hotels ?? []) {
-    alertMinutesByHotel.set(h.id, h.checkin_alert_minutes ?? DEFAULT_ALERT_MINUTES)
-  }
+type AlertType = 'urgent_2h' | 'overdue'
 
-  const maxMinutes = Math.max(
-    DEFAULT_ALERT_MINUTES,
-    ...Array.from(alertMinutesByHotel.values()),
-  )
-  const windowEnd = new Date(now.getTime() + maxMinutes * 60 * 1000)
+interface RoomRow {
+  id: string
+  hotel_id: string
+  number: string
+  checkin_time: string | null
+}
 
-  // 후보: checkin_time이 [now, now + max window] 안이고, 완료/점검이 아닌 방
-  const { data: rooms } = await service
-    .from('rooms')
-    .select('id, hotel_id, number, checkin_time')
-    .in('status', ['dirty', 'cleaning'])
-    .gte('checkin_time', now.toISOString())
-    .lte('checkin_time', windowEnd.toISOString())
-    .is('deleted_at', null)
-
-  // T-194: 체크인 시간이 이미 지난 미완료 방 — urgent_2h와 독립적으로 1회 알림
-  // 최근 24시간 내 초과분만 대상 (오래된 미입력 데이터로 인한 알림 폭주 방지)
-  const overdueSince = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  const { data: overdueRooms } = await service
-    .from('rooms')
-    .select('id, hotel_id, number, checkin_time')
-    .in('status', ['dirty', 'cleaning'])
-    .lt('checkin_time', now.toISOString())
-    .gte('checkin_time', overdueSince.toISOString())
-    .is('deleted_at', null)
-
-  let overdueCount = 0
-  if (overdueRooms?.length) {
-    const { data: existingOverdue } = await service
-      .from('room_logs')
-      .select('room_id')
-      .in('room_id', overdueRooms.map(r => r.id))
-      .eq('alert_type', 'overdue')
-    const overdueAlerted = new Set(existingOverdue?.map(a => a.room_id) ?? [])
-
-    for (const room of overdueRooms.filter(r => !overdueAlerted.has(r.id))) {
-      const { error: logError } = await service.from('room_logs').insert({
-        room_id: room.id,
-        status: 'dirty',
-        changed_by: 'system',
-        alert_type: 'overdue',
-      })
-      if (logError) continue
-
-      const checkinTime = new Date(room.checkin_time!).toLocaleTimeString('ko-KR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-      await sendPushToAdmin(room.hotel_id, {
-        title: '🚨 체크인 시간 초과',
-        body: `${room.number}호 미완료 — 체크인 ${checkinTime} 경과`,
-        url: '/admin',
-        tag: `overdue-alert-${room.id}`,
-      }).catch(() => {})
-      overdueCount++
-    }
-  }
-
-  // 호텔별 기준 시간 적용: checkin_time <= now + checkin_alert_minutes
-  const candidates = (rooms ?? []).filter(room => {
-    if (!room.checkin_time) return false
-    const minutes = alertMinutesByHotel.get(room.hotel_id) ?? DEFAULT_ALERT_MINUTES
-    const alertWindowEnd = now.getTime() + minutes * 60 * 1000
-    return new Date(room.checkin_time).getTime() <= alertWindowEnd
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ko-KR', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
   })
+}
 
-  if (!candidates.length) return NextResponse.json({ alerted: 0, overdue: overdueCount })
+function describeMinutes(minutes: number): string {
+  return minutes >= 60 ? `${Math.round(minutes / 60)}시간` : `${minutes}분`
+}
 
-  // room_logs alert_type='urgent_2h' 중복 방지
-  const { data: existingAlerts } = await service
+/** 이미 같은 종류의 알림을 받은 방을 제외한다. */
+async function filterUnalerted(
+  service: SupabaseClient,
+  rooms: RoomRow[],
+  alertType: AlertType,
+): Promise<RoomRow[]> {
+  if (!rooms.length) return []
+
+  const { data } = await service
     .from('room_logs')
     .select('room_id')
-    .in('room_id', candidates.map(r => r.id))
-    .eq('alert_type', 'urgent_2h')
+    .in('room_id', rooms.map(r => r.id))
+    .eq('alert_type', alertType)
 
-  const alertedRoomIds = new Set(existingAlerts?.map(a => a.room_id) ?? [])
-  const toAlert = candidates.filter(r => !alertedRoomIds.has(r.id))
+  const alerted = new Set((data ?? []).map(a => a.room_id))
+  return rooms.filter(r => !alerted.has(r.id))
+}
 
+/** 중복 방지 로그를 먼저 남기고 푸시를 보낸다. 실제 발송한 건수를 돌려준다. */
+async function dispatch(
+  service: SupabaseClient,
+  rooms: RoomRow[],
+  alertType: AlertType,
+  message: (room: RoomRow) => { title: string; body: string },
+): Promise<number> {
   let count = 0
-  for (const room of toAlert) {
-    // Log alert to prevent duplicate
-    const { error: logError } = await service.from('room_logs').insert({
+
+  for (const room of rooms) {
+    const { error } = await service.from('room_logs').insert({
       room_id: room.id,
       status: 'dirty',
       changed_by: 'system',
-      alert_type: 'urgent_2h',
+      alert_type: alertType,
     })
-    if (logError) continue // 로그 실패 시 발송 생략 (다음 주기에 재시도)
+    if (error) continue // 로그 실패 시 발송 생략 — 다음 주기에 재시도
 
-    // Send push to admin
-    const checkinTime = new Date(room.checkin_time!).toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-    const minutes = alertMinutesByHotel.get(room.hotel_id) ?? DEFAULT_ALERT_MINUTES
     await sendPushToAdmin(room.hotel_id, {
-      title: `⚠️ 체크인 ${minutes >= 60 ? `${Math.round(minutes / 60)}시간` : `${minutes}분`} 전`,
-      body: `${room.number}호 미완료 — 체크인 ${checkinTime}`,
+      ...message(room),
       url: '/admin',
-      tag: `checkin-alert-${room.id}`,
+      tag: `${alertType}-${room.id}`,
     }).catch(() => {})
     count++
   }
 
-  return NextResponse.json({ alerted: count, overdue: overdueCount })
+  return count
+}
+
+async function getHandler(request: NextRequest) {
+  const { service } = requireCron(request)
+  const now = new Date()
+
+  // 호텔별 알림 기준 시간
+  const { data: hotels } = await service.from('hotels').select('id, checkin_alert_minutes')
+  const alertMinutes = new Map<string, number>(
+    (hotels ?? []).map(h => [h.id, h.checkin_alert_minutes ?? DEFAULT_CHECKIN_ALERT_MINUTES]),
+  )
+  const minutesFor = (hotelId: string) =>
+    alertMinutes.get(hotelId) ?? DEFAULT_CHECKIN_ALERT_MINUTES
+
+  // 가장 넓은 기준으로 후보를 한 번에 가져온 뒤 호텔별 기준으로 좁힌다
+  const maxMinutes = Math.max(
+    DEFAULT_CHECKIN_ALERT_MINUTES,
+    ...Array.from(alertMinutes.values()),
+  )
+  const windowEnd = new Date(now.getTime() + maxMinutes * 60_000)
+
+  const [{ data: upcoming }, { data: overdue }] = await Promise.all([
+    service
+      .from('rooms')
+      .select('id, hotel_id, number, checkin_time')
+      .in('status', UNFINISHED_STATUSES)
+      .gte('checkin_time', now.toISOString())
+      .lte('checkin_time', windowEnd.toISOString())
+      .is('deleted_at', null),
+    service
+      .from('rooms')
+      .select('id, hotel_id, number, checkin_time')
+      .in('status', UNFINISHED_STATUSES)
+      .lt('checkin_time', now.toISOString())
+      .gte('checkin_time', hoursAgo(OVERDUE_LOOKBACK_HOURS, now).toISOString())
+      .is('deleted_at', null),
+  ])
+
+  const overdueRooms = await filterUnalerted(service, (overdue ?? []) as RoomRow[], 'overdue')
+  const overdueCount = await dispatch(service, overdueRooms, 'overdue', room => ({
+    title: '🚨 체크인 시간 초과',
+    body: `${room.number}호 미완료 — 체크인 ${formatTime(room.checkin_time!)} 경과`,
+  }))
+
+  // 호텔별 기준 적용: checkin_time <= now + checkin_alert_minutes
+  const candidates = ((upcoming ?? []) as RoomRow[]).filter(room => {
+    if (!room.checkin_time) return false
+    return new Date(room.checkin_time).getTime() <= now.getTime() + minutesFor(room.hotel_id) * 60_000
+  })
+
+  const toAlert = await filterUnalerted(service, candidates, 'urgent_2h')
+  const alerted = await dispatch(service, toAlert, 'urgent_2h', room => ({
+    title: `⚠️ 체크인 ${describeMinutes(minutesFor(room.hotel_id))} 전`,
+    body: `${room.number}호 미완료 — 체크인 ${formatTime(room.checkin_time!)}`,
+  }))
+
+  return NextResponse.json({ alerted, overdue: overdueCount })
 }
 
 export const GET = withApiError(getHandler)

@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { withApiError } from '@/lib/api-error'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { COOKIES, isLocale } from '@/lib/constants'
+
+const ONE_YEAR_SECONDS = 60 * 60 * 24 * 365
 
 async function postHandler(request: NextRequest) {
-  const { locale } = await request.json() as { locale: string }
-  const allowed = ['ko', 'en', 'vi']
-  if (!allowed.includes(locale)) return NextResponse.json({ error: 'invalid', code: 'invalid' }, { status: 400 })
+  const { locale } = await request.json() as { locale?: string }
+  if (!isLocale(locale)) throw ApiError.badRequest('지원하지 않는 언어입니다.')
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('roomly_locale', locale, { path: '/', maxAge: 60 * 60 * 24 * 365 })
+  response.cookies.set(COOKIES.locale, locale, { path: '/', maxAge: ONE_YEAR_SECONDS })
   return response
 }
 

@@ -3,20 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-
-const C = {
-  bg:      '#0B1215',
-  surface: '#17171B',
-  card:    '#1A1C20',
-  border:  '#212427',
-  text:    '#F2F3F4',
-  textMid: '#8A8F98',
-  textDim: '#4A4F58',
-  accent:  '#5e6ad2',
-  green:   '#34d399',
-  red:     '#f87171',
-  gold:    '#C9A465',
-}
+import { C } from '@/lib/theme'
 
 function RoomlyMark({ size = 32 }: { size?: number }) {
   const s = size / 32

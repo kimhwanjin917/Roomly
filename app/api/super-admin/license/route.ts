@@ -1,42 +1,35 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { randomBytes } from 'crypto'
-import { withApiError } from '@/lib/api-error'
+import { requireSuperAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
 
-function verifySession() {
-  const cookieStore = cookies()
-  const session = cookieStore.get('super_admin_session')?.value
-  return session === process.env.SUPER_ADMIN_PASSWORD_HASH
-}
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-)
-
-async function postHandler() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
-
-  const part1 = randomBytes(3).toString('hex').toUpperCase()
-  const part2 = randomBytes(3).toString('hex').toUpperCase()
-  const key = `ROOMLY-${part1}-${part2}`
-
-  const { error } = await supabaseAdmin.from('licenses').insert({ key })
-  if (error) return NextResponse.json({ error: error.message, code: 'server_error' }, { status: 500 })
-
-  return NextResponse.json({ key })
+function generateLicenseKey(): string {
+  const part = () => randomBytes(3).toString('hex').toUpperCase()
+  return `ROOMLY-${part()}-${part()}`
 }
 
 async function getHandler() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
+  const { service } = requireSuperAdmin()
 
-  const { data } = await supabaseAdmin
+  const { data } = await service
     .from('licenses')
     .select('id, key, created_at, used_at, hotel_id')
     .order('created_at', { ascending: false })
 
   return NextResponse.json({ licenses: data ?? [] })
+}
+
+async function postHandler() {
+  const { service } = requireSuperAdmin()
+
+  const key = generateLicenseKey()
+  const { error } = await service.from('licenses').insert({ key })
+  if (error) {
+    console.error('[super-admin/license POST]', error)
+    throw ApiError.internal('라이선스 발급에 실패했습니다.')
+  }
+
+  return NextResponse.json({ key })
 }
 
 export const GET = withApiError(getHandler)

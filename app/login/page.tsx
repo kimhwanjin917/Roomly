@@ -2,22 +2,8 @@
 
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-
-const C = {
-  bg:      '#0B1215',
-  surface: '#17171B',
-  card:    '#1A1C20',
-  border:  '#212427',
-  text:    '#F2F3F4',
-  textMid: '#8A8F98',
-  textDim: '#4A4F58',
-  accent:  '#5e6ad2',
-  green:   '#34d399',
-  amber:   '#fbbf24',
-  red:     '#f87171',
-}
+import { C } from '@/lib/theme'
 
 function RoomlyMark({ size = 32 }: { size?: number }) {
   const s = size / 32
@@ -71,14 +57,30 @@ function LoginForm() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      setError('이메일 또는 비밀번호를 확인해주세요.')
+
+    // 클라이언트에서 직접 Supabase에 로그인하면 서버의 실패 횟수 잠금이 우회된다.
+    // /api/auth/login이 세션 쿠키까지 세팅하므로 이 경로로만 로그인한다.
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError(data.error ?? '이메일 또는 비밀번호를 확인해주세요.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      setError('로그인 중 오류가 발생했습니다. 다시 시도해주세요.')
       setLoading(false)
       return
     }
+
+    // 서버가 세팅한 세션 쿠키를 클라이언트가 즉시 인지하도록 새로고침한다
     router.push('/admin')
+    router.refresh()
   }
 
   return (

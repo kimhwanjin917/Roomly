@@ -1,14 +1,18 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { createClientWithToken } from '@/lib/supabase/client'
+import { useState, useCallback } from 'react'
+import { useToast } from '@/lib/hooks/useToast'
+import { usePush } from '@/lib/hooks/usePush'
+import { useNow, useOnlineStatus, useRealtimeRefetch } from '@/lib/hooks/useLive'
+import { isUrgent, isFinished, fmtTime, typeLabel } from '@/lib/rooms'
+import type { RoomStatus } from '@/lib/constants'
 
 type Room = {
   id: string
   number: string
   floor: number
   type: string
-  status: 'dirty' | 'cleaning' | 'done' | 'inspect'
+  status: RoomStatus
   checkin_time: string | null
 }
 
@@ -18,25 +22,7 @@ type Assignment = {
   rooms: Room
 }
 
-type Toast = { msg: string; type: 'error' | 'success' }
-
-const TYPE_LABELS: Record<string, string> = {
-  single: '싱글', double: '더블', suite: '스위트', other: '기타',
-}
-
-const ALERT_MINUTES = Number(process.env.NEXT_PUBLIC_CHECKIN_ALERT_MINUTES ?? 120)
-
-function isUrgent(room: Room, now: Date) {
-  if (!room.checkin_time) return false
-  if (room.status === 'done' || room.status === 'inspect') return false
-  const alertAt = new Date(new Date(room.checkin_time).getTime() - ALERT_MINUTES * 60 * 1000)
-  return now >= alertAt
-}
-
-function fmtTime(iso: string | null) {
-  if (!iso) return null
-  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
-}
+const WATCHED_TABLES = ['rooms', 'assignments'] as const
 
 interface Props {
   staffId: string
@@ -46,107 +32,32 @@ interface Props {
   token: string
 }
 
-type PushState = 'idle' | 'subscribed' | 'denied' | 'unsupported'
-
 export default function WorkerDashboard({ staffId, hotelId, staffName, initialAssignments, token }: Props) {
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
-  const [now, setNow] = useState(new Date())
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
-  const [toast, setToast] = useState<Toast | null>(null)
   const [maintRoom, setMaintRoom] = useState<Assignment | null>(null)
   const [maintDesc, setMaintDesc] = useState('')
   const [maintSaving, setMaintSaving] = useState(false)
   const [supplyNote, setSupplyNote] = useState('')
   const [supplyEnabled, setSupplyEnabled] = useState(false)
-  const [isOnline, setIsOnline] = useState(true)
-  const [pushState, setPushState] = useState<PushState>('unsupported')
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => {
-    if (typeof Notification === 'undefined' || !('serviceWorker' in navigator)) {
-      setPushState('unsupported')
-      return
-    }
-    if (Notification.permission === 'granted') {
-      setPushState('subscribed')
-    } else if (Notification.permission === 'denied') {
-      setPushState('denied')
-    } else {
-      setPushState('idle')
-    }
-  }, [])
-
-  async function subscribePush() {
-    const permission = await Notification.requestPermission()
-    if (permission !== 'granted') { setPushState('denied'); return }
-    const reg = await navigator.serviceWorker.ready
-    const sub = await reg.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-    })
-    await fetch('/api/push/subscribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subscription: sub.toJSON(), staffId, hotelId, isAdmin: false }),
-    })
-    setPushState('subscribed')
-  }
-
-  async function unsubscribePush() {
-    const reg = await navigator.serviceWorker.ready
-    const sub = await reg.pushManager.getSubscription()
-    if (sub) {
-      await fetch('/api/push/subscribe', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ endpoint: sub.endpoint }),
-      })
-      await sub.unsubscribe()
-    }
-    setPushState('idle')
-  }
-
-  function showToast(msg: string, type: Toast['type'] = 'error') {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, type })
-    toastTimer.current = setTimeout(() => setToast(null), 3000)
-  }
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60_000)
-    return () => clearInterval(t)
-  }, [])
+  const now = useNow()
+  const { toast, showToast } = useToast()
+  const { state: pushState, toggle: togglePush } = usePush({ hotelId, staffId })
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch(`/api/worker/assignments?staffId=${staffId}`)
+      const res = await fetch('/api/worker/assignments')
       if (res.ok) setAssignments(await res.json())
     } catch {
       // 네트워크 오류 시 기존 데이터 유지
     }
-  }, [staffId])
+  }, [])
 
-  useEffect(() => {
-    const handleOnline = () => { setIsOnline(true); refetch() }
-    const handleOffline = () => setIsOnline(false)
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [refetch])
-
-  useEffect(() => {
-    const supabase = createClientWithToken(token)
-    const channel = supabase.channel('worker-realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, refetch)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, refetch)
-      .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [refetch, token])
+  const isOnline = useOnlineStatus(refetch)
+  useRealtimeRefetch({ channel: 'worker-realtime', tables: WATCHED_TABLES, onChange: refetch, token })
 
   async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
     const roomId = assignment.rooms.id
@@ -168,8 +79,8 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
 
   const sorted = [...assignments].sort((a, b) => {
     const ra = a.rooms, rb = b.rooms
-    const doneA = ra.status === 'done' || ra.status === 'inspect'
-    const doneB = rb.status === 'done' || rb.status === 'inspect'
+    const doneA = isFinished(ra.status)
+    const doneB = isFinished(rb.status)
     if (doneA !== doneB) return doneA ? 1 : -1
     const urgA = isUrgent(ra, now), urgB = isUrgent(rb, now)
     if (urgA !== urgB) return urgA ? -1 : 1
@@ -179,7 +90,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
     return 0
   })
 
-  const doneCount = assignments.filter(a => a.rooms.status === 'done' || a.rooms.status === 'inspect').length
+  const doneCount = assignments.filter(a => isFinished(a.rooms.status)).length
   const totalCount = assignments.length
   const allDone = totalCount > 0 && doneCount === totalCount
 
@@ -202,7 +113,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
             {/* 알림 버튼 */}
             {pushState !== 'unsupported' && (
               <button
-                onClick={pushState === 'idle' ? subscribePush : pushState === 'subscribed' ? unsubscribePush : undefined}
+                onClick={togglePush}
                 disabled={pushState === 'denied'}
                 title={pushState === 'denied' ? '브라우저 알림이 차단됨' : undefined}
                 className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors relative ${
@@ -318,7 +229,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                           <span className="px-2 py-0.5 bg-amber-50 text-amber-600 text-[10px] font-bold rounded-full">청소중</span>
                         )}
                       </div>
-                      <p className="text-xs text-[#B0B8C1] mt-0.5">{room.floor}층 · {TYPE_LABELS[room.type] ?? room.type}</p>
+                      <p className="text-xs text-[#B0B8C1] mt-0.5">{room.floor}층 · {typeLabel(room.type)}</p>
                     </div>
                   </div>
                   {room.checkin_time && (

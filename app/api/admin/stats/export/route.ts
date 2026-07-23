@@ -1,38 +1,66 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/auth'
+import { ApiError, withApiError } from '@/lib/api-error'
+import { kstDayRange, kstDateStr } from '@/lib/date'
 
-function getAdmin() {
-  return createSupabaseClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
+// 세션 쿠키/헤더를 읽는 라우트 — 빌드 시 정적 프리렌더를 시도하지 않도록 명시한다
+export const dynamic = 'force-dynamic'
+
+
+/**
+ * 객실 상태 변경 이력 CSV 내보내기.
+ *
+ * 쿼리: `?date=YYYY-MM-DD` (하루) 또는 `?from=...&to=...` (기간, KST 기준).
+ * 호텔은 세션에서만 결정된다 — 쿼리 파라미터로 다른 호텔을 지정할 수 없다.
+ */
+
+const HEADER = ['일시', '호수', '층', '타입', '상태', '변경자', '메모'] as const
+
+interface LogRow {
+  status: string | null
+  changed_by: string | null
+  memo: string | null
+  changed_at: string | null
+  rooms: { number: string; floor: number; type: string } | null
 }
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = req.nextUrl
-  const hotelId = searchParams.get('hotelId')
-  const from = searchParams.get('from')
-  const to = searchParams.get('to')
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
-  if (!hotelId || !from || !to) {
-    return NextResponse.json({ error: '파라미터 누락' }, { status: 400 })
+function csvCell(value: unknown): string {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`
+}
+
+async function getHandler(request: NextRequest) {
+  const { hotelId, service } = await requireAdmin()
+
+  const params = request.nextUrl.searchParams
+  const date = params.get('date')
+  const from = date ?? params.get('from')
+  const to = date ?? params.get('to')
+
+  if (!from || !to || !DATE_RE.test(from) || !DATE_RE.test(to)) {
+    throw ApiError.badRequest('조회할 날짜를 지정해주세요. (date 또는 from/to, YYYY-MM-DD)')
   }
 
-  const supabase = getAdmin()
+  const { start } = kstDayRange(from)
+  const { end } = kstDayRange(to)
 
-  const { data: logs } = await supabase
+  const { data, error } = await service
     .from('room_logs')
-    .select('id, room_id, status, changed_by, memo, created_at, rooms(number, floor, type)')
-    .eq('hotel_id', hotelId)
-    .gte('created_at', from)
-    .lte('created_at', to + 'T23:59:59Z')
-    .order('created_at', { ascending: true })
+    .select('status, changed_by, memo, changed_at, rooms!inner(hotel_id, number, floor, type)')
+    .eq('rooms.hotel_id', hotelId)
+    .gte('changed_at', start)
+    .lte('changed_at', end)
+    .order('changed_at', { ascending: true })
 
-  if (!logs) return NextResponse.json({ error: 'DB 오류' }, { status: 500 })
+  if (error) {
+    console.error('[stats/export]', error)
+    throw ApiError.internal()
+  }
 
-  const rows = logs.map((l: any) => [
-    l.created_at?.slice(0, 16) ?? '',
+  const logs = (data ?? []) as unknown as LogRow[]
+  const rows = logs.map(l => [
+    l.changed_at ? new Date(l.changed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '',
     l.rooms?.number ?? '',
     l.rooms?.floor ?? '',
     l.rooms?.type ?? '',
@@ -41,15 +69,16 @@ export async function GET(req: NextRequest) {
     l.memo ?? '',
   ])
 
-  const header = ['일시', '호수', '층', '타입', '상태', '변경자', '메모']
-  const csv = [header, ...rows]
-    .map(row => row.map((v: any) => `"${String(v).replace(/"/g, '""')}"`).join(','))
-    .join('\n')
+  // 선행 BOM — Excel이 UTF-8로 인식하게 한다
+  const csv = '﻿' + [HEADER, ...rows].map(row => row.map(csvCell).join(',')).join('\n')
+  const filename = from === to ? `roomly-${from}` : `roomly-${from}_${to}`
 
-  return new NextResponse('﻿' + csv, {
+  return new NextResponse(csv, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="roomly-stats-${from}-${to}.csv"`,
+      'Content-Disposition': `attachment; filename="${filename}.csv"`,
     },
   })
 }
+
+export const GET = withApiError(getHandler)
