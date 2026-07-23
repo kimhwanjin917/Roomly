@@ -148,6 +148,9 @@ interface Props {
   initialRooms: Room[]
   initialAssignments: Assignment[]
   staffList: Staff[]
+  checkinAlertMinutes?: number
+  subscriptionPlan?: string
+  trialEndsAt?: string | null
 }
 
 const inputSt: React.CSSProperties = {

@@ -1,4 +1,17 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+
+type Handler = (req: NextRequest, ctx?: unknown) => Promise<NextResponse>
+
+export function withApiError(handler: Handler): Handler {
+  return async (req, ctx) => {
+    try {
+      return await handler(req, ctx)
+    } catch (err) {
+      console.error('[withApiError]', err)
+      return NextResponse.json({ error: '서버 오류가 발생했습니다.', code: 'INTERNAL_ERROR' }, { status: 500 })
+    }
+  }
+}
 
 export const ApiError = {
   unauthorized: (msg = '인증이 필요합니다.') =>

@@ -23,3 +23,19 @@ export function checkRateLimit(
 
   return { allowed: true, remaining: limit - entry.count }
 }
+
+export type Limiter = { limit: number; windowMs: number }
+
+export const authLimiter: Limiter = { limit: 10, windowMs: 60_000 }
+export const adminLimiter: Limiter = { limit: 60, windowMs: 60_000 }
+export const qrLimiter: Limiter = { limit: 20, windowMs: 60_000 }
+
+export async function checkLimit(
+  limiter: Limiter,
+  key: string,
+  override?: Partial<Limiter>,
+): Promise<boolean> {
+  const { limit, windowMs } = { ...limiter, ...override }
+  const { allowed } = checkRateLimit(key, limit, windowMs)
+  return allowed
+}
