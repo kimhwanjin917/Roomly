@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { NAV as C } from '@/lib/theme'
+import RoomlyMark from '@/components/RoomlyMark'
 
 // Linear exact design tokens
 
@@ -185,16 +186,7 @@ export default function AdminNav() {
           className="flex items-center shrink-0"
           style={{ height: 52, padding: '0 14px', gap: 10, borderBottom: `1px solid ${C.border}` }}
         >
-          <span
-            style={{
-              width: 20, height: 20, borderRadius: 5,
-              background: C.accent,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0,
-            }}
-          >
-            R
-          </span>
+          <RoomlyMark size={20} />
           <span style={{ fontSize: 13, fontWeight: 600, color: C.textActive, letterSpacing: '-0.01em' }}>
             Roomly
           </span>
@@ -239,16 +231,7 @@ export default function AdminNav() {
       <header className="md:hidden sticky top-0 z-10" style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
         <div className="flex items-center justify-between" style={{ padding: '0 20px', height: 48 }}>
           <div className="flex items-center" style={{ gap: 8 }}>
-            <span
-              style={{
-                width: 22, height: 22, borderRadius: 5,
-                background: C.accent,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 10, fontWeight: 700,
-              }}
-            >
-              R
-            </span>
+            <RoomlyMark size={22} />
             <span style={{ fontWeight: 700, color: C.textActive, fontSize: 14, letterSpacing: '-0.01em' }}>Roomly</span>
           </div>
           <button onClick={handleLogout} style={{ fontSize: 12, color: C.text, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
