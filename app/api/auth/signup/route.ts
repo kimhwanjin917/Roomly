@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
     .select('id')
     .single()
   if (hotelErr || !hotel) {
+    console.error('[signup] hotels INSERT 실패:', JSON.stringify(hotelErr))
     return NextResponse.json({ error: '호텔 생성에 실패했습니다.' }, { status: 500 })
   }
 
@@ -42,9 +43,13 @@ export async function POST(request: NextRequest) {
     app_metadata: { hotel_id: hotel.id, role: 'admin' },
   })
   if (authErr || !authUser) {
+    console.error('[signup] auth.admin.createUser 실패:', JSON.stringify(authErr))
     await service.from('hotels').delete().eq('id', hotel.id)
-    const isDuplicate = authErr?.message?.toLowerCase().includes('already registered')
-      || authErr?.message?.toLowerCase().includes('already exists')
+    const msg = authErr?.message?.toLowerCase() ?? ''
+    const isDuplicate = msg.includes('already registered')
+      || msg.includes('already exists')
+      || msg.includes('email_exists')
+      || (authErr as any)?.code === 'email_exists'
     if (isDuplicate) {
       return NextResponse.json({ error: '이미 사용 중인 이메일입니다.' }, { status: 409 })
     }
