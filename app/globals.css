@@ -119,13 +119,15 @@
 .reveal-delay-4 { transition-delay: 0.40s; }
 .reveal-stagger  { transition-delay: 0.15s; }
 
-/* Accessibility */
+/* Accessibility: 반복되는 부유/스크롤 모션만 끄고, 인트로 리빌·페이드는 그대로 유지 */
 @media (prefers-reduced-motion: reduce) {
-  .reveal, .reveal-clip, .reveal-left, .reveal-right {
-    clip-path: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
+  .reveal, .reveal-left, .reveal-right {
+    transition: opacity 0.5s ease;
   }
-  * { animation-duration: 0.01ms !important; animation-delay: 0ms !important; }
+  .reveal-clip {
+    transition: opacity 0.5s ease;
+  }
+  .motion-loop {
+    animation: none !important;
+  }
 }

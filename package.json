@@ -10,7 +10,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cap:sync": "node scripts/sync-native-version.mjs && cap sync",
+    "cap:assets": "node scripts/generate-icons.js && capacitor-assets generate --iconBackgroundColor #2563EB --iconBackgroundColorDark #1d4ed8 --splashBackgroundColor #2563EB --splashBackgroundColorDark #1e3a8a",
+    "cap:android": "npm run cap:sync && cap open android",
+    "cap:ios": "npm run cap:sync && cap open ios",
+    "cap:build:android": "npm run cap:sync && cd android && gradlew bundleRelease"
   },
   "repository": {
     "type": "git",
@@ -26,6 +31,11 @@
   "homepage": "https://github.com/kimhwanjin917/Roomly#readme",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",
+    "@capacitor/android": "^8.4.1",
+    "@capacitor/app": "^8.1.0",
+    "@capacitor/core": "^8.4.1",
+    "@capacitor/ios": "^8.4.1",
+    "@capacitor/push-notifications": "^8.1.1",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
@@ -50,6 +60,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.1",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^20.19.43",
     "@types/qrcode": "^1.5.6",
