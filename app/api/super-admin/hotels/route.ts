@@ -1,22 +1,22 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { verifySuperAdminToken } from '@/lib/super-admin-auth'
+import { withApiError } from '@/lib/api-error'
 
 function verifySession() {
   const cookieStore = cookies()
-  const token = cookieStore.get('super_admin_session')?.value
-  if (!token) return false
-  return verifySuperAdminToken(token)
+  const session = cookieStore.get('super_admin_session')?.value
+  if (!session) return false
+  return session === process.env.SUPER_ADMIN_PASSWORD_HASH
 }
 
-export async function GET() {
-  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+const supabaseAdmin = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+)
 
-  const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  )
+async function getHandler() {
+  if (!verifySession()) return NextResponse.json({ error: 'Unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const { data: hotels } = await supabaseAdmin
     .from('hotels')
@@ -40,3 +40,5 @@ export async function GET() {
     })),
   })
 }
+
+export const GET = withApiError(getHandler)

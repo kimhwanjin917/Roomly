@@ -1,79 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { sendEmail } from '@/lib/email'
-import TrialEndingEmail from '@/emails/TrialEndingEmail'
+import { TrialEndingEmail } from '@/emails/TrialEndingEmail'
+import { withApiError } from '@/lib/api-error'
 
-export async function GET(request: NextRequest) {
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000
+
+/** KST 기준 YYYY-MM-DD */
+function kstDateStr(d: Date): string {
+  return new Date(d.getTime() + KST_OFFSET_MS).toISOString().slice(0, 10)
+}
+
+/**
+ * T-087: 무료체험(3개월) 만료 알림 크론
+ * trial_ends_at이 KST 날짜 기준 D-3 또는 D-1인 trial 호텔에 알림 이메일 발송.
+ * email_logs로 같은 날 중복 발송 방지.
+ */
+async function getHandler(request: NextRequest) {
   const authHeader = request.headers.get('authorization')
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   const service = createServiceClient()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://roomly.app'
+  const todayKst = kstDateStr(new Date())
 
-  const now = new Date()
-  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-
-  // trial_ends_at이 오늘~7일 후 사이인 호텔 (아직 trial 상태)
   const { data: hotels } = await service
     .from('hotels')
-    .select('id, name, trial_ends_at, created_at, admin_email')
+    .select('id, name, trial_ends_at')
     .eq('subscription_plan', 'trial')
-    .gte('trial_ends_at', now.toISOString())
-    .lte('trial_ends_at', sevenDaysLater.toISOString())
+    .not('trial_ends_at', 'is', null)
 
   if (!hotels?.length) return NextResponse.json({ sent: 0 })
 
+  // 오늘(KST) 발송된 이메일 로그 — 같은 날 중복 발송 방지
+  const todayStartUtc = new Date(new Date(`${todayKst}T00:00:00+09:00`)).toISOString()
+  const { data: todayLogs } = await service
+    .from('email_logs')
+    .select('hotel_id, subject')
+    .gte('created_at', todayStartUtc)
+
+  // 관리자 이메일 조회
+  const {
+    data: { users },
+  } = await service.auth.admin.listUsers()
+
   let sent = 0
   for (const hotel of hotels) {
-    if (!hotel.admin_email) continue
+    const endsAtKst = kstDateStr(new Date(hotel.trial_ends_at as string))
 
-    const trialEnd = new Date(hotel.trial_ends_at)
-    const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (24 * 60 * 60 * 1000))
+    // KST 날짜 기준 남은 일수
+    const daysLeft = Math.round(
+      (Date.parse(`${endsAtKst}T00:00:00Z`) - Date.parse(`${todayKst}T00:00:00Z`)) / 86_400_000
+    )
+    if (daysLeft !== 3 && daysLeft !== 1) continue
 
-    const { data: assignments } = await service
-      .from('assignments')
-      .select('staff_id, assigned_at, completed_at, staff:staff_id(name), rooms!inner(hotel_id)')
-      .eq('rooms.hotel_id', hotel.id)
-      .not('completed_at', 'is', null)
+    const adminUser = users.find((u) => u.app_metadata?.hotel_id === hotel.id)
+    if (!adminUser?.email) continue
 
-    const staffMap = new Map<string, { name: string; count: number; totalMinutes: number }>()
-    for (const a of assignments ?? []) {
-      const id = a.staff_id ?? 'guest'
-      const name = (a.staff as unknown as { name: string } | null)?.name ?? '게스트'
-      if (!staffMap.has(id)) staffMap.set(id, { name, count: 0, totalMinutes: 0 })
-      const s = staffMap.get(id)!
-      s.count++
-      if (a.completed_at && a.assigned_at) {
-        s.totalMinutes += (new Date(a.completed_at).getTime() - new Date(a.assigned_at).getTime()) / 60000
-      }
-    }
+    const subject = `[Roomly] 무료체험이 ${daysLeft}일 후 종료됩니다 — ${hotel.name}`
 
-    const totalCompleted = assignments?.length ?? 0
-    const totalMinutes = Array.from(staffMap.values()).reduce((sum, s) => sum + s.totalMinutes, 0)
-    const avgMinutes = totalCompleted > 0 ? Math.round(totalMinutes / totalCompleted) : null
-    const topStaff = Array.from(staffMap.values())
-      .sort((a, b) => {
-        const aAvg = a.count > 0 ? a.totalMinutes / a.count : 999
-        const bAvg = b.count > 0 ? b.totalMinutes / b.count : 999
-        return aAvg - bAvg
-      })[0]?.name ?? null
+    // 오늘 같은 제목으로 이미 발송했으면 스킵
+    const alreadySent = (todayLogs ?? []).some(
+      (log) => log.hotel_id === hotel.id && log.subject === subject
+    )
+    if (alreadySent) continue
 
     await sendEmail({
-      to: hotel.admin_email,
-      subject: `[Roomly] 3개월 체험이 ${daysLeft}일 후 종료됩니다`,
+      to: adminUser.email,
+      subject,
+      hotelId: hotel.id,
       react: TrialEndingEmail({
-        hotelName: hotel.name,
-        appUrl,
+        hotelName: hotel.name as string,
         daysLeft,
-        totalCompleted,
-        avgMinutes,
-        topStaff,
+        endsAt: endsAtKst,
       }),
-    }).catch(() => {})
+    })
     sent++
   }
 
   return NextResponse.json({ sent })
 }
+
+export const GET = withApiError(getHandler)

@@ -54,6 +54,25 @@ export function DailyReportEmail({
 
           <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
 
+          {/* AI 요약 (있을 때만) */}
+          {aiSummary && (
+            <Section
+              style={{
+                backgroundColor: '#eff6ff',
+                borderRadius: '8px',
+                padding: '4px 16px',
+                marginBottom: '24px',
+              }}
+            >
+              <Text style={{ fontSize: '12px', fontWeight: 'bold', color: '#2563eb', marginBottom: '4px' }}>
+                AI 요약
+              </Text>
+              <Text style={{ fontSize: '14px', color: '#1e3a5f', lineHeight: '1.6', marginTop: '0' }}>
+                {aiSummary}
+              </Text>
+            </Section>
+          )}
+
           {/* Summary stats */}
           <Section>
             <Text style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '15px', marginBottom: '12px' }}>

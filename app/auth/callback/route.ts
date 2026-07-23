@@ -8,12 +8,15 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = createClient()
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      if (type === 'recovery') {
+        return NextResponse.redirect(`${origin}/reset-password`)
+      }
+      // type=signup 등 이메일 인증 완료
+      return NextResponse.redirect(`${origin}/login?verified=1`)
+    }
   }
 
-  if (type === 'recovery') {
-    return NextResponse.redirect(`${origin}/reset-password`)
-  }
-
-  return NextResponse.redirect(`${origin}/login?verified=1`)
+  return NextResponse.redirect(`${origin}/login?error=auth_callback`)
 }

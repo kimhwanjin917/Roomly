@@ -1,5 +1,6 @@
--- ============================================================
--- Roomly 004_billing — 결제 관련 스키마
--- ⚠️ 이 파일은 005_patch.sql로 대체됨. 직접 실행하지 말 것.
--- 토스페이먼츠 관련 컬럼은 005_patch.sql에서 처리.
--- ============================================================
+ALTER TABLE hotels
+  ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT,
+  ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT,
+  ADD COLUMN IF NOT EXISTS plan_expires_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS subscription_plan TEXT NOT NULL DEFAULT 'trial'
+    CHECK (subscription_plan IN ('trial', 'starter', 'standard', 'pro'));

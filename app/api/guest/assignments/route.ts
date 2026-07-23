@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
+import { withApiError } from '@/lib/api-error'
 
-export async function GET(request: NextRequest) {
+async function getHandler(request: NextRequest) {
   const sessionCookie = request.cookies.get('roomly_guest_session')
-  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!sessionCookie) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   let payload: jwt.JwtPayload
   try {
     payload = jwt.verify(sessionCookie.value, process.env.JWT_SECRET!) as jwt.JwtPayload
   } catch {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
   }
 
   const hotelId = payload.app_metadata?.hotel_id as string
@@ -35,3 +36,5 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json(data ?? [])
 }
+
+export const GET = withApiError(getHandler)

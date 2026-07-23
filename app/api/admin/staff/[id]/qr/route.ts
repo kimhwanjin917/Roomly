@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
+import { withApiError } from '@/lib/api-error'
 
 async function getStaff(staffId: string, hotelId: string) {
   const service = createServiceClient()
@@ -13,10 +14,7 @@ async function getStaff(staffId: string, hotelId: string) {
   return data
 }
 
-function makeToken(
-  staff: { auth_id: string; qr_version: number; id: string; role: string },
-  hotelId: string
-) {
+function makeToken(staff: { auth_id: string; qr_version: number; id: string; role: string }, hotelId: string) {
   return jwt.sign(
     {
       sub: staff.auth_id,
@@ -37,14 +35,14 @@ function makeToken(
 }
 
 // GET — view current QR without regenerating
-export async function GET(_request: NextRequest, { params }: { params: { id: string } }) {
+async function getHandler(_request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
   const staff = await getStaff(params.id, hotelId)
-  if (!staff) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (!staff) return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
 
   const token = makeToken(staff, hotelId)
   const qrUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/qr?token=${token}`
@@ -52,16 +50,16 @@ export async function GET(_request: NextRequest, { params }: { params: { id: str
 }
 
 // POST — increment qr_version and return new QR (invalidates old one)
-export async function POST(_request: NextRequest, { params }: { params: { id: string } }) {
+async function postHandler(_request: NextRequest, { params }: { params: { id: string } }) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!user) return NextResponse.json({ error: 'unauthorized', code: 'unauthorized' }, { status: 401 })
 
   const hotelId = user.app_metadata?.hotel_id as string
   const service = createServiceClient()
 
   const staff = await getStaff(params.id, hotelId)
-  if (!staff) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  if (!staff) return NextResponse.json({ error: 'forbidden', code: 'forbidden' }, { status: 403 })
 
   const newVersion = staff.qr_version + 1
   await service.from('staff').update({ qr_version: newVersion }).eq('id', params.id)
@@ -70,3 +68,6 @@ export async function POST(_request: NextRequest, { params }: { params: { id: st
   const qrUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/qr?token=${token}`
   return NextResponse.json({ qrUrl })
 }
+
+export const GET = withApiError(getHandler)
+export const POST = withApiError(postHandler)

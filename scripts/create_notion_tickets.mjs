@@ -1,4 +1,10 @@
-const TOKEN = 'ntn_h40993625448BPM2GRFXYnGK6zF0dOnhv8QMfHdMOA18J0';
+// 사용법: NOTION_TOKEN=ntn_... node scripts/create_notion_tickets.mjs
+// 토큰은 노션 통합(Roomly Dev)에서 발급 — 절대 커밋하지 않는다.
+const TOKEN = process.env.NOTION_TOKEN;
+if (!TOKEN) {
+  console.error('NOTION_TOKEN 환경변수가 필요합니다.');
+  process.exit(1);
+}
 const PAGE_ID = '3870f4574ef0804b84f3f737f733f1f9';
 
 async function api(method, path, body) {

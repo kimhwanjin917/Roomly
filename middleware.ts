@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 import { jwtVerify } from 'jose'
+import { authLimiter, adminLimiter, qrLimiter, checkLimit } from '@/lib/rateLimit'
 
 function getJwtSecret() {
   return new TextEncoder().encode(process.env.JWT_SECRET!)
@@ -11,34 +12,46 @@ export async function middleware(request: NextRequest) {
 
   // /admin/* — Supabase Auth 세션 필요
   if (pathname.startsWith('/admin') || pathname.startsWith('/api/admin')) {
-    const { supabaseResponse, user, supabase } = await updateSession(request)
+    const { supabaseResponse, user } = await updateSession(request)
     if (!user) {
       const url = request.nextUrl.clone()
       url.pathname = '/login'
       return NextResponse.redirect(url)
     }
 
-    // 플랜 만료 체크 — 페이지 라우트에만 적용 (API 라우트 및 /admin/billing/* 제외)
+    // /api/admin/* — Rate limit (60회/분 per user, T-070)
+    if (pathname.startsWith('/api/admin')) {
+      const allowed = await checkLimit(adminLimiter, `admin:${user.id}`, {
+        limit: 60,
+        windowMs: 60_000,
+      })
+      if (!allowed) {
+        return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429 })
+      }
+    }
+
+    // 플랜 만료 체크 — 페이지 라우트에만 적용 (API 라우트 및 /admin/billing 제외)
     if (
       pathname.startsWith('/admin') &&
       !pathname.startsWith('/api/admin') &&
-      !pathname.startsWith('/admin/billing')
+      pathname !== '/admin/billing'
     ) {
       const hotelId = user.app_metadata?.hotel_id
       if (hotelId) {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+        const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
         try {
-          const { data: hotel } = await supabase
-            .from('hotels')
-            .select('plan_expires_at, trial_ends_at')
-            .eq('id', hotelId)
-            .single()
-          const now = new Date()
-          const planExpired = hotel?.plan_expires_at && new Date(hotel.plan_expires_at) < now
-          // plan_expires_at이 NULL(체험 중)이면 trial_ends_at으로 만료 체크
-          const trialExpired = !hotel?.plan_expires_at
-            && hotel?.trial_ends_at
-            && new Date(hotel.trial_ends_at) < now
-          if (planExpired || trialExpired) {
+          const res = await fetch(
+            `${supabaseUrl}/rest/v1/hotels?id=eq.${hotelId}&select=plan_expires_at`,
+            {
+              headers: {
+                apikey: serviceKey,
+                Authorization: `Bearer ${serviceKey}`,
+              },
+            }
+          )
+          const [hotel] = await res.json()
+          if (hotel?.plan_expires_at && new Date(hotel.plan_expires_at) < new Date()) {
             const url = request.nextUrl.clone()
             url.pathname = '/admin/billing'
             url.searchParams.set('expired', 'true')
@@ -53,28 +66,22 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  // /api/auth/* — 인증 불필요 (공개 엔드포인트)
+  // /api/auth/* — 인증 불필요 (공개 엔드포인트), Rate limit 적용 (T-070)
   if (pathname.startsWith('/api/auth')) {
-    return NextResponse.next()
-  }
-
-  // /worker/dirty/[staffId] — dirty 역할 전용
-  if (pathname.match(/^\/worker\/dirty\/[^/]+/)) {
-    const workerSession = request.cookies.get('roomly_worker_session')
-    if (!workerSession) return NextResponse.redirect(new URL('/login', request.url))
-    try {
-      const { payload } = await jwtVerify(workerSession.value, getJwtSecret())
-      const staffIdInUrl = pathname.split('/')[3]
-      const staffIdInToken = (payload.app_metadata as any)?.staff_id
-      if (staffIdInToken !== staffIdInUrl) return NextResponse.redirect(new URL('/login', request.url))
-    } catch {
-      return NextResponse.redirect(new URL('/login?error=session_expired', request.url))
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
+    // /api/auth/qr — QR 로그인 전용 리미터 (20회/분 per IP)
+    const isQr = pathname.startsWith('/api/auth/qr')
+    const allowed = isQr
+      ? await checkLimit(qrLimiter, `qr:${ip}`, { limit: 20, windowMs: 60_000 })
+      : await checkLimit(authLimiter, `auth:${ip}`, { limit: 10, windowMs: 60_000 })
+    if (!allowed) {
+      return NextResponse.json({ error: 'rate_limit_exceeded' }, { status: 429 })
     }
     return NextResponse.next()
   }
 
-  // /worker/[staffId] — housekeeping 세션 검증
-  if (pathname.match(/^\/worker\/(?!guest|dirty)[^/]+/)) {
+  // /worker/[staffId] — roomly_worker_session 쿠키 검증
+  if (pathname.match(/^\/worker\/(?!guest)[^/]+/)) {
     const workerSession = request.cookies.get('roomly_worker_session')
     if (!workerSession) {
       return NextResponse.redirect(new URL('/login', request.url))
@@ -87,7 +94,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/login', request.url))
       }
     } catch {
-      return NextResponse.redirect(new URL('/login?error=session_expired', request.url))
+      return NextResponse.redirect(new URL('/login', request.url))
     }
     return NextResponse.next()
   }
@@ -107,7 +114,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // /api/worker/* — roomly_worker_session 필요
-  if (pathname.startsWith('/api/worker/dirty') || pathname.startsWith('/api/worker')) {
+  if (pathname.startsWith('/api/worker')) {
     const workerSession = request.cookies.get('roomly_worker_session')
     if (!workerSession) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
@@ -133,7 +140,6 @@ export const config = {
     '/worker/:path*',
     '/api/admin/:path*',
     '/api/worker/:path*',
-    '/api/worker/dirty/:path*',
     '/api/guest/:path*',
     '/api/auth/:path*',
   ],

@@ -1,4 +1,0 @@
-{
-  "sql.lintingEnabled": false,
-  "sqlLanguageServer.lint.rules.no-empty-query": "off"
-}

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import * as jwt from 'jsonwebtoken'
 import { randomUUID } from 'crypto'
+import { withApiError } from '@/lib/api-error'
 
-export async function POST(request: NextRequest) {
+async function postHandler(request: NextRequest) {
   const { hotelId, code } = await request.json()
 
-  if (!hotelId || !code) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
-  if (!/^[0-9a-f-]{36}$/.test(hotelId)) return NextResponse.json({ error: 'invalid_request' }, { status: 400 })
+  if (!hotelId || !code) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
+  if (!/^[0-9a-f-]{36}$/.test(hotelId)) return NextResponse.json({ error: 'invalid_request', code: 'invalid_request' }, { status: 400 })
 
   const service = createServiceClient()
 
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
     .gt('expires_at', new Date().toISOString())
     .single()
 
-  if (!guestCode) return NextResponse.json({ error: 'invalid_code' }, { status: 401 })
+  if (!guestCode) return NextResponse.json({ error: 'invalid_code', code: 'invalid_code' }, { status: 401 })
 
   const expiresAt = new Date(guestCode.expires_at)
   const expiresInSec = Math.floor((expiresAt.getTime() - Date.now()) / 1000)
@@ -47,3 +48,5 @@ export async function POST(request: NextRequest) {
   })
   return response
 }
+
+export const POST = withApiError(postHandler)

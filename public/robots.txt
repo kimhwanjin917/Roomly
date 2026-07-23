@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /worker/
+Disallow: /super-admin/
+Disallow: /api/
+
+Sitemap: https://roomly.app/sitemap.xml
