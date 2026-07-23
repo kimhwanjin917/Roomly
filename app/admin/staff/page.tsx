@@ -253,7 +253,7 @@ export default function StaffPage() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <h2 style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>일일 근무자 접속 코드</h2>
-              <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>당일 자정 만료 · 카카오톡 또는 문자로 전달</p>
+              <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>당일 자정 만료 · 링크 또는 문자로 전달</p>
             </div>
             {guestCode && (
               <button

@@ -123,7 +123,7 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
         {step === 1 && (
           <div>
             <div className="mb-6">
-              <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">Step 1 of 2</p>
+              <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">1단계 / 2단계</p>
               <h1 className="text-2xl font-bold text-slate-900">객실을 등록해 보세요</h1>
               <p className="text-sm text-slate-500 mt-1.5">나중에 언제든 추가하거나 삭제할 수 있습니다.</p>
             </div>
@@ -298,7 +298,7 @@ export default function OnboardingWizard({ hotelId, hotelName }: Props) {
         {step === 2 && (
           <div>
             <div className="mb-6">
-              <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">Step 2 of 2</p>
+              <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">2단계 / 2단계</p>
               <h1 className="text-2xl font-bold text-slate-900">직원을 추가해 보세요</h1>
               <p className="text-sm text-slate-500 mt-1.5">추가 후 QR 코드를 발급해 직원에게 전달하세요.</p>
             </div>

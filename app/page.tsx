@@ -410,7 +410,7 @@ function DashboardMockup({ activeFeature = 0 }: { activeFeature?: number }) {
 ══════════════════════════════════════════════════════════════ */
 function StickyFeatures() {
   return (
-    <section style={{ padding: '140px 32px', maxWidth: 1200, margin: '0 auto' }}>
+    <section id="features" style={{ padding: '140px 32px', maxWidth: 1200, margin: '0 auto' }}>
       {/* Section heading */}
       <div style={{ textAlign: 'center', marginBottom: 100 }}>
         <p className="reveal-clip" style={{
@@ -513,9 +513,9 @@ export default function LandingPage() {
 
   const ticker = [
     '실시간 객실 현황', '·', 'QR 직원 접속', '·', '체크인 지연 제로',
-    '·', '배정 즉시 알림', '·', '카카오톡 단톡방 대체', '·', '하우스키핑 디지털화', '·',
+    '·', '배정 즉시 알림', '·', '단톡방 대체', '·', '하우스키핑 디지털화', '·',
     '실시간 객실 현황', '·', 'QR 직원 접속', '·', '체크인 지연 제로',
-    '·', '배정 즉시 알림', '·', '카카오톡 단톡방 대체', '·', '하우스키핑 디지털화', '·',
+    '·', '배정 즉시 알림', '·', '단톡방 대체', '·', '하우스키핑 디지털화', '·',
   ]
 
   return (
@@ -622,7 +622,7 @@ export default function LandingPage() {
             animation: 'fadeIn 0.8s ease 1.7s both',
           }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}` }}/>
-            Hotel Housekeeping · Now Live
+            하우스키핑 디지털화 · 무료 체험 중
           </div>
 
           {/* A — Word-by-word headline */}
@@ -662,7 +662,7 @@ export default function LandingPage() {
             animation: 'fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.75s both',
           }}>
             객실 배정·청소·완료 확인까지 실시간으로.<br/>
-            카카오톡 단톡방은 이제 필요 없습니다.
+            단톡방은 이제 필요 없습니다.
           </p>
 
           <div style={{
@@ -706,7 +706,7 @@ export default function LandingPage() {
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
             animation: 'fadeIn 0.6s ease 2.5s both',
           }}>
-            <span style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Scroll</span>
+            <span style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase' }}>스크롤</span>
             <svg viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth={1.5}
               style={{ width: 17, height: 17, animation: 'scrollBounce 2s ease-in-out infinite' }}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
@@ -746,17 +746,18 @@ export default function LandingPage() {
               fontWeight: 900, letterSpacing: '-0.048em',
               lineHeight: 0.96, color: C.text, marginBottom: 44,
             }}>
-              호텔 운영의 80%는<br/>
+              호텔 운영에서<br/>
+              가장 많이 낭비되는 건<br/>
               <span style={{
                 background: `linear-gradient(135deg, ${C.accentHi}, ${C.gold})`,
                 WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              }}>커뮤니케이션 비용</span>입니다
+              }}>커뮤니케이션 시간</span>입니다
             </h2>
             <p className="reveal" style={{
               fontSize: 18, color: C.textMid, lineHeight: 1.8,
               maxWidth: 560, letterSpacing: '-0.02em',
             }}>
-              아직도 카카오톡 단톡방으로 객실을 배정하고 있나요?
+              아직도 단톡방으로 객실을 배정하고 있나요?
               수기 체크리스트, 수없는 전화 통화, 놓치는 완료 보고.
               Roomly는 그 모든 비효율을 실시간 디지털 현황판 하나로 해결합니다.
             </p>
@@ -793,8 +794,8 @@ export default function LandingPage() {
               {[
                 { num: '3분',  label: '평균 도입 시간', sub: '설정부터 운영까지', grad: `linear-gradient(135deg, #ffffff 0%, ${C.green} 100%)` },
                 { num: '0원',  label: '도입 비용',      sub: '3개월 완전 무료',   grad: `linear-gradient(135deg, #ffffff 0%, ${C.gold} 100%)` },
-                { num: '100%', label: 'QR 접속률',      sub: '앱 설치 없이',      grad: `linear-gradient(135deg, ${C.accentHi} 0%, ${C.gold} 100%)` },
-                { num: '∞',    label: '동시 접속',      sub: '직원 수 제한 없음', grad: `linear-gradient(135deg, #ffffff 0%, ${C.accentHi} 100%)` },
+                { num: '0개',  label: '필요한 앱',       sub: '설치 없이 QR 스캔',  grad: `linear-gradient(135deg, ${C.accentHi} 0%, ${C.gold} 100%)` },
+                { num: '무제한', label: '직원 접속',    sub: '인원 제한 없음',    grad: `linear-gradient(135deg, #ffffff 0%, ${C.accentHi} 100%)` },
               ].map((s, i) => (
                 <div
                   key={s.label}
@@ -853,7 +854,7 @@ export default function LandingPage() {
                 </div>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
                   {[
-                    '카카오톡 단톡방으로 객실 배정',
+                    '단톡방으로 객실 배정',
                     '수기 체크리스트, 종이 보고',
                     '완료 확인마다 전화 통화',
                     '어떤 객실이 끝났는지 파악 불가',
@@ -906,7 +907,7 @@ export default function LandingPage() {
         </section>
 
         {/* ════ PRICING ════ */}
-        <section style={{ padding: '140px 32px', maxWidth: 1200, margin: '0 auto' }}>
+        <section id="pricing" style={{ padding: '140px 32px', maxWidth: 1200, margin: '0 auto' }}>
           <div style={{ textAlign: 'center', marginBottom: 80 }}>
             <p className="reveal-clip" style={{
               fontSize: 11, fontWeight: 700, color: C.accent,
@@ -984,66 +985,46 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* ════ BOTTOM CTA ════ */}
-        <section style={{
-          padding: '180px 32px', textAlign: 'center',
-          background: C.bgMid, borderTop: `1px solid ${C.border}`,
-          position: 'relative', overflow: 'hidden',
-        }}>
-          <div aria-hidden style={{
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 800, height: 500, borderRadius: '50%',
-            background: `radial-gradient(ellipse, ${C.accent}1e 0%, transparent 65%)`,
-            pointerEvents: 'none',
-          }}/>
-          <div style={{ maxWidth: 680, margin: '0 auto', position: 'relative' }}>
-            {/* A — word-by-word CTA headline (scroll-triggered via reveal class) */}
-            <h2 className="reveal-clip" style={{
-              fontSize: 'clamp(40px, 6.5vw, 88px)',
-              fontWeight: 900, letterSpacing: '-0.052em',
-              color: C.text, lineHeight: 0.94, marginBottom: 36,
-            }}>
-              지금 바로<br/>
-              <span style={{
-                background: `linear-gradient(135deg, ${C.accentHi}, ${C.gold})`,
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              }}>시작하세요</span>
-            </h2>
-            <p className="reveal" style={{ fontSize: 16, color: C.textMid, marginBottom: 52, letterSpacing: '-0.02em', lineHeight: 1.75 }}>
-              3개월 무료 · 신용카드 불필요 · 언제든 취소
-            </p>
-            <div className="reveal" style={{ transitionDelay: '0.1s' }}>
-              <Link href="/signup" style={{
-                display: 'inline-flex', alignItems: 'center', gap: 12,
-                fontSize: 15, fontWeight: 700, color: '#fff',
-                padding: '16px 36px', borderRadius: 12, background: C.accent,
-                textDecoration: 'none', letterSpacing: '-0.02em',
-                boxShadow: `0 0 64px ${C.accent}60, 0 20px 60px rgba(0,0,0,0.5)`,
-              }}>
-                무료로 시작하기
-                <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 15, height: 15 }}>
-                  <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.25 4.25a.75.75 0 0 1 0 1.06L9.28 12.53a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd"/>
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </section>
-
         {/* ════ FOOTER ════ */}
-        <footer style={{
-          padding: '28px 32px', borderTop: `1px solid ${C.border}`,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          maxWidth: 1200, margin: '0 auto', flexWrap: 'wrap', gap: 16,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <RoomlyMark size={20}/>
-            <span style={{ fontSize: 13, color: C.textMid, fontWeight: 600 }}>Roomly</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
-            <Link href="/privacy" style={{ fontSize: 12, color: C.textDim, textDecoration: 'none' }}>개인정보처리방침</Link>
-            <Link href="/terms" style={{ fontSize: 12, color: C.textDim, textDecoration: 'none' }}>이용약관</Link>
-            <span style={{ fontSize: 12, color: C.textDim }}>© 2025 Roomly</span>
+        <footer style={{ borderTop: `1px solid ${C.border}` }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto', padding: '52px 32px 32px' }}>
+            {/* 상단: 로고 + 컬럼 */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '48px 80px', marginBottom: 48, flexWrap: 'wrap' }}>
+              {/* 브랜드 */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <RoomlyMark size={22}/>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text, letterSpacing: '-0.03em' }}>Roomly</span>
+                </div>
+                <p style={{ fontSize: 12, color: C.textDim, lineHeight: 1.7, maxWidth: 240 }}>
+                  호텔 하우스키핑을 실시간으로.<br/>단톡방 없이 운영하는 가장 빠른 방법.
+                </p>
+              </div>
+
+              {/* 제품 */}
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: C.textMid, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>제품</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <Link href="/#features" style={{ fontSize: 13, color: C.textDim, textDecoration: 'none' }}>기능 소개</Link>
+                  <Link href="/#pricing" style={{ fontSize: 13, color: C.textDim, textDecoration: 'none' }}>요금제</Link>
+                </div>
+              </div>
+
+              {/* 지원 */}
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, color: C.textMid, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>지원</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <Link href="/contact" style={{ fontSize: 13, color: C.textDim, textDecoration: 'none' }}>문의하기</Link>
+                  <Link href="/terms" style={{ fontSize: 13, color: C.textDim, textDecoration: 'none' }}>이용약관</Link>
+                  <Link href="/privacy" style={{ fontSize: 13, color: C.textDim, textDecoration: 'none' }}>개인정보처리방침</Link>
+                </div>
+              </div>
+            </div>
+
+            {/* 하단: 저작권 */}
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 24 }}>
+              <span style={{ fontSize: 12, color: C.textDim }}>© 2026 Roomly. All rights reserved.</span>
+            </div>
           </div>
         </footer>
 

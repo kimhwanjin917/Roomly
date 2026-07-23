@@ -122,14 +122,14 @@ export default function SignupPage() {
           borderRadius: 10,
         }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>3개월 무료체험 — 신용카드 불필요</p>
-          <p style={{ fontSize: 11, color: C.textDim, marginTop: 3 }}>체험 후 유료 전환 시 최대 객실 10개 → 50개+</p>
+          <p style={{ fontSize: 11, color: C.textDim, marginTop: 3 }}>무료: 최대 10객실 · 유료 전환 후: 50객실 이상</p>
         </div>
 
         {/* Card */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
           <div style={{ padding: '24px 24px 8px' }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em', marginBottom: 4 }}>호텔 등록</h1>
-            <p style={{ fontSize: 13, color: C.textDim }}>지금 바로 하우스키핑 디지털화를 시작하세요</p>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em', marginBottom: 4 }}>무료로 시작하기</h1>
+            <p style={{ fontSize: 13, color: C.textDim }}>호텔명과 이메일만 입력하면 바로 시작됩니다</p>
           </div>
 
           <form onSubmit={handleSubmit} style={{ padding: '20px 24px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}>
