@@ -73,12 +73,39 @@ function LoginForm() {
         pointerEvents: 'none', zIndex: 0,
       }}/>
 
+      {/* 홈으로 — 직접 진입한 경우 히스토리가 없을 수 있어 router.back() 대신 링크로 보낸다 */}
+      <Link
+        href="/"
+        style={{
+          position: 'fixed', top: 20, left: 20, zIndex: 2,
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '8px 14px 8px 10px',
+          background: C.surface, border: `1px solid ${C.border}`,
+          borderRadius: 10, fontSize: 13, fontWeight: 600,
+          color: C.textMid, textDecoration: 'none',
+          letterSpacing: '-0.01em', transition: 'color 0.15s, border-color 0.15s',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.color = C.text
+          e.currentTarget.style.borderColor = C.textDim
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.color = C.textMid
+          e.currentTarget.style.borderColor = C.border
+        }}
+      >
+        <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 15, height: 15 }}>
+          <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 0 1-.02 1.06L8.832 10l3.938 3.71a.75.75 0 1 1-1.04 1.08l-4.5-4.25a.75.75 0 0 1 0-1.08l4.5-4.25a.75.75 0 0 1 1.06.02Z" clipRule="evenodd" />
+        </svg>
+        홈으로
+      </Link>
+
       <div style={{ width: '100%', maxWidth: 380, position: 'relative', zIndex: 1 }}>
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 40, justifyContent: 'center' }}>
+        <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 40, justifyContent: 'center', textDecoration: 'none' }}>
           <RoomlyMark size={32}/>
           <span style={{ fontSize: 18, fontWeight: 700, color: C.text, letterSpacing: '-0.03em' }}>Roomly</span>
-        </div>
+        </Link>
 
         {/* Banners */}
         {registered && (

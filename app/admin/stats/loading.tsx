@@ -1,73 +1,45 @@
+import { C } from '@/lib/theme'
+
 export default function Loading() {
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* 헤더 스켈레톤 */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-gray-200 rounded-lg animate-pulse" />
-              <div className="w-24 h-4 bg-gray-200 rounded animate-pulse hidden sm:block" />
+    <main style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px 80px' }} className="md:pb-6">
+      {/* 날짜 선택 스켈레톤 */}
+      <div style={{ width: 144, height: 36, background: C.card, borderRadius: 10, marginBottom: 20 }} className="animate-pulse" />
+
+      {/* 숫자 요약 3개 큰 박스 */}
+      <div className="grid grid-cols-3" style={{ gap: 12, marginBottom: 20 }}>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 56, height: 36, background: C.surface, borderRadius: 10 }} className="animate-pulse" />
+            <div style={{ width: 40, height: 12, background: C.surface, borderRadius: 6 }} className="animate-pulse" />
+          </div>
+        ))}
+      </div>
+
+      {/* 진행률 바 스켈레톤 */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+          <div style={{ width: 80, height: 12, background: C.surface, borderRadius: 6 }} className="animate-pulse" />
+          <div style={{ width: 48, height: 12, background: C.surface, borderRadius: 6 }} className="animate-pulse" />
+        </div>
+        <div style={{ height: 8, background: C.surface, borderRadius: 999 }} className="animate-pulse" />
+      </div>
+
+      {/* 직원별 통계 스켈레톤 */}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ width: 128, height: 16, background: C.surface, borderRadius: 6 }} className="animate-pulse" />
+        </div>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} style={{ padding: '12px 16px', borderTop: i === 0 ? 'none' : `1px solid ${C.border}` }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <div style={{ width: 80, height: 16, background: C.surface, borderRadius: 6 }} className="animate-pulse" />
+              <div style={{ width: 64, height: 12, background: C.surface, borderRadius: 6 }} className="animate-pulse" />
             </div>
-            <div className="flex gap-1">
-              {[72, 60, 60, 44].map((w, i) => (
-                <div key={i} className="h-7 bg-gray-200 rounded-md animate-pulse" style={{ width: w }} />
-              ))}
-            </div>
+            <div style={{ height: 6, background: C.surface, borderRadius: 999 }} className="animate-pulse" />
           </div>
-          <div className="w-16 h-4 bg-gray-200 rounded animate-pulse" />
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-4 py-6 space-y-5">
-        {/* 날짜 선택 스켈레톤 */}
-        <div className="flex items-center gap-3">
-          <div className="w-36 h-9 bg-gray-200 rounded-lg animate-pulse" />
-        </div>
-
-        {/* 숫자 요약 3개 큰 박스 */}
-        <div className="grid grid-cols-3 gap-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col items-center gap-2">
-              <div className="w-14 h-9 bg-gray-200 rounded-lg animate-pulse" />
-              <div className="w-10 h-3 bg-gray-200 rounded animate-pulse" />
-            </div>
-          ))}
-        </div>
-
-        {/* 진행률 바 스켈레톤 */}
-        <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2">
-          <div className="flex justify-between">
-            <div className="w-20 h-3 bg-gray-200 rounded animate-pulse" />
-            <div className="w-12 h-3 bg-gray-200 rounded animate-pulse" />
-          </div>
-          <div className="h-2 bg-gray-200 rounded-full animate-pulse" />
-        </div>
-
-        {/* 막대 차트 형태 스켈레톤 — 직원별 통계 */}
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100">
-            <div className="w-32 h-4 bg-gray-200 rounded animate-pulse" />
-          </div>
-          <div className="divide-y divide-slate-100">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="px-4 py-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="w-20 h-4 bg-gray-200 rounded animate-pulse" />
-                  <div className="w-16 h-3 bg-gray-200 rounded animate-pulse" />
-                </div>
-                {/* 막대 바 */}
-                <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden animate-pulse">
-                  <div
-                    className="h-full bg-gray-300 rounded-full"
-                    style={{ width: `${75 - i * 15}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </main>
-    </div>
+        ))}
+      </div>
+    </main>
   )
 }

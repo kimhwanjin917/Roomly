@@ -352,7 +352,8 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
               <div className="flex gap-2">
                 <button
                   onClick={() => { setMemoRoom(null); setSupplyNote(''); setSupplyEnabled(false) }}
-                  className="flex-1 py-3.5 bg-[#F2F4F6] hover:bg-[#E8EAED] rounded-xl text-sm font-bold text-[#191919] transition-colors"
+                  disabled={loading[memoRoom.rooms.id]}
+                  className="flex-1 py-3.5 bg-[#F2F4F6] hover:bg-[#E8EAED] rounded-xl text-sm font-bold text-[#191919] disabled:opacity-40 transition-colors"
                 >취소</button>
                 <button
                   onClick={async () => {
@@ -369,8 +370,9 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                     setSupplyNote('')
                     setSupplyEnabled(false)
                   }}
-                  className="flex-1 py-3.5 bg-toss-success hover:bg-[#04AD65] text-white rounded-xl text-sm font-bold transition-colors"
-                >완료 확인</button>
+                  disabled={loading[memoRoom.rooms.id]}
+                  className="flex-1 py-3.5 bg-toss-success hover:bg-[#04AD65] text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
+                >{loading[memoRoom.rooms.id] ? '처리 중...' : '완료 확인'}</button>
               </div>
             </div>
           </div>

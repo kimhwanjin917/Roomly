@@ -10,6 +10,11 @@ export function isRoomStatus(value: unknown): value is RoomStatus {
   return typeof value === 'string' && (ROOM_STATUSES as readonly string[]).includes(value)
 }
 
+/** 근무자의 작업이 끝난 상태 — 배정을 닫아도 되는 상태 */
+export function isFinishedStatus(status: string): boolean {
+  return status === 'done' || status === 'inspect'
+}
+
 /** 직원 역할 (QR 토큰의 worker_role) */
 export const STAFF_ROLES = ['housekeeping', 'dirty'] as const
 export type StaffRole = (typeof STAFF_ROLES)[number]
@@ -53,7 +58,8 @@ export const DEFAULT_CHECKIN_ALERT_MINUTES = 120
 
 /** 앱 URL — 이메일/QR 링크 등 절대 URL 생성용 */
 export function appUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? 'https://roomly.app'
+  const raw = process.env.NEXT_PUBLIC_APP_URL ?? 'https://roomly.app'
+  return /^https?:\/\//.test(raw) ? raw : `https://${raw}`
 }
 
 /**

@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import AdminNav from '@/components/AdminNav'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import { DndContext, DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
@@ -278,9 +277,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }} className="md:pl-[220px]">
-      <AdminNav />
-
+    <>
       <main style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px 80px' }} className="md:pb-6">
 
         {/* Realtime 연결 끊김 배너 */}
@@ -805,6 +802,6 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

@@ -1,10 +1,11 @@
 'use client'
 
 import { useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import RoomlyMark from '@/components/RoomlyMark'
 import { useToast } from '@/lib/hooks/useToast'
 import { useNow, useOnlineStatus, useRealtimeRefetch } from '@/lib/hooks/useLive'
-import { isUrgent, isFinished, fmtTime, typeLabel } from '@/lib/rooms'
+import { isUrgent, fmtTime, typeLabel } from '@/lib/rooms'
 import type { RoomStatus } from '@/lib/constants'
 
 type Room = {
@@ -16,11 +17,22 @@ type Room = {
   checkin_time: string | null
 }
 
-type Assignment = { id: string; assigned_at: string; rooms: Room }
+type Assignment = {
+  id: string
+  assigned_at: string
+  completed_at: string | null
+  rooms: Room
+}
 
 const WATCHED_TABLES = ['rooms', 'assignments'] as const
 
-export default function GuestDashboard({ initialAssignments, token }: { hotelId: string; initialAssignments: Assignment[]; token: string }) {
+export default function GuestDashboard({ initialAssignments, staffName, token }: {
+  hotelId: string
+  staffName: string
+  initialAssignments: Assignment[]
+  token: string
+}) {
+  const router = useRouter()
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
@@ -31,46 +43,64 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
 
   const refetch = useCallback(async () => {
     try {
-      const res = await fetch('/api/guest/assignments')
+      const res = await fetch('/api/guest/assignments', { cache: 'no-store' })
+      // 코드가 재발급되면 세션이 끊긴다 — 새 QR로 다시 입장시킨다
+      if (res.status === 401) { router.replace('/guest'); return }
       if (res.ok) setAssignments(await res.json())
     } catch {
       // 네트워크 오류 시 기존 데이터 유지
     }
-  }, [])
+  }, [router])
 
   const isOnline = useOnlineStatus(refetch)
   useRealtimeRefetch({ channel: 'guest-realtime', tables: WATCHED_TABLES, onChange: refetch, token })
 
-  async function changeStatus(assignment: Assignment, status: string, memoText?: string) {
+  async function changeStatus(assignment: Assignment, status: RoomStatus, memoText?: string) {
     const roomId = assignment.rooms.id
     setLoading(l => ({ ...l, [roomId]: true }))
+
+    // 낙관적 반영 — 서버 응답을 기다리는 동안에도 카드가 즉시 바뀌어야
+    // "눌렀는데 그대로다"라는 오해가 생기지 않는다
+    const previous = assignments
+    const finishing = status === 'done' || status === 'inspect'
+    setAssignments(list => list.map(a =>
+      a.id !== assignment.id ? a : {
+        ...a,
+        completed_at: finishing ? (a.completed_at ?? new Date().toISOString()) : null,
+        rooms: { ...a.rooms, status },
+      },
+    ))
+
     try {
       const res = await fetch('/api/guest/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roomId, assignmentId: assignment.id, status, memo: memoText ?? null }),
       })
+      if (res.status === 401) { router.replace('/guest'); return }
       if (!res.ok) throw new Error()
       await refetch()
     } catch {
+      setAssignments(previous)
       showToast('저장에 실패했습니다. 다시 시도해주세요.')
     } finally {
       setLoading(l => ({ ...l, [roomId]: false }))
     }
   }
 
+  // 처리 완료 여부는 배정의 completed_at이 기준이다.
+  // 객실 상태는 관리자가 되돌릴 수 있어 근무자 몫이 끝났는지와는 별개다.
   const sorted = [...assignments].sort((a, b) => {
     const ra = a.rooms, rb = b.rooms
-    const doneA = isFinished(ra.status)
-    const doneB = isFinished(rb.status)
+    const doneA = !!a.completed_at, doneB = !!b.completed_at
     if (doneA !== doneB) return doneA ? 1 : -1
     const urgA = isUrgent(ra, now), urgB = isUrgent(rb, now)
     if (urgA !== urgB) return urgA ? -1 : 1
     if (ra.checkin_time && rb.checkin_time) return new Date(ra.checkin_time).getTime() - new Date(rb.checkin_time).getTime()
-    return 0
+    return ra.number.localeCompare(rb.number, undefined, { numeric: true })
   })
 
-  const doneCount = assignments.filter(a => isFinished(a.rooms.status)).length
+  const doneCount = assignments.filter(a => a.completed_at).length
   const totalCount = assignments.length
 
   return (
@@ -81,7 +111,7 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
           <div>
             <div className="flex items-center gap-2 mb-1">
               <RoomlyMark size={20} />
-              <p className="text-xs text-slate-400">일일 근무자</p>
+              <p className="text-xs text-slate-400">일일 근무자 · {staffName}님</p>
             </div>
             <p className="text-xl font-bold text-slate-900">오늘의 청소 목록</p>
             <p className="text-xs text-slate-400 mt-0.5">{now.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })} · 자정에 세션 만료</p>
@@ -118,11 +148,11 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
 
         {sorted.map(assignment => {
           const room = assignment.rooms
-          const urgent = isUrgent(room, now)
+          const finished = !!assignment.completed_at
+          const urgent = !finished && isUrgent(room, now)
           const isLoading = loading[room.id]
-          const isDone = room.status === 'done'
-          const isInspect = room.status === 'inspect'
-          const finished = isDone || isInspect
+          const isDone = finished && room.status === 'done'
+          const isInspect = finished && room.status === 'inspect'
 
           return (
             <div
@@ -215,11 +245,12 @@ export default function GuestDashboard({ initialAssignments, token }: { hotelId:
               className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
             />
             <div className="flex gap-2">
-              <button onClick={() => setMemoRoom(null)} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 transition-colors">취소</button>
+              <button onClick={() => setMemoRoom(null)} disabled={loading[memoRoom.rooms.id]} className="flex-1 py-3 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">취소</button>
               <button
                 onClick={async () => { if (!memoRoom) return; await changeStatus(memoRoom, 'done', memo); setMemoRoom(null) }}
-                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold transition-colors"
-              >완료 확인</button>
+                disabled={loading[memoRoom.rooms.id]}
+                className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
+              >{loading[memoRoom.rooms.id] ? '처리 중...' : '완료 확인'}</button>
             </div>
           </div>
         </div>

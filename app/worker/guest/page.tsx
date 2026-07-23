@@ -1,38 +1,30 @@
 import { cookies } from 'next/headers'
-import { createServerClient } from '@supabase/ssr'
 import { redirect } from 'next/navigation'
-import * as jwt from 'jsonwebtoken'
+import { requireGuest } from '@/lib/auth'
+import { fetchGuestAssignments } from '@/lib/guest-work'
 import GuestDashboard from './GuestDashboard'
 
-export default async function GuestWorkerPage() {
-  const cookieStore = cookies()
-  const sessionCookie = cookieStore.get('roomly_guest_session')
-  if (!sessionCookie) redirect('/guest')
+export const dynamic = 'force-dynamic'
 
-  let payload: jwt.JwtPayload
+export default async function GuestWorkerPage() {
+  // requireGuest가 세션 + 코드 세대까지 확인한다.
+  // 코드가 재발급됐으면 여기서 걸러져 새 QR로 다시 입장하게 된다.
+  let ctx
   try {
-    payload = jwt.verify(sessionCookie.value, process.env.JWT_SECRET!) as jwt.JwtPayload
+    ctx = await requireGuest()
   } catch {
     redirect('/guest')
   }
 
-  const hotelId = payload.app_metadata?.hotel_id as string
+  const assignments = await fetchGuestAssignments(ctx.service, ctx.hotelId)
+  const token = cookies().get('roomly_guest_session')!.value
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      global: { headers: { Authorization: `Bearer ${sessionCookie.value}` } },
-      cookies: { getAll: () => [], setAll: () => {} },
-    }
+  return (
+    <GuestDashboard
+      hotelId={ctx.hotelId}
+      staffName={ctx.staffName}
+      initialAssignments={assignments as never}
+      token={token}
+    />
   )
-
-  const { data: assignments } = await supabase
-    .from('assignments')
-    .select('id, assigned_at, rooms(id, number, floor, type, status, checkin_time)')
-    .eq('is_guest', true)
-    .is('completed_at', null)
-    .is('cancelled_at', null)
-
-  return <GuestDashboard hotelId={hotelId} initialAssignments={(assignments ?? []) as any} token={sessionCookie.value} />
 }

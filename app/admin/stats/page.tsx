@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import AdminNav from '@/components/AdminNav'
 import { C } from '@/lib/theme'
 
 type Period = 'daily' | 'weekly' | 'monthly'
@@ -194,9 +193,7 @@ export default function StatsPage() {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif" }} className="md:pl-[220px]">
-      <AdminNav />
-
+    <>
       <main style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px 80px', display: 'flex', flexDirection: 'column', gap: 12 }} className="md:pb-6">
         <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em' }}>통계</h1>
 
@@ -424,6 +421,6 @@ export default function StatsPage() {
         )}
       </main>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
+    </>
   )
 }

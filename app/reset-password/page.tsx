@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import RoomlyMark from '@/components/RoomlyMark'
+import { appUrl } from '@/lib/constants'
 
 type Mode = 'checking' | 'request' | 'update'
 
@@ -34,9 +35,8 @@ export default function ResetPasswordPage() {
     setLoading(true)
     try {
       const supabase = createClient()
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
       const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${appUrl}/auth/callback?type=recovery`,
+        redirectTo: `${appUrl()}/auth/callback?type=recovery`,
       })
       if (err) {
         setError('메일 발송에 실패했습니다. 잠시 후 다시 시도해주세요.')

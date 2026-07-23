@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import AdminNav from '@/components/AdminNav'
 import { C } from '@/lib/theme'
 
 const inputSt: React.CSSProperties = {
@@ -113,15 +112,14 @@ export default function SuppliesPage() {
   }
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="md:pl-[220px]">
+    <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.accent, animation: 'spin 0.7s linear infinite' }}/>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif" }} className="md:pl-[220px]">
-      <AdminNav />
+    <>
       <main style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px 80px', display: 'flex', flexDirection: 'column', gap: 14 }} className="md:pb-6">
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em' }}>비품 관리</h1>
@@ -237,6 +235,6 @@ export default function SuppliesPage() {
           </div>
         </div>
       )}
-    </div>
+    </>
   )
 }

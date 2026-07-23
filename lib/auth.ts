@@ -54,6 +54,9 @@ export interface WorkerContext {
 
 export interface GuestContext {
   hotelId: string
+  /** 이 세션의 일용직 staff 레코드 */
+  staffId: string
+  staffName: string
   service: SupabaseClient
 }
 
@@ -90,13 +93,48 @@ export async function requireWorker(
   return { staffId, hotelId, workerRole, service: createServiceClient() as unknown as SupabaseClient }
 }
 
+/**
+ * 일일 근무자(게스트) 세션 검증.
+ *
+ * 토큰에 박힌 guest_code_id가 현재 유효한 코드와 일치할 때만 통과시킨다.
+ * 관리자가 코드를 재발급하면 새 행(새 id)이 생기므로 옛 세션은 여기서 즉시 끊긴다.
+ */
 export async function requireGuest(request?: NextRequest): Promise<GuestContext> {
   const payload = verifySessionCookie(request, COOKIES.guest)
 
   const hotelId = payload.app_metadata?.hotel_id as string | undefined
-  if (!hotelId) throw ApiError.unauthorized('잘못된 토큰입니다.', 'invalid_token')
+  const staffId = payload.app_metadata?.staff_id as string | undefined
+  const guestCodeId = payload.app_metadata?.guest_code_id as string | undefined
+  if (!hotelId || !staffId || !guestCodeId) {
+    throw ApiError.unauthorized('다시 QR을 스캔해 입장해주세요.', 'session_expired')
+  }
 
-  return { hotelId, service: createServiceClient() as unknown as SupabaseClient }
+  const service = createServiceClient() as unknown as SupabaseClient
+
+  const { data: current } = await service
+    .from('guest_codes')
+    .select('id')
+    .eq('hotel_id', hotelId)
+    .gt('expires_at', new Date().toISOString())
+    .maybeSingle()
+
+  if (!current || current.id !== guestCodeId) {
+    throw ApiError.unauthorized('접속 코드가 재발급되었습니다. 새 QR로 다시 입장해주세요.', 'code_rotated')
+  }
+
+  // 세대는 맞지만 관리자가 개별 삭제했을 수 있다
+  const { data: staff } = await service
+    .from('staff')
+    .select('id, name')
+    .eq('id', staffId)
+    .eq('hotel_id', hotelId)
+    .maybeSingle()
+
+  if (!staff) {
+    throw ApiError.unauthorized('등록 정보가 없습니다. 다시 입장해주세요.', 'staff_removed')
+  }
+
+  return { hotelId, staffId: staff.id, staffName: staff.name, service }
 }
 
 // ── 슈퍼 관리자 (해시 비교 쿠키) ──────────────────────────────

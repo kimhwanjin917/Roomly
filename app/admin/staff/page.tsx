@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import QRCode from 'qrcode'
-import AdminNav from '@/components/AdminNav'
 import { C } from '@/lib/theme'
+import { appUrl } from '@/lib/constants'
 
-type Staff = { id: string; name: string; phone_number: string | null; qr_version: number; role: string }
-type GuestCode = { code: string; expiresAt: string }
+type Staff = { id: string; name: string; phone_number: string | null; qr_version: number; role: string; employment_type: string }
+type GuestCode = { id: string; code: string; expiresAt: string }
 
 const inputSt: React.CSSProperties = {
   width: '100%', padding: '11px 14px',
@@ -58,6 +58,8 @@ export default function StaffPage() {
 
   const [guestCode, setGuestCode]     = useState<GuestCode | null>(null)
   const [guestLoading, setGuestLoading] = useState(false)
+  const [guestQrDataUrl, setGuestQrDataUrl] = useState('')
+  const [showRegenConfirm, setShowRegenConfirm] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -69,9 +71,24 @@ export default function StaffPage() {
       const { data: staffData } = await supabase.from('staff').select('*').eq('hotel_id', hid).order('name')
       setStaffList(staffData ?? [])
       setLoading(false)
+
+      const res = await fetch('/api/admin/guest-code')
+      const existing = await res.json()
+      if (existing) setGuestCode(existing)
     }
     load()
   }, [router])
+
+  // 일일 근무자가 QR로 새로 등록되면 새로고침 없이 목록에 바로 반영한다
+  useEffect(() => {
+    if (!hotelId) return
+    const supabase = createClient()
+    const ch = supabase.channel('staff-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff', filter: `hotel_id=eq.${hotelId}` }, () => { refreshList() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hotelId])
 
   useEffect(() => {
     if (!qrModal?.qrUrl) { setQrDataUrl(''); return }
@@ -138,20 +155,28 @@ export default function StaffPage() {
     setGuestLoading(true)
     const res = await fetch('/api/admin/guest-code', { method: 'POST' })
     setGuestCode(await res.json())
+    setShowRegenConfirm(false)
     setGuestLoading(false)
+    // 재발급은 기존 일용직 기록을 지운다 — 목록을 즉시 맞춘다
+    await refreshList()
   }
 
-  const guestUrl = `${process.env.NEXT_PUBLIC_APP_URL}/guest?h=${hotelId}`
+  const guestUrl = `${appUrl()}/guest?h=${hotelId}`
+  const guestQrUrl = guestCode ? `${guestUrl}&c=${guestCode.code}` : ''
+
+  useEffect(() => {
+    if (!guestQrUrl) { setGuestQrDataUrl(''); return }
+    QRCode.toDataURL(guestQrUrl, { width: 180, margin: 2 }).then(setGuestQrDataUrl)
+  }, [guestQrUrl])
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: C.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="md:pl-[220px]">
+    <div style={{ minHeight: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.accent, animation: 'spin 0.7s linear infinite' }}/>
     </div>
   )
 
   return (
-    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif" }} className="md:pl-[220px]">
-      <AdminNav />
+    <>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       <main style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px 80px', display: 'flex', flexDirection: 'column', gap: 14 }} className="md:pb-6">
@@ -214,6 +239,15 @@ export default function StaffPage() {
                           }}>
                             {s.role === 'dirty' ? '더티' : '하우스키핑'}
                           </span>
+                          {s.employment_type === 'temp' && (
+                            <span style={{
+                              fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 6,
+                              background: 'rgba(148,163,184,0.12)', color: C.textMid,
+                              border: '1px solid rgba(148,163,184,0.22)',
+                            }}>
+                              일용직
+                            </span>
+                          )}
                         </div>
                         <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{s.phone_number ?? '연락처 없음'}</p>
                       </div>
@@ -240,11 +274,11 @@ export default function StaffPage() {
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
               <h2 style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>일일 근무자 접속 코드</h2>
-              <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>당일 자정 만료 · 링크 또는 문자로 전달</p>
+              <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>당일 자정 만료 · QR 스캔 또는 링크/문자로 전달</p>
             </div>
             {guestCode && (
               <button
-                onClick={handleGuestCode}
+                onClick={() => setShowRegenConfirm(true)}
                 style={{ fontSize: 11, fontWeight: 600, color: C.textMid, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               >재발급</button>
             )}
@@ -252,12 +286,17 @@ export default function StaffPage() {
 
           {guestCode ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '0.18em', color: C.text, fontFamily: 'monospace' }}>{guestCode.code}</span>
-                <button
-                  onClick={() => navigator.clipboard.writeText(guestCode.code)}
-                  style={{ padding: '7px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, fontWeight: 600, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}
-                >복사</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                {guestQrDataUrl && (
+                  <img src={guestQrDataUrl} alt="일일 근무자 접속 QR" style={{ width: 96, height: 96, borderRadius: 8, background: '#fff', padding: 6, flexShrink: 0 }}/>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <span style={{ fontSize: 36, fontWeight: 800, letterSpacing: '0.18em', color: C.text, fontFamily: 'monospace' }}>{guestCode.code}</span>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(guestCode.code)}
+                    style={{ padding: '7px 12px', background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 11, fontWeight: 600, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'flex-start' }}
+                  >복사</button>
+                </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, padding: '10px 12px' }}>
                 <span style={{ fontSize: 11, color: C.textDim, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{guestUrl}</span>
@@ -424,6 +463,38 @@ export default function StaffPage() {
           </div>
         </div>
       )}
-    </div>
+
+      {/* 코드 재발급 확인 — 기존 일용직 기록이 모두 삭제된다 */}
+      {showRegenConfirm && (
+        <div style={modalOverlay} className="sm:items-center" onClick={() => setShowRegenConfirm(false)}>
+          <div style={{ ...modalBox, maxWidth: 360 }} className="sm:rounded-2xl sm:max-w-xs" onClick={e => e.stopPropagation()}>
+            <ModalHandle/>
+            <div style={{ padding: '16px 20px 24px', textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.2)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <svg viewBox="0 0 24 24" fill="none" stroke={C.amber} strokeWidth={2} style={{ width: 22, height: 22 }}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                </svg>
+              </div>
+              <p style={{ fontWeight: 700, color: C.text, fontSize: 15, marginBottom: 6 }}>접속 코드를 재발급할까요?</p>
+              <p style={{ fontSize: 13, color: C.textDim, marginBottom: 18, lineHeight: 1.5 }}>
+                기존 코드와 QR이 즉시 무효화되고, 현재 등록된 <b style={{ color: C.textMid }}>일용직 {staffList.filter(s => s.employment_type === 'temp').length}명</b>의 기록이 모두 삭제됩니다.
+                근무자는 새 QR로 처음부터 다시 등록해야 합니다. (청소 배정과 작업 이력은 유지됩니다)
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setShowRegenConfirm(false)}
+                  style={{ flex: 1, padding: '13px 0', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}
+                >취소</button>
+                <button
+                  onClick={handleGuestCode}
+                  disabled={guestLoading}
+                  style={{ flex: 1, padding: '13px 0', background: C.amber, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: '#111', cursor: guestLoading ? 'not-allowed' : 'pointer', opacity: guestLoading ? 0.5 : 1, fontFamily: 'inherit' }}
+                >{guestLoading ? '발급 중...' : '재발급'}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

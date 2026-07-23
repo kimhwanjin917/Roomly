@@ -31,18 +31,20 @@ const withPWA = require('next-pwa')({
     },
     {
       urlPattern: /^\/api\/worker\/assignments/,
-      handler: 'StaleWhileRevalidate',
+      handler: 'NetworkFirst',
       options: {
         cacheName: 'worker-api',
         expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 },
+        networkTimeoutSeconds: 5,
       },
     },
     {
       urlPattern: /^\/api\/guest\/assignments/,
-      handler: 'StaleWhileRevalidate',
+      handler: 'NetworkFirst',
       options: {
         cacheName: 'guest-api',
         expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 },
+        networkTimeoutSeconds: 5,
       },
     },
   ],
