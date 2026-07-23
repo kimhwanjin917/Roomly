@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { chargeBillingKey } from '@/lib/toss'
 import { sendEmail } from '@/lib/email'
+import PaymentFailedEmail from '@/emails/PaymentFailedEmail'
+import ReceiptEmail from '@/emails/ReceiptEmail'
 
 const PLAN_AMOUNTS: Record<string, number> = {
   starter: 30000,
@@ -40,6 +42,8 @@ export async function GET(request: NextRequest) {
   let charged = 0
   let failed = 0
 
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://roomly.app'
+
   for (const hotel of hotels) {
     const amount = PLAN_AMOUNTS[hotel.subscription_plan]
     if (!amount || !hotel.toss_billing_key || !hotel.toss_customer_key) { failed++; continue }
@@ -66,19 +70,42 @@ export async function GET(request: NextRequest) {
       }).eq('id', hotel.id)
 
       charged++
+
+      await sendEmail({
+        to: adminEmail,
+        subject: `[Roomly] ${hotel.name} 구독 결제가 완료되었습니다`,
+        react: ReceiptEmail({
+          hotelName: hotel.name,
+          planName: hotel.subscription_plan,
+          amount,
+          paidAt: now.toISOString(),
+          nextBillingAt: nextExpiry.toISOString(),
+        }),
+        hotelId: hotel.id,
+        template: 'receipt',
+      })
     } catch (err) {
       console.error(`[billing-charge] 결제 실패 hotel=${hotel.id}:`, err)
       failed++
-      // 결제 실패 시 플랜을 trial로 다운그레이드해 접근 차단
+
       await service.from('hotels').update({
         subscription_plan: 'trial',
         toss_billing_key: null,
-      }).eq('id', hotel.id).catch(() => {})
-      sendEmail({
+      }).eq('id', hotel.id)
+
+      await sendEmail({
         to: adminEmail,
         subject: '[Roomly] 자동 결제에 실패했습니다',
-        text: `${hotel.name}의 Roomly 구독 자동 결제가 실패했습니다.\n결제 수단을 확인하고 /admin/billing 에서 다시 결제해 주세요.\n\n오류: ${err instanceof Error ? err.message : '알 수 없는 오류'}`,
-      }).catch(() => {})
+        react: PaymentFailedEmail({
+          hotelName: hotel.name,
+          planName: hotel.subscription_plan,
+          amount,
+          failedAt: now.toISOString(),
+          billingUrl: `${appUrl}/admin/billing`,
+        }),
+        hotelId: hotel.id,
+        template: 'payment_failed',
+      })
     }
   }
 

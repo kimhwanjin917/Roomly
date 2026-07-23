@@ -1,0 +1,64 @@
+{
+  "worker": {
+    "greeting": "Hello,",
+    "greeting_suffix": "! 👋",
+    "completed": "Done",
+    "total": "Total",
+    "all_done_title": "All rooms complete!",
+    "all_done_body": "Great work today 🎉",
+    "no_assignments": "No rooms assigned",
+    "offline_banner": "You are offline. Showing last known data.",
+    "status": {
+      "dirty": "Dirty",
+      "cleaning": "Cleaning",
+      "done": "Done",
+      "inspect": "Inspection"
+    },
+    "action": {
+      "start_cleaning": "Start Cleaning",
+      "mark_done": "Done",
+      "mark_inspect": "Needs Inspection",
+      "revert_dirty": "Revert to Dirty",
+      "processing": "Processing..."
+    },
+    "memo": {
+      "title_done": "Complete Room",
+      "title_suffix": "",
+      "body": "Leave a note if there is anything to report",
+      "placeholder": "e.g. Extra towels requested, minibar empty...",
+      "cancel": "Cancel",
+      "confirm": "Confirm Done"
+    },
+    "maintenance": {
+      "report_button": "Report Issue",
+      "title": "Report Maintenance Issue",
+      "title_suffix": "",
+      "body": "Briefly describe the issue",
+      "placeholder": "e.g. Bathroom faucet leaking, AC not working...",
+      "cancel": "Cancel",
+      "submit": "Submit Report",
+      "submitting": "Sending...",
+      "success": "Report submitted.",
+      "error": "Failed to submit report."
+    },
+    "push": {
+      "enable": "Enable Notifications",
+      "disable": "Disable Notifications",
+      "blocked": "Browser notifications are blocked"
+    },
+    "floor": "F",
+    "room": "Room",
+    "checkin": "Check-in",
+    "urgent": "Urgent",
+    "error_save": "Failed to save. Please try again."
+  },
+  "dirty_worker": {
+    "title": "Dirty Rooms",
+    "room_count": " rooms",
+    "no_rooms": "No rooms to process",
+    "action": {
+      "mark_dirty": "Dirty",
+      "processing": "Processing..."
+    }
+  }
+}

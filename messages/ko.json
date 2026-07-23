@@ -1,0 +1,64 @@
+{
+  "worker": {
+    "greeting": "안녕하세요,",
+    "greeting_suffix": "님 👋",
+    "completed": "완료",
+    "total": "전체",
+    "all_done_title": "모든 객실 완료!",
+    "all_done_body": "오늘 수고하셨습니다 🎉",
+    "no_assignments": "배정된 객실이 없습니다",
+    "offline_banner": "오프라인 상태입니다. 마지막 데이터를 표시 중입니다.",
+    "status": {
+      "dirty": "더티",
+      "cleaning": "청소중",
+      "done": "완료",
+      "inspect": "점검대기"
+    },
+    "action": {
+      "start_cleaning": "청소 시작",
+      "mark_done": "완료",
+      "mark_inspect": "점검 필요",
+      "revert_dirty": "대기중으로 되돌리기",
+      "processing": "처리 중..."
+    },
+    "memo": {
+      "title_done": "호 완료 처리",
+      "title_suffix": "",
+      "body": "특이사항이 있으면 메모를 남겨주세요",
+      "placeholder": "예: 욕실 수건 추가 요청, 미니바 비어있음...",
+      "cancel": "취소",
+      "confirm": "완료 확인"
+    },
+    "maintenance": {
+      "report_button": "고장 신고",
+      "title": "호 고장·유지보수 신고",
+      "title_suffix": "",
+      "body": "고장 내용을 간단히 입력해주세요",
+      "placeholder": "예: 욕실 수도꼭지 누수, 에어컨 작동 불량...",
+      "cancel": "취소",
+      "submit": "신고 접수",
+      "submitting": "전송 중...",
+      "success": "신고가 접수되었습니다.",
+      "error": "신고 전송에 실패했습니다."
+    },
+    "push": {
+      "enable": "알림 켜기",
+      "disable": "알림 끄기",
+      "blocked": "브라우저 알림이 차단됨"
+    },
+    "floor": "층",
+    "room": "호",
+    "checkin": "체크인",
+    "urgent": "긴급",
+    "error_save": "저장에 실패했습니다. 다시 시도해주세요."
+  },
+  "dirty_worker": {
+    "title": "더티 현황",
+    "room_count": "개 객실",
+    "no_rooms": "처리할 객실이 없습니다",
+    "action": {
+      "mark_dirty": "더티",
+      "processing": "처리 중..."
+    }
+  }
+}

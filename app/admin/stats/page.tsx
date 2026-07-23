@@ -5,6 +5,21 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
 
+const C = {
+  bg:      '#0B1215',
+  surface: '#17171B',
+  card:    '#1A1C20',
+  border:  '#212427',
+  text:    '#F2F3F4',
+  textMid: '#8A8F98',
+  textDim: '#4A4F58',
+  accent:  '#5e6ad2',
+  green:   '#34d399',
+  amber:   '#fbbf24',
+  red:     '#f87171',
+  violet:  '#818cf8',
+}
+
 type Period = 'daily' | 'weekly' | 'monthly'
 
 type StaffStat = {
@@ -27,25 +42,28 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 const STATUS_DOT: Record<string, string> = {
-  dirty: 'bg-slate-400', cleaning: 'bg-amber-400', inspect: 'bg-violet-500',
+  dirty: C.textDim, cleaning: C.amber, inspect: C.violet,
 }
 
 function BarChart({ data }: { data: ChartPoint[] }) {
   const maxVal = Math.max(...data.map(d => d.value), 1)
   return (
-    <div className="flex items-end gap-1.5 h-36 mt-4">
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 140, marginTop: 16 }}>
       {data.map((d, i) => (
-        <div key={i} className="flex-1 flex flex-col items-center gap-1.5 min-w-0">
-          {d.value > 0 && (
-            <span className="text-[10px] font-bold text-[#6B7684]">{d.value}</span>
-          )}
-          <div className="w-full bg-[#F2F4F6] rounded-t-lg relative" style={{ height: '80px' }}>
+        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          {d.value > 0 && <span style={{ fontSize: 9, fontWeight: 700, color: C.textMid }}>{d.value}</span>}
+          <div style={{ width: '100%', background: C.surface, borderRadius: '4px 4px 0 0', position: 'relative', height: 90 }}>
             <div
-              className="absolute bottom-0 left-0 right-0 bg-toss-blue rounded-t-lg transition-all duration-500"
-              style={{ height: `${Math.max((d.value / maxVal) * 80, d.value > 0 ? 4 : 0)}px` }}
+              style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                background: `linear-gradient(180deg, ${C.accent}, ${C.accent}99)`,
+                borderRadius: '4px 4px 0 0',
+                height: `${Math.max((d.value / maxVal) * 90, d.value > 0 ? 4 : 0)}px`,
+                transition: 'height 0.5s cubic-bezier(0.16,1,0.3,1)',
+              }}
             />
           </div>
-          <span className="text-[9px] text-[#B0B8C1] font-medium truncate w-full text-center leading-tight">{d.label}</span>
+          <span style={{ fontSize: 9, color: C.textDim, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', width: '100%', textAlign: 'center', lineHeight: 1.2 }}>{d.label}</span>
         </div>
       ))}
     </div>
@@ -55,16 +73,18 @@ function BarChart({ data }: { data: ChartPoint[] }) {
 export default function StatsPage() {
   const router = useRouter()
   const today = new Date().toISOString().slice(0, 10)
-  const [date, setDate] = useState(today)
-  const [period, setPeriod] = useState<Period>('daily')
-  const [hotelId, setHotelId] = useState('')
-  const [loading, setLoading] = useState(true)
+  const [date, setDate]             = useState(today)
+  const [period, setPeriod]         = useState<Period>('daily')
+  const [hotelId, setHotelId]       = useState('')
+  const [loading, setLoading]       = useState(true)
 
-  const [totalRooms, setTotalRooms] = useState(0)
+  const [totalRooms, setTotalRooms]       = useState(0)
   const [totalCompleted, setTotalCompleted] = useState(0)
-  const [staffStats, setStaffStats] = useState<StaffStat[]>([])
-  const [incomplete, setIncomplete] = useState<IncompleteRoom[]>([])
-  const [chartData, setChartData] = useState<ChartPoint[]>([])
+  const [staffStats, setStaffStats]       = useState<StaffStat[]>([])
+  const [incomplete, setIncomplete]       = useState<IncompleteRoom[]>([])
+  const [chartData, setChartData]         = useState<ChartPoint[]>([])
+  const [insights, setInsights]           = useState<string[]>([])
+  const [loadingInsights, setLoadingInsights] = useState(false)
 
   useEffect(() => {
     async function init() {
@@ -88,7 +108,7 @@ export default function StatsPage() {
     setLoading(true)
     const supabase = createClient()
     const dateStart = `${date}T00:00:00+09:00`
-    const dateEnd = `${date}T23:59:59+09:00`
+    const dateEnd   = `${date}T23:59:59+09:00`
 
     const [roomsRes, completedRes, staffRes] = await Promise.all([
       supabase.from('rooms').select('id, number, floor, status').eq('hotel_id', hotelId).is('deleted_at', null),
@@ -100,7 +120,7 @@ export default function StatsPage() {
       supabase.from('staff').select('id, name').eq('hotel_id', hotelId),
     ])
 
-    const rooms = roomsRes.data ?? []
+    const rooms     = roomsRes.data ?? []
     const completed = completedRes.data ?? []
     const staffList = staffRes.data ?? []
 
@@ -125,15 +145,20 @@ export default function StatsPage() {
       Object.entries(statMap)
         .filter(([, v]) => v.count > 0)
         .map(([id, v]) => ({
-          staffId: id,
-          name: v.name,
-          completed: v.count,
+          staffId: id, name: v.name, completed: v.count,
           avgMinutes: v.count > 0 ? Math.round(v.totalMin / v.count) : null,
         }))
         .sort((a, b) => b.completed - a.completed)
     )
-
     setLoading(false)
+  }
+
+  async function fetchInsights() {
+    setLoadingInsights(true); setInsights([])
+    try {
+      const res = await fetch('/api/admin/ai-insight')
+      if (res.ok) { const data = await res.json(); setInsights(data.insights ?? []) }
+    } catch { /* AI 미연결 */ } finally { setLoadingInsights(false) }
   }
 
   async function loadChartData(p: Period) {
@@ -153,8 +178,7 @@ export default function StatsPage() {
 
     const countMap: Record<string, number> = {}
     for (let i = 0; i < days; i++) {
-      const d = new Date()
-      d.setDate(d.getDate() - days + 1 + i)
+      const d = new Date(); d.setDate(d.getDate() - days + 1 + i)
       countMap[d.toISOString().slice(0, 10)] = 0
     }
     for (const row of completions ?? []) {
@@ -179,57 +203,61 @@ export default function StatsPage() {
     { key: 'monthly', label: '월간' },
   ]
 
+  const cardSt: React.CSSProperties = {
+    background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, overflow: 'hidden',
+  }
+
   return (
-    <div className="min-h-screen bg-toss-bg">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text, fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif" }} className="md:pl-[220px]">
       <AdminNav />
 
-      <main className="max-w-3xl mx-auto px-4 py-6 pb-20 md:pb-6 space-y-4">
-        {/* 헤더 */}
-        <div>
-          <h1 className="text-xl font-bold text-[#191919]">통계</h1>
-        </div>
+      <main style={{ maxWidth: 800, margin: '0 auto', padding: '20px 16px 80px', display: 'flex', flexDirection: 'column', gap: 12 }} className="md:pb-6">
+        <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em' }}>통계</h1>
 
         {/* 기간 탭 */}
-        <div className="flex gap-1 bg-white rounded-2xl p-1 shadow-card w-fit">
+        <div style={{ display: 'flex', gap: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 4, width: 'fit-content' }}>
           {PERIOD_TABS.map(tab => (
             <button
               key={tab.key}
               onClick={() => setPeriod(tab.key)}
-              className={`px-5 py-2 text-sm font-bold rounded-xl transition-all ${
-                period === tab.key
-                  ? 'bg-[#191919] text-white shadow-sm'
-                  : 'text-[#B0B8C1] hover:text-[#6B7684]'
-              }`}
-            >
-              {tab.label}
-            </button>
+              style={{
+                padding: '7px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8,
+                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: period === tab.key ? C.text : 'transparent',
+                color: period === tab.key ? C.bg : C.textMid,
+                transition: 'all 0.15s',
+              }}
+            >{tab.label}</button>
           ))}
         </div>
 
         {/* 날짜 선택 (일간) */}
         {period === 'daily' && (
-          <div className="flex items-center gap-3">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <input
               type="date"
               value={date}
               max={today}
               onChange={e => setDate(e.target.value)}
-              className="px-4 py-2.5 bg-white rounded-xl text-sm text-[#191919] shadow-card focus:outline-none focus:ring-2 focus:ring-toss-blue transition-all"
+              style={{
+                padding: '8px 12px', background: C.card, border: `1px solid ${C.border}`,
+                borderRadius: 8, fontSize: 13, color: C.text, outline: 'none', fontFamily: 'inherit',
+              }}
             />
             {date !== today && (
               <button
                 onClick={() => setDate(today)}
-                className="text-sm font-bold text-toss-blue hover:text-toss-blue-hover transition-colors"
+                style={{ fontSize: 13, fontWeight: 700, color: C.accent, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
               >오늘로</button>
             )}
-            <span className="text-sm text-[#6B7684] font-medium">
+            <span style={{ fontSize: 13, color: C.textMid }}>
               {new Date(date).toLocaleDateString('ko-KR', { month: 'long', day: 'numeric', weekday: 'short' })}
             </span>
             <button
               onClick={() => window.open(`/api/admin/stats/export?date=${date}`, '_blank')}
-              className="ml-auto flex items-center gap-1.5 px-3.5 py-2 bg-white rounded-xl text-sm font-semibold text-[#6B7684] shadow-card hover:bg-[#F8F9FB] transition-colors"
+              style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, fontWeight: 600, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}
             >
-              <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+              <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 13, height: 13 }}>
                 <path d="M10.75 2.75a.75.75 0 0 0-1.5 0v8.614L6.295 8.235a.75.75 0 1 0-1.09 1.03l4.25 4.5a.75.75 0 0 0 1.09 0l4.25-4.5a.75.75 0 0 0-1.09-1.03l-2.955 3.129V2.75Z" />
                 <path d="M3.5 12.75a.75.75 0 0 0-1.5 0v2.5A2.75 2.75 0 0 0 4.75 18h10.5A2.75 2.75 0 0 0 18 15.25v-2.5a.75.75 0 0 0-1.5 0v2.5c0 .69-.56 1.25-1.25 1.25H4.75c-.69 0-1.25-.56-1.25-1.25v-2.5Z" />
               </svg>
@@ -239,57 +267,58 @@ export default function StatsPage() {
         )}
 
         {loading ? (
-          <div className="bg-white rounded-2xl shadow-card py-20 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-toss-blue border-t-transparent rounded-full animate-spin" />
+          <div style={{ ...cardSt, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px 0' }}>
+            <div style={{ width: 24, height: 24, borderRadius: '50%', border: `2px solid ${C.border}`, borderTopColor: C.accent, animation: 'spin 0.7s linear infinite' }}/>
           </div>
         ) : period !== 'daily' ? (
           /* 주간 / 월간 차트 */
-          <div className="bg-white rounded-2xl shadow-card p-5">
-            <div className="flex justify-between items-center">
-              <h2 className="font-bold text-[#191919]">
+          <div style={{ ...cardSt, padding: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>
                 {period === 'weekly' ? '최근 7일 완료 현황' : '최근 30일 완료 현황'}
               </h2>
-              <span className="text-sm font-bold text-toss-blue">
+              <span style={{ fontSize: 13, fontWeight: 700, color: C.accent }}>
                 총 {chartData.reduce((s, d) => s + d.value, 0)}건
               </span>
             </div>
-            {chartData.length > 0 ? (
-              <BarChart data={chartData} />
-            ) : (
-              <p className="text-center text-[#B0B8C1] text-sm py-10">데이터가 없습니다</p>
-            )}
+            {chartData.length > 0
+              ? <BarChart data={chartData} />
+              : <p style={{ textAlign: 'center', color: C.textDim, fontSize: 13, padding: '32px 0' }}>데이터가 없습니다</p>
+            }
           </div>
         ) : (
           <>
             {/* 요약 카드 3개 */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white rounded-2xl shadow-card p-4 text-center">
-                <p className="text-3xl font-bold text-[#191919] leading-none">{totalCompleted}</p>
-                <p className="text-xs text-[#B0B8C1] font-medium mt-1.5">완료</p>
-              </div>
-              <div className="bg-white rounded-2xl shadow-card p-4 text-center">
-                <p className="text-3xl font-bold text-[#191919] leading-none">{totalRooms}</p>
-                <p className="text-xs text-[#B0B8C1] font-medium mt-1.5">전체 객실</p>
-              </div>
-              <div className="bg-white rounded-2xl shadow-card p-4 text-center">
-                <p className={`text-3xl font-bold leading-none ${completionRate === 100 ? 'text-toss-success' : 'text-[#191919]'}`}>
-                  {completionRate}<span className="text-lg">%</span>
-                </p>
-                <p className="text-xs text-[#B0B8C1] font-medium mt-1.5">완료율</p>
-              </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+              {[
+                { val: totalCompleted, label: '완료', color: completionRate === 100 ? C.green : C.text },
+                { val: totalRooms,     label: '전체 객실', color: C.text },
+                { val: `${completionRate}%`, label: '완료율', color: completionRate === 100 ? C.green : C.text },
+              ].map(item => (
+                <div key={item.label} style={{ ...cardSt, padding: '16px 12px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 28, fontWeight: 800, color: item.color, letterSpacing: '-0.04em', lineHeight: 1 }}>{item.val}</p>
+                  <p style={{ fontSize: 11, color: C.textDim, marginTop: 6, fontWeight: 500 }}>{item.label}</p>
+                </div>
+              ))}
             </div>
 
             {/* 진행률 바 */}
             {totalRooms > 0 && (
-              <div className="bg-white rounded-2xl shadow-card p-5">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-sm font-bold text-[#191919]">금일 진행률</span>
-                  <span className="text-sm font-bold text-[#6B7684]">{totalCompleted} / {totalRooms}</span>
+              <div style={{ ...cardSt, padding: '16px 18px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>금일 진행률</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: C.textMid }}>{totalCompleted} / {totalRooms}</span>
                 </div>
-                <div className="h-2 bg-[#F2F4F6] rounded-full overflow-hidden">
+                <div style={{ height: 6, background: C.surface, borderRadius: 999, overflow: 'hidden' }}>
                   <div
-                    className={`h-full rounded-full transition-all duration-700 ${completionRate === 100 ? 'bg-toss-success' : 'bg-toss-blue'}`}
-                    style={{ width: `${completionRate}%` }}
+                    style={{
+                      height: '100%', borderRadius: 999,
+                      background: completionRate === 100
+                        ? `linear-gradient(90deg, ${C.green}, ${C.green}99)`
+                        : `linear-gradient(90deg, ${C.accent}, ${C.accent}99)`,
+                      width: `${completionRate}%`,
+                      transition: 'width 0.7s cubic-bezier(0.16,1,0.3,1)',
+                    }}
                   />
                 </div>
               </div>
@@ -297,37 +326,35 @@ export default function StatsPage() {
 
             {/* 직원별 통계 */}
             {staffStats.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-                <div className="px-5 py-4" style={{ borderBottom: '1px solid #F2F4F6' }}>
-                  <h2 className="font-bold text-[#191919]">직원별 처리 현황</h2>
+              <div style={cardSt}>
+                <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
+                  <h2 style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>직원별 처리 현황</h2>
                 </div>
                 <div>
                   {staffStats.map((s, idx) => {
                     const isLast = idx === staffStats.length - 1
                     return (
-                      <div
-                        key={s.staffId}
-                        className="px-5 py-4"
-                        style={!isLast ? { borderBottom: '1px solid #F2F4F6' } : undefined}
-                      >
-                        <div className="flex items-center justify-between mb-2.5">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-[#EBF3FF] rounded-xl flex items-center justify-center shrink-0">
-                              <span className="text-xs font-bold text-toss-blue">{s.name.charAt(0)}</span>
+                      <div key={s.staffId} style={{ padding: '12px 18px', borderBottom: isLast ? 'none' : `1px solid ${C.border}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 30, height: 30, background: `${C.accent}18`, border: `1px solid ${C.accent}25`, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: C.accent }}>{s.name.charAt(0)}</span>
                             </div>
-                            <span className="font-bold text-[#191919] text-sm">{s.name}</span>
+                            <span style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{s.name}</span>
                           </div>
-                          <div className="flex items-center gap-3">
-                            {s.avgMinutes != null && (
-                              <span className="text-xs text-[#B0B8C1] font-medium">평균 {s.avgMinutes}분</span>
-                            )}
-                            <span className="text-sm font-bold text-[#191919]">{s.completed}개</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                            {s.avgMinutes != null && <span style={{ fontSize: 11, color: C.textDim }}>평균 {s.avgMinutes}분</span>}
+                            <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{s.completed}개</span>
                           </div>
                         </div>
-                        <div className="h-1.5 bg-[#F2F4F6] rounded-full overflow-hidden">
+                        <div style={{ height: 4, background: C.surface, borderRadius: 999, overflow: 'hidden' }}>
                           <div
-                            className="h-full bg-toss-blue rounded-full transition-all duration-500"
-                            style={{ width: `${Math.round((s.completed / maxCompleted) * 100)}%` }}
+                            style={{
+                              height: '100%', borderRadius: 999,
+                              background: `linear-gradient(90deg, ${C.accent}, ${C.accent}80)`,
+                              width: `${Math.round((s.completed / maxCompleted) * 100)}%`,
+                              transition: 'width 0.5s cubic-bezier(0.16,1,0.3,1)',
+                            }}
                           />
                         </div>
                       </div>
@@ -339,28 +366,22 @@ export default function StatsPage() {
 
             {/* 미완료 객실 */}
             {incomplete.length > 0 && (
-              <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-                <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid #F2F4F6' }}>
-                  <h2 className="font-bold text-[#191919]">미완료 객실</h2>
-                  <span className="text-sm font-bold text-toss-error">{incomplete.length}개</span>
+              <div style={cardSt}>
+                <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <h2 style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>미완료 객실</h2>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: C.red }}>{incomplete.length}개</span>
                 </div>
                 <div>
                   {incomplete.map((r, i) => {
                     const isLast = i === incomplete.length - 1
                     return (
-                      <div
-                        key={i}
-                        className="px-5 py-3.5 flex items-center justify-between"
-                        style={!isLast ? { borderBottom: '1px solid #F2F4F6' } : undefined}
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className={`w-2 h-2 rounded-full ${STATUS_DOT[r.status] ?? 'bg-slate-300'}`} />
-                          <span className="font-bold text-[#191919] text-sm">{r.number}호</span>
-                          <span className="text-xs text-[#B0B8C1]">{r.floor}층</span>
+                      <div key={i} style={{ padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: isLast ? 'none' : `1px solid ${C.border}` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: STATUS_DOT[r.status] ?? C.textDim, flexShrink: 0 }}/>
+                          <span style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{r.number}호</span>
+                          <span style={{ fontSize: 11, color: C.textDim }}>{r.floor}층</span>
                         </div>
-                        <span className="text-xs font-semibold text-[#6B7684]">
-                          {STATUS_LABELS[r.status] ?? r.status}
-                        </span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMid }}>{STATUS_LABELS[r.status] ?? r.status}</span>
                       </div>
                     )
                   })}
@@ -369,13 +390,54 @@ export default function StatsPage() {
             )}
 
             {staffStats.length === 0 && incomplete.length === 0 && (
-              <div className="bg-white rounded-2xl shadow-card py-20 text-center">
-                <p className="text-[#B0B8C1] text-sm font-medium">해당 날짜의 처리 데이터가 없습니다</p>
+              <div style={{ ...cardSt, padding: '60px 0', textAlign: 'center' }}>
+                <p style={{ color: C.textDim, fontSize: 13 }}>해당 날짜의 처리 데이터가 없습니다</p>
               </div>
             )}
+
+            {/* AI 인사이트 카드 */}
+            <div style={cardSt}>
+              <div style={{ padding: '14px 18px', borderBottom: insights.length > 0 ? `1px solid ${C.border}` : undefined, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14 }}>✨</span>
+                  <h2 style={{ fontWeight: 700, color: C.text, fontSize: 14 }}>AI 인사이트</h2>
+                </div>
+                <button
+                  onClick={fetchInsights}
+                  disabled={loadingInsights}
+                  style={{
+                    padding: '5px 14px', background: `${C.accent}14`, border: `1px solid ${C.accent}28`,
+                    color: C.accent, borderRadius: 999, fontSize: 11, fontWeight: 700,
+                    cursor: loadingInsights ? 'not-allowed' : 'pointer', opacity: loadingInsights ? 0.5 : 1,
+                    fontFamily: 'inherit',
+                  }}
+                >{loadingInsights ? '분석 중...' : insights.length > 0 ? '새로고침' : '분석하기'}</button>
+              </div>
+              {insights.length > 0 && (
+                <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {insights.map((insight, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                      <span style={{
+                        width: 20, height: 20, borderRadius: '50%',
+                        background: `${C.accent}14`, border: `1px solid ${C.accent}25`,
+                        color: C.accent, fontSize: 10, fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 1,
+                      }}>{i + 1}</span>
+                      <p style={{ fontSize: 13, color: C.textMid, lineHeight: 1.6 }}>{insight}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {!loadingInsights && insights.length === 0 && (
+                <div style={{ padding: '20px', textAlign: 'center' }}>
+                  <p style={{ fontSize: 12, color: C.textDim }}>분석하기 버튼을 눌러 AI 인사이트를 확인하세요</p>
+                </div>
+              )}
+            </div>
           </>
         )}
       </main>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }

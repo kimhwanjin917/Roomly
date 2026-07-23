@@ -247,7 +247,7 @@ export default function AdminNav() {
       </aside>
 
       {/* Mobile: Top header */}
-      <header className="md:hidden bg-white sticky top-0 z-10" style={{ borderBottom: '1px solid #E8EAED' }}>
+      <header className="md:hidden sticky top-0 z-10" style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
         <div className="flex items-center justify-between" style={{ padding: '0 20px', height: 48 }}>
           <div className="flex items-center" style={{ gap: 8 }}>
             <span
@@ -260,9 +260,9 @@ export default function AdminNav() {
             >
               R
             </span>
-            <span style={{ fontWeight: 700, color: '#191919', fontSize: 14, letterSpacing: '-0.01em' }}>Roomly</span>
+            <span style={{ fontWeight: 700, color: C.textActive, fontSize: 14, letterSpacing: '-0.01em' }}>Roomly</span>
           </div>
-          <button onClick={handleLogout} className="text-xs text-[#B0B8C1] hover:text-[#6B7684] transition-colors">
+          <button onClick={handleLogout} style={{ fontSize: 12, color: C.text, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
             로그아웃
           </button>
         </div>
@@ -270,8 +270,8 @@ export default function AdminNav() {
 
       {/* Mobile: Bottom tab bar */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-10 bg-white flex"
-        style={{ borderTop: '1px solid #E8EAED', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="md:hidden fixed bottom-0 left-0 right-0 z-10 flex"
+        style={{ background: C.bg, borderTop: `1px solid ${C.border}`, paddingBottom: 'env(safe-area-inset-bottom)' }}
       >
         {NAV_ITEMS.map(item => {
           const active = isActive(item.href)
@@ -280,12 +280,12 @@ export default function AdminNav() {
               key={item.href}
               href={item.href}
               className="flex-1 flex flex-col items-center justify-center"
-              style={{ paddingTop: 8, paddingBottom: 6, gap: 2 }}
+              style={{ paddingTop: 8, paddingBottom: 6, gap: 2, textDecoration: 'none' }}
             >
-              <span style={{ color: active ? C.accent : '#B0B8C1' }}>
+              <span style={{ color: active ? C.accent : C.iconDim }}>
                 {active ? item.iconActive ?? item.icon : item.icon}
               </span>
-              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '-0.01em', color: active ? C.accent : '#B0B8C1' }}>
+              <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '-0.01em', color: active ? C.accent : C.text }}>
                 {item.label}
               </span>
             </Link>
@@ -294,16 +294,16 @@ export default function AdminNav() {
         <button
           onClick={() => setShowMore(true)}
           className="flex-1 flex flex-col items-center justify-center"
-          style={{ paddingTop: 8, paddingBottom: 6, gap: 2 }}
+          style={{ paddingTop: 8, paddingBottom: 6, gap: 2, background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <span style={{ color: moreActive ? C.accent : '#B0B8C1' }}>
+          <span style={{ color: moreActive ? C.accent : C.iconDim }}>
             <svg viewBox="0 0 24 24" fill="currentColor" style={{ width: 15, height: 15 }}>
               <circle cx="5" cy="12" r="2" />
               <circle cx="12" cy="12" r="2" />
               <circle cx="19" cy="12" r="2" />
             </svg>
           </span>
-          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '-0.01em', color: moreActive ? C.accent : '#B0B8C1' }}>
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: '-0.01em', color: moreActive ? C.accent : C.text }}>
             더보기
           </span>
         </button>
@@ -311,18 +311,18 @@ export default function AdminNav() {
 
       {/* Mobile: More bottom sheet */}
       {showMore && (
-        <div className="fixed inset-0 z-30 md:hidden" style={{ background: 'rgba(0,0,0,0.4)' }} onClick={() => setShowMore(false)}>
+        <div className="fixed inset-0 z-30 md:hidden" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setShowMore(false)}>
           <div
-            className="absolute bottom-0 left-0 right-0 bg-white"
-            style={{ borderRadius: '24px 24px 0 0', paddingBottom: 'env(safe-area-inset-bottom)' }}
+            className="absolute bottom-0 left-0 right-0"
+            style={{ background: C.bg, borderTop: `1px solid ${C.border}`, borderRadius: '20px 20px 0 0', paddingBottom: 'env(safe-area-inset-bottom)' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-center" style={{ paddingTop: 12, paddingBottom: 8 }}>
-              <div style={{ width: 40, height: 4, background: '#E8EAED', borderRadius: 9999 }} />
+              <div style={{ width: 40, height: 4, background: C.border, borderRadius: 9999 }} />
             </div>
             <div style={{ padding: '0 20px 32px' }}>
-              <p className="text-xs font-bold text-[#B0B8C1] tracking-wider uppercase" style={{ marginBottom: 16 }}>관리</p>
-              <div className="grid grid-cols-3" style={{ gap: 12 }}>
+              <p style={{ fontSize: 10, fontWeight: 600, color: C.section, letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 16 }}>관리</p>
+              <div className="grid grid-cols-3" style={{ gap: 10 }}>
                 {MORE_ITEMS.map(item => {
                   const active = isActive(item.href)
                   return (
@@ -332,13 +332,14 @@ export default function AdminNav() {
                       onClick={() => setShowMore(false)}
                       className="flex flex-col items-center"
                       style={{
-                        gap: 8, padding: 16, borderRadius: 16,
-                        background: active ? '#eef0fb' : '#F8F9FB',
-                        color: active ? C.accent : '#6B7684',
+                        gap: 8, padding: 14, borderRadius: 12, textDecoration: 'none',
+                        background: active ? `${C.accent}18` : C.active,
+                        border: `1px solid ${active ? C.accent + '35' : C.border}`,
+                        color: active ? C.accent : C.text,
                       }}
                     >
                       {item.icon}
-                      <span style={{ fontSize: 12, fontWeight: 600, color: active ? C.accent : '#191919' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: active ? C.accent : C.textActive }}>
                         {item.label}
                       </span>
                     </Link>

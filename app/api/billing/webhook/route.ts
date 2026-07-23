@@ -37,11 +37,36 @@ export async function POST(req: NextRequest) {
   if (event.eventType === 'PAYMENT_STATUS_CHANGED') {
     const payment = event.data
     if (payment.status === 'DONE') {
+      // 멱등성 처리: 동일 paymentKey 중복 수신 방지 (T-082)
+      if (payment.paymentKey) {
+        const { data: existing } = await supabase
+          .from('payment_logs')
+          .select('id')
+          .eq('toss_payment_key', payment.paymentKey)
+          .single()
+        if (existing) return NextResponse.json({ received: true, duplicate: true })
+      }
+
       const planInfo = PLAN_AMOUNTS[payment.totalAmount]
       const customerKey = payment.metadata?.customerKey ?? payment.customerKey
 
       if (customerKey && planInfo) {
         const nextExpiry = addOneMonth(new Date())
+
+        // 결제 로그 기록
+        const { data: hotel } = await supabase
+          .from('hotels').select('id').eq('toss_customer_key', customerKey).single()
+        if (hotel && payment.paymentKey) {
+          await supabase.from('payment_logs').insert({
+            hotel_id: hotel.id,
+            toss_payment_key: payment.paymentKey,
+            amount: payment.totalAmount,
+            plan: planInfo.plan,
+            status: 'success',
+            next_billing_at: nextExpiry.toISOString(),
+            raw_event: event,
+          })
+        }
 
         await supabase.from('hotels')
           .update({

@@ -27,11 +27,14 @@ const PLANS = [
   },
 ]
 
+const ANNUAL_DISCOUNT = 10 // 연간 = 월 × 10 (2개월 무료)
+
 function BillingContent() {
   const searchParams = useSearchParams()
   const success = searchParams.get('success') === 'true'
   const expired = searchParams.get('expired') === 'true'
   const [loading, setLoading] = useState<string | null>(null)
+  const [interval, setInterval] = useState<'monthly' | 'annual'>('monthly')
 
   async function handleCheckout(planId: string) {
     setLoading(planId)
@@ -79,6 +82,21 @@ function BillingContent() {
         <div className="text-center mb-10">
           <h1 className="text-3xl font-bold text-gray-900 mb-3">요금제 선택</h1>
           <p className="text-gray-500 text-base">호텔에 맞는 플랜을 선택하세요</p>
+
+          {/* 월간/연간 토글 (T-201) */}
+          <div className="inline-flex items-center bg-gray-100 rounded-full p-1 mt-6">
+            <button
+              onClick={() => setInterval('monthly')}
+              className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${interval === 'monthly' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+            >월간</button>
+            <button
+              onClick={() => setInterval('annual')}
+              className={`px-5 py-2 rounded-full text-sm font-semibold transition-all ${interval === 'annual' ? 'bg-white shadow text-gray-900' : 'text-gray-500'}`}
+            >
+              연간
+              <span className="ml-1.5 text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">2개월 무료</span>
+            </button>
+          </div>
         </div>
 
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-5 mb-10 text-center text-white shadow-lg">
@@ -104,8 +122,22 @@ function BillingContent() {
                 <div className="mb-6">
                   <h2 className="text-xl font-bold text-gray-900 mb-2">{plan.name}</h2>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-3xl font-extrabold text-gray-900">₩{plan.price}</span>
-                    <span className="text-gray-400 text-sm">/월</span>
+                    {interval === 'annual' ? (
+                      <>
+                        <span className="text-3xl font-extrabold text-gray-900">
+                          ₩{(Number(plan.price.replace(/,/g, '')) * ANNUAL_DISCOUNT).toLocaleString()}
+                        </span>
+                        <span className="text-gray-400 text-sm">/년</span>
+                        <span className="text-xs text-emerald-600 font-semibold ml-1">
+                          (월 ₩{plan.price})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-3xl font-extrabold text-gray-900">₩{plan.price}</span>
+                        <span className="text-gray-400 text-sm">/월</span>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -141,7 +173,7 @@ function BillingContent() {
                       처리 중...
                     </span>
                   ) : (
-                    '3개월 무료 시작하기'
+                    interval === 'annual' ? '연간 결제 시작' : '3개월 무료 시작하기'
                   )}
                 </button>
               </div>

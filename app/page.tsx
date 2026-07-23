@@ -1,693 +1,1048 @@
+'use client'
+
 import Link from 'next/link'
-import type { Metadata } from 'next'
+import { useEffect } from 'react'
 
-export const metadata: Metadata = {
-  title: 'Roomly — 체크인 지연 없는 호텔 하우스키핑 관리',
-  description:
-    '객실 배정부터 완료 확인까지, 관리자 폰에서 실시간으로 보입니다. QR 스캔 한 번으로 직원이 접속하고, 카카오톡 단톡방 없이 하우스키핑을 운영하세요.',
-}
-
+/* ── Palette ─────────────────────────────────────────────────── */
 const C = {
-  bg:        '#080809',
-  surface:   '#0f1011',
-  surfaceHi: '#141516',
-  border:    '#1e2024',
-  borderHi:  '#2a2d33',
-  text:      '#f2f3f4',
-  textMid:   '#8a8f98',
-  textDim:   '#4a4f58',
-  accent:    '#5e6ad2',
-  accentHi:  '#6e7ae0',
+  bg:      '#0B1215',
+  bgMid:   '#111518',
+  surface: '#17171B',
+  card:    '#1A1C20',
+  border:  '#212427',
+  borderHi:'#262626',
+  text:    '#F2F3F4',
+  textMid: '#8A8F98',
+  textDim: '#4A4F58',
+  accent:  '#5e6ad2',
+  accentHi:'#818cf8',
+  gold:    '#C9A465',
+  green:   '#34d399',
+  amber:   '#fbbf24',
 }
 
-export default function LandingPage() {
+/* ══════════════════════════════════════════════════════════════
+   Logo mark — 3×2 grid, checkerboard pattern (✓ · ✓ / · ✓ ·)
+══════════════════════════════════════════════════════════════ */
+function RoomlyMark({ size = 24 }: { size?: number }) {
+  const s = size / 32
+
+  const cols = [4, 12.5, 21].map(v => v * s)
+  const rows = [4, 17].map(v => v * s)
+  const cw = 7 * s, ch = 11 * s, rx_ = 2 * s
+
+  // [col, row] pairs that are "done"
+  const done = [[0, 0], [2, 0], [1, 1]]
+
+  const isDone = (c: number, r: number) =>
+    done.some(([dc, dr]) => dc === c && dr === r)
+
+  // checkmark path centred at (cx, cy) scaled by s
+  const check = (cx: number, cy: number) =>
+    `M${cx - 1.7*s} ${cy + 0.3*s} L${cx - 0.3*s} ${cy + 1.8*s} L${cx + 2.5*s} ${cy - 2.2*s}`
+
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: C.bg,
-        fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif",
-        WebkitFontSmoothing: 'antialiased',
-        color: C.text,
-      }}
-    >
-      {/* Background grid */}
-      <div
-        aria-hidden
-        style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundImage: `linear-gradient(${C.border} 1px, transparent 1px), linear-gradient(90deg, ${C.border} 1px, transparent 1px)`,
-          backgroundSize: '48px 48px',
-          opacity: 0.4,
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
-      {/* Top glow */}
-      <div
-        aria-hidden
-        style={{
-          position: 'fixed',
-          top: -200,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 800,
-          height: 600,
-          borderRadius: '50%',
-          background: 'radial-gradient(ellipse, rgba(94,106,210,0.15) 0%, transparent 70%)',
-          pointerEvents: 'none',
-          zIndex: 0,
-        }}
-      />
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+      <rect width={size} height={size} rx={8 * s} fill="#17171B"/>
 
-      <div style={{ position: 'relative', zIndex: 1 }}>
+      {/* glows */}
+      {done.map(([c, r]) => (
+        <ellipse
+          key={`g${c}${r}`}
+          cx={cols[c] + cw / 2} cy={rows[r] + ch / 2}
+          rx={5.5 * s} ry={6.5 * s}
+          fill={C.accent} opacity="0.22"
+        />
+      ))}
 
-        {/* Header */}
-        <header
+      {/* cells */}
+      {rows.map((y, r) =>
+        cols.map((x, c) => (
+          <rect
+            key={`c${c}${r}`}
+            x={x} y={y} width={cw} height={ch} rx={rx_}
+            fill={isDone(c, r) ? C.accent : '#2C2F36'}
+          />
+        ))
+      )}
+
+      {/* checkmarks on done cells (only at >= 20px) */}
+      {size >= 20 && done.map(([c, r]) => (
+        <path
+          key={`k${c}${r}`}
+          d={check(cols[c] + cw / 2, rows[r] + ch / 2)}
+          stroke="white"
+          strokeWidth={1.5 * s}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          fill="none"
+        />
+      ))}
+    </svg>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   A — Word-by-word reveal (EGEON style)
+   gradient/color은 반드시 innermost span에 적용해야 함.
+   외부 span에 background-clip:text 쓰면 overflow:hidden 자식이
+   background painting을 차단 → 텍스트 투명해지는 버그 발생.
+══════════════════════════════════════════════════════════════ */
+function WordReveal({
+  text,
+  startDelay = 1.0,
+  wordDelay  = 0.075,
+  gradient,
+  color = C.text,
+}: {
+  text:        string
+  startDelay?: number
+  wordDelay?:  number
+  gradient?:   string
+  color?:      string
+}) {
+  return (
+    <>
+      {text.split(' ').map((word, i) => (
+        <span
+          key={i}
           style={{
-            position: 'sticky',
-            top: 0,
-            zIndex: 50,
-            background: 'rgba(8,8,9,0.85)',
-            backdropFilter: 'blur(20px)',
-            WebkitBackdropFilter: 'blur(20px)',
-            borderBottom: `1px solid ${C.border}`,
+            display: 'inline-block',
+            overflow: 'hidden',
+            verticalAlign: 'bottom',
+            marginRight: '0.22em',
           }}
         >
-          <div
-            style={{
-              maxWidth: 1100,
-              margin: '0 auto',
-              padding: '0 24px',
-              height: 56,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
-            {/* Logo */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span
-                style={{
-                  width: 22, height: 22, borderRadius: 6,
-                  background: C.accent,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: 11, fontWeight: 700, flexShrink: 0,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                R
-              </span>
-              <span style={{ fontSize: 15, fontWeight: 600, color: C.text, letterSpacing: '-0.02em' }}>
-                Roomly
-              </span>
+          <span style={{
+            display: 'inline-block',
+            ...(gradient
+              ? {
+                  background: gradient,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }
+              : { color }),
+            animation: `revealUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) ${startDelay + i * wordDelay}s both`,
+          }}>
+            {word}
+          </span>
+        </span>
+      ))}
+    </>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   C — Dashboard Mockup (changes with activeFeature)
+══════════════════════════════════════════════════════════════ */
+const FEATURES = [
+  {
+    id:   'realtime',
+    tag:  'Real-time',
+    title:'실시간 현황판',
+    desc: '모든 객실 상태를 한 화면에서. 청소 대기·진행 중·완료를 색상으로 즉시 파악하고, 드래그로 직원에게 배정합니다. 체크인 카운트다운까지 함께 보입니다.',
+  },
+  {
+    id:   'qr',
+    tag:  'Zero Setup',
+    title:'QR 직원 접속',
+    desc: '링크도 앱도 계정도 필요 없습니다. QR 스캔 한 번으로 직원이 즉시 접속하고, 배정된 객실만 보입니다. 퇴직 후 QR만 교체하면 접근이 즉시 차단됩니다.',
+  },
+  {
+    id:   'notify',
+    tag:  'Instant',
+    title:'배정 즉시 알림',
+    desc: '객실을 배정하면 직원 폰에 즉시 알림이 갑니다. 완료 보고도 푸시 알림으로 관리자에게 자동 전달됩니다. 전화 한 통도 필요 없습니다.',
+  },
+]
+
+function QrSvg() {
+  return (
+    <svg viewBox="0 0 21 21" width="76" height="76">
+      {/* TL finder */}
+      <rect x="1" y="1" width="7" height="7" fill={C.bg} rx="0.5"/>
+      <rect x="2" y="2" width="5" height="5" fill="#fff" rx="0.3"/>
+      <rect x="3" y="3" width="3" height="3" fill={C.bg}/>
+      {/* TR finder */}
+      <rect x="13" y="1" width="7" height="7" fill={C.bg} rx="0.5"/>
+      <rect x="14" y="2" width="5" height="5" fill="#fff" rx="0.3"/>
+      <rect x="15" y="3" width="3" height="3" fill={C.bg}/>
+      {/* BL finder */}
+      <rect x="1" y="13" width="7" height="7" fill={C.bg} rx="0.5"/>
+      <rect x="2" y="14" width="5" height="5" fill="#fff" rx="0.3"/>
+      <rect x="3" y="15" width="3" height="3" fill={C.bg}/>
+      {/* Data modules */}
+      {([
+        [9,1],[11,1],[12,1],[10,2],[9,3],[11,3],[10,4],[12,4],
+        [9,6],[10,6],[12,6],[9,8],[11,8],[10,9],[12,9],[9,11],
+        [11,11],[13,9],[14,9],[14,11],[15,10],[16,9],[16,11],
+        [13,13],[15,13],[14,14],[16,14],[13,15],[15,15],[16,15],
+        [13,17],[14,17],[16,17],[15,18],[13,19],[14,19],[15,19],
+      ] as [number, number][]).map(([x, y]) => (
+        <rect key={`${x}-${y}`} x={x} y={y} width="1" height="1" fill={C.bg}/>
+      ))}
+    </svg>
+  )
+}
+
+function DashboardMockup({ activeFeature = 0 }: { activeFeature?: number }) {
+  const rooms = [
+    { id: '101', status: 'done',    name: '김지현' },
+    { id: '102', status: 'active',  name: '박민수' },
+    { id: '103', status: 'waiting', name: '' },
+    { id: '104', status: 'done',    name: '이수연' },
+    { id: '105', status: 'active',  name: '최태준' },
+    { id: '106', status: 'waiting', name: '' },
+    { id: '201', status: 'done',    name: '김지현' },
+    { id: '202', status: 'waiting', name: '' },
+    { id: '203', status: 'active',  name: '박민수' },
+  ]
+  const sColor = { done: C.green, active: C.amber, waiting: C.borderHi }
+  const sLabel = { done: '완료', active: '청소 중', waiting: '대기' }
+  const trans = 'opacity 0.45s cubic-bezier(0.16,1,0.3,1), transform 0.45s cubic-bezier(0.16,1,0.3,1)'
+
+  return (
+    <div style={{
+      background: C.bgMid,
+      border: `1px solid ${C.border}`,
+      borderRadius: 16,
+      overflow: 'hidden',
+      boxShadow: `0 48px 120px rgba(0,0,0,0.72)`,
+      position: 'relative',
+    }}>
+      {/* ── Titlebar (항상 표시) ── */}
+      <div style={{
+        padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
+        display: 'flex', alignItems: 'center', gap: 7, background: C.surface,
+      }}>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57' }}/>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#febc2e' }}/>
+        <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840' }}/>
+        <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: C.textDim, letterSpacing: '-0.01em' }}>
+          Roomly — 실시간 객실 현황
+        </span>
+      </div>
+
+      {/* ── Feature 0: 대시보드 (베이스, 높이 결정) ── */}
+      <div style={{ display: 'flex', gap: 1, borderBottom: `1px solid ${C.border}`, background: C.border }}>
+        {[
+          { label: '전체', value: '9', color: C.textMid },
+          { label: '완료',  value: '4', color: C.green },
+          { label: '청소 중', value: '3', color: C.amber },
+          { label: '대기',  value: '2', color: C.textDim },
+        ].map(s => (
+          <div key={s.label} style={{ flex: 1, padding: '13px 8px', background: C.bgMid, textAlign: 'center' }}>
+            <div style={{ fontSize: 19, fontWeight: 700, color: s.color, letterSpacing: '-0.03em' }}>{s.value}</div>
+            <div style={{ fontSize: 10, color: C.textDim, marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, background: C.border, padding: 1 }}>
+        {rooms.map(r => (
+          <div key={r.id} style={{ background: C.card, padding: '13px 11px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{r.id}호</span>
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%',
+                background: sColor[r.status as keyof typeof sColor],
+                boxShadow: r.status !== 'waiting' ? `0 0 7px ${sColor[r.status as keyof typeof sColor]}90` : 'none',
+              }}/>
             </div>
-
-            {/* Nav */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Link
-                href="/login"
-                style={{
-                  fontSize: 13, fontWeight: 500, color: C.textMid,
-                  padding: '6px 12px', borderRadius: 6,
-                  textDecoration: 'none', letterSpacing: '-0.01em',
-                }}
-              >
-                로그인
-              </Link>
-              <Link
-                href="/signup"
-                style={{
-                  fontSize: 13, fontWeight: 600, color: '#fff',
-                  padding: '6px 14px', borderRadius: 6,
-                  background: C.accent,
-                  textDecoration: 'none', letterSpacing: '-0.01em',
-                }}
-              >
-                무료 시작
-              </Link>
-            </div>
+            <span style={{ fontSize: 10, color: sColor[r.status as keyof typeof sColor], fontWeight: 600 }}>
+              {sLabel[r.status as keyof typeof sLabel]}
+            </span>
+            {r.name && <span style={{ fontSize: 9, color: C.textDim }}>{r.name}</span>}
           </div>
-        </header>
+        ))}
+      </div>
+      <div style={{ padding: '11px 14px', display: 'flex', alignItems: 'center', gap: 8, borderTop: `1px solid ${C.border}` }}>
+        <div style={{ flex: 1, height: 3, borderRadius: 2, background: C.border, overflow: 'hidden' }}>
+          <div style={{ width: '55%', height: '100%', background: `linear-gradient(90deg, ${C.green}, ${C.accent})`, borderRadius: 2 }}/>
+        </div>
+        <span style={{ fontSize: 9, color: C.textMid }}>55%</span>
+      </div>
 
-        {/* Hero */}
-        <section
-          style={{
-            padding: '120px 24px 96px',
-            maxWidth: 1100,
-            margin: '0 auto',
-            textAlign: 'center',
-          }}
-        >
-          {/* Badge */}
-          <div
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              border: `1px solid ${C.borderHi}`,
-              borderRadius: 999,
-              padding: '5px 14px',
-              marginBottom: 40,
-              fontSize: 12, fontWeight: 500, color: C.textMid,
-              letterSpacing: '-0.01em',
-            }}
-          >
-            <span
-              style={{
-                width: 6, height: 6, borderRadius: '50%',
-                background: C.accent, flexShrink: 0,
-              }}
-            />
-            Hotel Housekeeping Management
-          </div>
-
-          {/* Headline */}
-          <h1
-            style={{
-              fontSize: 'clamp(40px, 7vw, 72px)',
-              fontWeight: 800,
-              letterSpacing: '-0.04em',
-              lineHeight: 1.05,
-              marginBottom: 24,
-              background: `linear-gradient(135deg, ${C.text} 0%, ${C.textMid} 100%)`,
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            체크인 지연을<br />없애는 가장 빠른 방법
-          </h1>
-
-          {/* Sub */}
-          <p
-            style={{
-              fontSize: 17,
-              color: C.textMid,
-              lineHeight: 1.6,
-              marginBottom: 48,
-              letterSpacing: '-0.01em',
-              maxWidth: 480,
-              margin: '0 auto 48px',
-            }}
-          >
-            객실 배정·청소·완료 확인까지 실시간으로.<br />
-            카카오톡 단톡방은 이제 필요 없습니다.
-          </p>
-
-          {/* CTAs */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <Link
-              href="/signup"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                fontSize: 14, fontWeight: 600, color: '#fff',
-                padding: '11px 22px', borderRadius: 8,
-                background: C.accent,
-                textDecoration: 'none', letterSpacing: '-0.01em',
-              }}
-            >
-              무료로 시작하기
-              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 14, height: 14 }}>
-                <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.25 4.25a.75.75 0 0 1 0 1.06L9.28 12.53a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd" />
-              </svg>
-            </Link>
-            <Link
-              href="/login"
-              style={{
-                display: 'inline-flex', alignItems: 'center',
-                fontSize: 14, fontWeight: 500, color: C.textMid,
-                padding: '11px 22px', borderRadius: 8,
-                border: `1px solid ${C.border}`,
-                textDecoration: 'none', letterSpacing: '-0.01em',
-              }}
-            >
-              로그인
-            </Link>
-          </div>
-
-          <p style={{ marginTop: 20, fontSize: 12, color: C.textDim, letterSpacing: '-0.01em' }}>
-            3개월 무료 · 신용카드 불필요 · 언제든 취소
-          </p>
-        </section>
-
-        {/* Divider */}
-        <div style={{ height: 1, background: C.border, maxWidth: 1100, margin: '0 auto' }} />
-
-        {/* Features */}
-        <section style={{ padding: '80px 24px', maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ marginBottom: 56, textAlign: 'center' }}>
-            <p
-              style={{
-                fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                textTransform: 'uppercase', color: C.accent, marginBottom: 16,
-              }}
-            >
-              Features
+      {/* ── Feature 1 오버레이: QR 직원 접속 ── */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: C.bgMid,
+        opacity: activeFeature === 1 ? 1 : 0,
+        transform: activeFeature === 1 ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(8px)',
+        transition: trans,
+        pointerEvents: activeFeature === 1 ? 'auto' : 'none',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', gap: 7, background: C.surface,
+        }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57' }}/>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#febc2e' }}/>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840' }}/>
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: C.textDim, letterSpacing: '-0.01em' }}>
+            Roomly — 직원 QR 접속
+          </span>
+        </div>
+        <div style={{ padding: '24px 24px', flex: 1 }}>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 4, letterSpacing: '-0.02em' }}>
+              직원 공유용 QR 코드
             </p>
-            <h2
-              style={{
-                fontSize: 'clamp(24px, 4vw, 40px)',
-                fontWeight: 700, letterSpacing: '-0.03em',
-                color: C.text, lineHeight: 1.1,
-              }}
-            >
-              복잡한 설정 없이 바로 씁니다
-            </h2>
+            <p style={{ fontSize: 11, color: C.textDim }}>스캔 한 번으로 즉시 접속 · 앱 설치 불필요</p>
           </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: 1,
-              border: `1px solid ${C.border}`,
-              borderRadius: 12,
-              overflow: 'hidden',
-            }}
-          >
-            {[
-              {
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 20, height: 20 }}>
-                    <rect x="3" y="3" width="8" height="8" rx="1.5" />
-                    <rect x="13" y="3" width="8" height="8" rx="1.5" />
-                    <rect x="3" y="13" width="8" height="8" rx="1.5" />
-                    <rect x="13" y="13" width="8" height="8" rx="1.5" />
-                  </svg>
-                ),
-                title: '실시간 현황판',
-                desc: '모든 객실 상태를 한 화면에서. 청소 대기·진행 중·완료를 색상으로 즉시 파악하고, 드래그로 직원에게 배정합니다.',
-              },
-              {
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 20, height: 20 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75V16.5ZM16.5 6.75h.75v.75h-.75v-.75Z" />
-                  </svg>
-                ),
-                title: 'QR 직원 접속',
-                desc: '링크도 앱도 계정도 필요 없습니다. QR 스캔 한 번으로 직원이 즉시 접속하고, 배정된 객실만 보입니다.',
-              },
-              {
-                icon: (
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} style={{ width: 20, height: 20 }}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                  </svg>
-                ),
-                title: '배정 즉시 알림',
-                desc: '객실을 배정하면 직원 폰에 즉시 알림이 갑니다. 담당 객실을 놓치거나 다시 물어볼 일이 없습니다.',
-              },
-            ].map((f, i) => (
-              <div
-                key={f.title}
-                style={{
-                  padding: '36px 32px',
-                  background: C.surface,
-                  borderRight: i < 2 ? `1px solid ${C.border}` : 'none',
-                }}
-              >
-                <div
-                  style={{
-                    width: 36, height: 36, borderRadius: 8,
-                    background: C.surfaceHi,
-                    border: `1px solid ${C.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: C.accent, marginBottom: 20,
-                  }}
-                >
-                  {f.icon}
+          <div style={{
+            width: 140, height: 140, margin: '0 auto 20px',
+            background: '#fff', borderRadius: 12, padding: 12,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: `0 0 40px ${C.accent}28`,
+          }}>
+            <QrSvg/>
+          </div>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+            <p style={{
+              fontSize: 10, fontWeight: 700, color: C.textDim,
+              letterSpacing: '0.1em', textTransform: 'uppercase', marginBottom: 10,
+            }}>현재 접속 중인 직원</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+              {[
+                { name: '김지현', rooms: '101 · 201호', color: C.green },
+                { name: '박민수', rooms: '102 · 203호', color: C.accent },
+                { name: '최태준', rooms: '105호',       color: C.amber },
+              ].map(s => (
+                <div key={s.name} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '9px 13px', background: C.card, borderRadius: 9,
+                  border: `1px solid ${C.border}`,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, boxShadow: `0 0 6px ${s.color}` }}/>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: C.text }}>{s.name}</span>
+                  </div>
+                  <span style={{ fontSize: 11, color: C.textDim }}>{s.rooms}</span>
                 </div>
-                <h3
-                  style={{
-                    fontSize: 15, fontWeight: 600, color: C.text,
-                    letterSpacing: '-0.02em', marginBottom: 10,
-                  }}
-                >
-                  {f.title}
-                </h3>
-                <p style={{ fontSize: 13, color: C.textMid, lineHeight: 1.65, letterSpacing: '-0.01em' }}>
-                  {f.desc}
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Feature 2 오버레이: 배정 즉시 알림 ── */}
+      <div style={{
+        position: 'absolute', inset: 0,
+        background: C.bgMid,
+        opacity: activeFeature === 2 ? 1 : 0,
+        transform: activeFeature === 2 ? 'scale(1) translateY(0)' : 'scale(0.97) translateY(8px)',
+        transition: trans,
+        pointerEvents: activeFeature === 2 ? 'auto' : 'none',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{
+          padding: '11px 16px', borderBottom: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', gap: 7, background: C.surface,
+        }}>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ff5f57' }}/>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#febc2e' }}/>
+          <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#28c840' }}/>
+          <span style={{ flex: 1, textAlign: 'center', fontSize: 11, color: C.textDim, letterSpacing: '-0.01em' }}>
+            Roomly — 알림 센터
+          </span>
+        </div>
+        <div style={{ padding: '14px', flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.textMid }}>최근 알림</span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, color: C.accent,
+              background: `${C.accent}18`, border: `1px solid ${C.accent}28`,
+              padding: '2px 8px', borderRadius: 4,
+            }}>2 unread</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { room: '203호', type: '배정', desc: '지금 바로 청소를 시작하세요',  time: '방금 전', color: C.accent, unread: true },
+              { room: '105호', type: '완료', desc: '청소 완료 — 관리자에게 보고됨', time: '3분 전',  color: C.green,  unread: true },
+              { room: '302호', type: '배정', desc: '지금 바로 청소를 시작하세요',  time: '8분 전',  color: C.accent, unread: false },
+            ].map((n, i) => (
+              <div key={i} style={{
+                padding: '12px 13px', borderRadius: 10,
+                background: n.unread ? C.surface : C.card,
+                border: `1px solid ${n.unread ? C.borderHi : C.border}`,
+                opacity: n.unread ? 1 : 0.5,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginBottom: 6 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 7, background: n.color,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    {n.type === '배정'
+                      ? <svg viewBox="0 0 16 16" fill="white" style={{ width: 12, height: 12 }}>
+                          <path d="M8 1a5 5 0 0 0-5 5v1.5c0 .276-.224.5-.5.5H2a.5.5 0 0 0 0 1h12a.5.5 0 0 0 0-1h-.5a.5.5 0 0 1-.5-.5V6a5 5 0 0 0-5-5zm0 13a2 2 0 0 0 2-2H6a2 2 0 0 0 2 2z"/>
+                        </svg>
+                      : <svg viewBox="0 0 16 16" fill="white" style={{ width: 12, height: 12 }}>
+                          <path fillRule="evenodd" d="M12.707 4.293a1 1 0 0 1 0 1.414L7.414 11 3.293 6.879A1 1 0 0 1 4.707 5.465L7.414 8.172l3.879-3.879a1 1 0 0 1 1.414 0Z" clipRule="evenodd"/>
+                        </svg>
+                    }
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: C.text }}>
+                      Roomly <span style={{ color: n.color }}>{n.type}</span>
+                    </div>
+                    <div style={{ fontSize: 10, color: C.textDim }}>{n.time}</div>
+                  </div>
+                  {n.unread && <div style={{ width: 6, height: 6, borderRadius: '50%', background: n.color, boxShadow: `0 0 7px ${n.color}`, flexShrink: 0 }}/>}
+                </div>
+                <p style={{ fontSize: 12, color: C.textMid, lineHeight: 1.5, margin: 0 }}>
+                  <strong style={{ color: C.text }}>{n.room}</strong>
+                  {n.type === '배정' ? '가 배정되었습니다.' : ' 청소가 완료되었습니다.'}<br/>
+                  <span style={{ fontSize: 11, color: C.textDim }}>{n.desc}</span>
                 </p>
               </div>
             ))}
           </div>
-        </section>
+        </div>
+      </div>
+    </div>
+  )
+}
 
-        {/* Divider */}
-        <div style={{ height: 1, background: C.border, maxWidth: 1100, margin: '0 auto' }} />
+/* ══════════════════════════════════════════════════════════════
+   C — Features Section (각 피처마다 텍스트 + 목업 나란히)
+══════════════════════════════════════════════════════════════ */
+function StickyFeatures() {
+  return (
+    <section style={{ padding: '140px 32px', maxWidth: 1200, margin: '0 auto' }}>
+      {/* Section heading */}
+      <div style={{ textAlign: 'center', marginBottom: 100 }}>
+        <p className="reveal-clip" style={{
+          fontSize: 11, fontWeight: 700, color: C.accent,
+          letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16,
+        }}>Features</p>
+        <h2 className="reveal-clip" style={{
+          fontSize: 'clamp(28px, 4.5vw, 60px)',
+          fontWeight: 900, letterSpacing: '-0.048em',
+          color: C.text, lineHeight: 1.0,
+          transitionDelay: '0.1s',
+        }}>
+          복잡한 설정 없이<br/>바로 씁니다
+        </h2>
+      </div>
 
-        {/* Before/After */}
-        <section style={{ padding: '80px 24px', maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ marginBottom: 56, textAlign: 'center' }}>
-            <p
-              style={{
-                fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                textTransform: 'uppercase', color: C.accent, marginBottom: 16,
-              }}
-            >
-              Before / After
-            </p>
-            <h2
-              style={{
-                fontSize: 'clamp(24px, 4vw, 40px)',
-                fontWeight: 700, letterSpacing: '-0.03em',
-                color: C.text, lineHeight: 1.1,
-              }}
-            >
-              이런 상황, 익숙하지 않으신가요?
-            </h2>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
-            {/* Before */}
-            <div
-              style={{
-                padding: '28px 28px',
-                background: C.surface,
-                border: `1px solid ${C.border}`,
-                borderRadius: 10,
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-block',
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: '#f87171',
-                  background: 'rgba(248,113,113,0.1)',
-                  border: '1px solid rgba(248,113,113,0.2)',
-                  padding: '3px 10px', borderRadius: 4,
-                  marginBottom: 24,
-                }}
-              >
-                Before
-              </span>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {[
-                  '카카오톡 단톡방으로 객실 배정',
-                  '수기 체크리스트, 종이 보고',
-                  '완료 확인마다 전화 통화',
-                ].map(t => (
-                  <li
-                    key={t}
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
-                  >
-                    <svg viewBox="0 0 16 16" fill="none" stroke="#f87171" strokeWidth={2} style={{ width: 14, height: 14, flexShrink: 0, marginTop: 2 }}>
-                      <path strokeLinecap="round" d="M4 4l8 8M12 4l-8 8" />
-                    </svg>
-                    <span style={{ fontSize: 13, color: C.textMid, letterSpacing: '-0.01em', lineHeight: 1.5 }}>{t}</span>
-                  </li>
-                ))}
-              </ul>
+      {/* Feature rows */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 120 }}>
+        {FEATURES.map((f, i) => (
+          <div
+            key={f.id}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+              gap: 64,
+              alignItems: 'center',
+            }}
+          >
+            {/* Text — wipe in from left */}
+            <div className="reveal-left">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: C.accent,
+                  background: `${C.accent}14`, border: `1px solid ${C.accent}28`,
+                  padding: '4px 12px', borderRadius: 4,
+                }}>{f.tag}</span>
+                <span style={{ fontSize: 13, color: C.textDim, fontWeight: 600 }}>
+                  0{i + 1} / 0{FEATURES.length}
+                </span>
+              </div>
+              <h3 style={{
+                fontSize: 'clamp(30px, 3.8vw, 52px)',
+                fontWeight: 900, letterSpacing: '-0.045em',
+                color: C.text, marginBottom: 20, lineHeight: 1.0,
+              }}>
+                {f.title}
+              </h3>
+              <p style={{
+                fontSize: 16, color: C.textMid,
+                lineHeight: 1.8, letterSpacing: '-0.015em',
+                maxWidth: 420,
+              }}>
+                {f.desc}
+              </p>
             </div>
 
-            {/* After */}
-            <div
-              style={{
-                padding: '28px 28px',
-                background: C.surface,
-                border: `1px solid ${C.accent}40`,
-                borderRadius: 10,
-                boxShadow: `0 0 40px rgba(94,106,210,0.08)`,
-              }}
-            >
-              <span
-                style={{
-                  display: 'inline-block',
-                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                  color: C.accent,
-                  background: `${C.accent}18`,
-                  border: `1px solid ${C.accent}30`,
-                  padding: '3px 10px', borderRadius: 4,
-                  marginBottom: 24,
-                }}
-              >
-                After
-              </span>
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {[
-                  'QR 스캔 한 번으로 즉시 접속',
-                  '실시간 현황판으로 모든 상태 파악',
-                  '배정 즉시 직원 폰에 자동 알림',
-                ].map(t => (
-                  <li
-                    key={t}
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}
-                  >
-                    <svg viewBox="0 0 16 16" fill={C.accent} style={{ width: 14, height: 14, flexShrink: 0, marginTop: 2 }}>
-                      <path fillRule="evenodd" d="M12.707 4.293a1 1 0 0 1 0 1.414L7.414 11 3.293 6.879A1 1 0 0 1 4.707 5.465L7.414 8.172l3.879-3.879a1 1 0 0 1 1.414 0Z" clipRule="evenodd" />
-                    </svg>
-                    <span style={{ fontSize: 13, color: C.text, letterSpacing: '-0.01em', lineHeight: 1.5 }}>{t}</span>
-                  </li>
-                ))}
-              </ul>
+            {/* Mockup — wipe in from right, 0.15s stagger */}
+            <div className="reveal-right reveal-stagger">
+              <div style={{ transform: 'perspective(1400px) rotateY(-5deg) rotateX(2deg)' }}>
+                <DashboardMockup activeFeature={i}/>
+              </div>
             </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Main Page
+══════════════════════════════════════════════════════════════ */
+export default function LandingPage() {
+  /* B — observe all clip/fade reveal elements */
+  useEffect(() => {
+    history.scrollRestoration = 'manual'
+    window.scrollTo(0, 0)
+  }, [])
+
+  useEffect(() => {
+    const selectors = '.reveal, .reveal-clip, .reveal-left, .reveal-right'
+    const els = Array.from(document.querySelectorAll(selectors))
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible') })
+      },
+      { threshold: 0 },
+    )
+    els.forEach(el => obs.observe(el))
+
+    // fallback: 페이지 어딘가에서 observer가 실패해도 4초 후 전부 보이게
+    const fallback = setTimeout(() => {
+      els.forEach(el => el.classList.add('visible'))
+    }, 4000)
+
+    return () => { obs.disconnect(); clearTimeout(fallback) }
+  }, [])
+
+  const ticker = [
+    '실시간 객실 현황', '·', 'QR 직원 접속', '·', '체크인 지연 제로',
+    '·', '배정 즉시 알림', '·', '카카오톡 단톡방 대체', '·', '하우스키핑 디지털화', '·',
+    '실시간 객실 현황', '·', 'QR 직원 접속', '·', '체크인 지연 제로',
+    '·', '배정 즉시 알림', '·', '카카오톡 단톡방 대체', '·', '하우스키핑 디지털화', '·',
+  ]
+
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: C.bg,
+      fontFamily: "'Inter', 'Pretendard', -apple-system, sans-serif",
+      WebkitFontSmoothing: 'antialiased',
+      color: C.text,
+      overflowX: 'hidden',
+    }}>
+
+      {/* ── Film grain ──────────────────────────────────── */}
+      <svg width="0" height="0" style={{ position: 'fixed', zIndex: -1 }}>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency="0.68" numOctaves="3" stitchTiles="stitch"/>
+          <feColorMatrix type="saturate" values="0"/>
+          <feBlend in="SourceGraphic" mode="multiply" result="b"/>
+          <feComposite in="b" in2="SourceGraphic" operator="in"/>
+        </filter>
+      </svg>
+      <div aria-hidden style={{
+        position: 'fixed', inset: 0, zIndex: 999, pointerEvents: 'none',
+        filter: 'url(#grain)', opacity: 0.032, background: '#fff',
+      }}/>
+
+      {/* ── Letterbox bars (cinematic open) ─────────────── */}
+      <div aria-hidden style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 90,
+        height: 90, background: '#000', transformOrigin: 'top',
+        animation: 'letterboxClose 1.5s cubic-bezier(0.76, 0, 0.24, 1) 0.15s forwards',
+      }}/>
+      <div aria-hidden style={{
+        position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 90,
+        height: 90, background: '#000', transformOrigin: 'bottom',
+        animation: 'letterboxClose 1.5s cubic-bezier(0.76, 0, 0.24, 1) 0.15s forwards',
+      }}/>
+
+      {/* ── Ambient glows ───────────────────────────────── */}
+      <div aria-hidden style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{
+          position: 'absolute', top: -250, left: '28%',
+          width: 1000, height: 700, borderRadius: '50%',
+          background: `radial-gradient(ellipse, ${C.accent}1a 0%, transparent 65%)`,
+          animation: 'glowPulse 7s ease-in-out infinite',
+        }}/>
+        <div style={{
+          position: 'absolute', top: '55%', right: -150,
+          width: 600, height: 600, borderRadius: '50%',
+          background: `radial-gradient(ellipse, ${C.gold}0d 0%, transparent 65%)`,
+        }}/>
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 1 }}>
+
+        {/* ════ HEADER ════ */}
+        <header style={{
+          position: 'fixed', top: 0, left: 0, right: 0, zIndex: 80,
+          background: `rgba(11,18,21,0.72)`,
+          backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+          borderBottom: `1px solid ${C.border}`,
+          animation: 'fadeIn 0.6s ease 1.3s both',
+        }}>
+          <div style={{
+            maxWidth: 1200, margin: '0 auto', padding: '0 32px',
+            height: 60, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+              <RoomlyMark size={24}/>
+              <span style={{ fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.03em' }}>
+                Roomly
+              </span>
+            </div>
+            <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Link href="/login" style={{
+                fontSize: 13, fontWeight: 500, color: C.textMid,
+                padding: '7px 14px', borderRadius: 8, textDecoration: 'none', letterSpacing: '-0.02em',
+              }}>로그인</Link>
+              <Link href="/signup" style={{
+                fontSize: 13, fontWeight: 600, color: '#fff',
+                padding: '7px 18px', borderRadius: 8, background: C.accent,
+                textDecoration: 'none', letterSpacing: '-0.02em',
+                boxShadow: `0 0 24px ${C.accent}50`,
+              }}>무료 시작</Link>
+            </nav>
+          </div>
+        </header>
+
+        {/* ════ HERO ════ */}
+        <section style={{
+          minHeight: '100vh',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          padding: '140px 32px 100px', textAlign: 'center',
+          position: 'relative',
+        }}>
+          {/* Badge */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            border: `1px solid ${C.border}`, borderRadius: 999,
+            padding: '6px 16px', marginBottom: 52,
+            fontSize: 11, fontWeight: 600, color: C.textMid,
+            letterSpacing: '0.05em', textTransform: 'uppercase',
+            animation: 'fadeIn 0.8s ease 1.7s both',
+          }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 8px ${C.green}` }}/>
+            Hotel Housekeeping · Now Live
+          </div>
+
+          {/* A — Word-by-word headline */}
+          <h1 style={{
+            fontSize: 'clamp(48px, 9vw, 124px)',
+            fontWeight: 900, letterSpacing: '-0.055em',
+            lineHeight: 0.92, marginBottom: 44,
+          }}>
+            <div style={{ marginBottom: '0.06em' }}>
+              <WordReveal
+                text="체크인 지연을"
+                startDelay={1.0}
+                gradient={`linear-gradient(160deg, ${C.text} 40%, ${C.textMid} 100%)`}
+              />
+            </div>
+            <div style={{ marginBottom: '0.06em' }}>
+              <WordReveal
+                text="없애는"
+                startDelay={1.22}
+                wordDelay={0.1}
+                gradient={`linear-gradient(135deg, ${C.accentHi} 30%, ${C.gold} 100%)`}
+              />
+            </div>
+            <div>
+              <WordReveal
+                text="가장 빠른 방법"
+                startDelay={1.42}
+                gradient={`linear-gradient(160deg, ${C.text} 40%, ${C.textMid} 100%)`}
+              />
+            </div>
+          </h1>
+
+          <p style={{
+            fontSize: 'clamp(15px, 1.8vw, 18px)',
+            color: C.textMid, lineHeight: 1.75, maxWidth: 460,
+            margin: '0 auto 56px', letterSpacing: '-0.02em',
+            animation: 'fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.75s both',
+          }}>
+            객실 배정·청소·완료 확인까지 실시간으로.<br/>
+            카카오톡 단톡방은 이제 필요 없습니다.
+          </p>
+
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 12, flexWrap: 'wrap',
+            animation: 'fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.95s both',
+          }}>
+            <Link href="/signup" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              fontSize: 14, fontWeight: 700, color: '#fff',
+              padding: '14px 28px', borderRadius: 10, background: C.accent,
+              textDecoration: 'none', letterSpacing: '-0.02em',
+              boxShadow: `0 0 44px ${C.accent}55, 0 8px 32px rgba(0,0,0,0.4)`,
+            }}>
+              무료로 시작하기
+              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 14, height: 14 }}>
+                <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.25 4.25a.75.75 0 0 1 0 1.06L9.28 12.53a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd"/>
+              </svg>
+            </Link>
+            <Link href="/login" style={{
+              display: 'inline-flex', alignItems: 'center',
+              fontSize: 14, fontWeight: 500, color: C.textMid,
+              padding: '14px 24px', borderRadius: 10,
+              border: `1px solid ${C.border}`,
+              textDecoration: 'none', letterSpacing: '-0.02em',
+            }}>
+              로그인하기
+            </Link>
+          </div>
+
+          <p style={{
+            marginTop: 24, fontSize: 12, color: C.textDim,
+            animation: 'fadeIn 0.6s ease 2.3s both',
+          }}>
+            3개월 무료 · 신용카드 불필요 · 언제든 취소
+          </p>
+
+          {/* Scroll indicator */}
+          <div style={{
+            position: 'absolute', bottom: 36, left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7,
+            animation: 'fadeIn 0.6s ease 2.5s both',
+          }}>
+            <span style={{ fontSize: 9, color: C.textDim, letterSpacing: '0.15em', textTransform: 'uppercase' }}>Scroll</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth={1.5}
+              style={{ width: 17, height: 17, animation: 'scrollBounce 2s ease-in-out infinite' }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
           </div>
         </section>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: C.border, maxWidth: 1100, margin: '0 auto' }} />
+        {/* ════ TICKER ════ */}
+        <div style={{
+          overflow: 'hidden',
+          borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+          padding: '16px 0', background: C.surface,
+        }}>
+          <div style={{
+            display: 'flex', gap: 40, width: 'max-content',
+            animation: 'marquee 30s linear infinite',
+          }}>
+            {[...ticker, ...ticker].map((item, i) => (
+              <span key={i} style={{
+                fontSize: 11, fontWeight: 500,
+                color: item === '·' ? C.textDim : C.textMid,
+                letterSpacing: '0.05em', textTransform: 'uppercase', whiteSpace: 'nowrap',
+              }}>{item}</span>
+            ))}
+          </div>
+        </div>
 
-        {/* Pricing */}
-        <section style={{ padding: '80px 24px', maxWidth: 1100, margin: '0 auto' }}>
-          <div style={{ marginBottom: 56, textAlign: 'center' }}>
-            <p
-              style={{
-                fontSize: 11, fontWeight: 600, letterSpacing: '0.1em',
-                textTransform: 'uppercase', color: C.accent, marginBottom: 16,
-              }}
-            >
-              Pricing
-            </p>
-            <h2
-              style={{
-                fontSize: 'clamp(24px, 4vw, 40px)',
-                fontWeight: 700, letterSpacing: '-0.03em',
-                color: C.text, lineHeight: 1.1, marginBottom: 12,
-              }}
-            >
-              투명한 요금제
+        {/* ════ STATEMENT ════ */}
+        <section style={{ padding: '160px 32px', maxWidth: 1200, margin: '0 auto' }}>
+          <div style={{ maxWidth: 920 }}>
+            <p className="reveal-clip" style={{
+              fontSize: 11, fontWeight: 700, color: C.accent,
+              letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 36,
+            }}>Why Roomly</p>
+            <h2 className="reveal-clip" style={{
+              fontSize: 'clamp(38px, 6.5vw, 88px)',
+              fontWeight: 900, letterSpacing: '-0.048em',
+              lineHeight: 0.96, color: C.text, marginBottom: 44,
+            }}>
+              호텔 운영의 80%는<br/>
+              <span style={{
+                background: `linear-gradient(135deg, ${C.accentHi}, ${C.gold})`,
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>커뮤니케이션 비용</span>입니다
             </h2>
-            <p style={{ fontSize: 14, color: C.textMid, letterSpacing: '-0.01em' }}>
-              3개월 무료 체험 후 결정하세요. 언제든 취소 가능합니다.
+            <p className="reveal" style={{
+              fontSize: 18, color: C.textMid, lineHeight: 1.8,
+              maxWidth: 560, letterSpacing: '-0.02em',
+            }}>
+              아직도 카카오톡 단톡방으로 객실을 배정하고 있나요?
+              수기 체크리스트, 수없는 전화 통화, 놓치는 완료 보고.
+              Roomly는 그 모든 비효율을 실시간 디지털 현황판 하나로 해결합니다.
             </p>
           </div>
+        </section>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-            {[
-              {
-                name: '스타터',
-                sub: '소규모 호텔',
-                price: '30,000',
-                features: ['최대 50객실', '실시간 현황판', 'QR 직원 접속', '이메일 지원'],
-                highlight: false,
-              },
-              {
-                name: '스탠다드',
-                sub: '중형 호텔',
-                price: '70,000',
-                features: ['최대 150객실', '실시간 현황판', 'QR 직원 접속', '배정 알림', '우선 지원'],
-                highlight: true,
-              },
-              {
-                name: '프로',
-                sub: '대형 호텔 · 체인',
-                price: '150,000',
-                features: ['무제한 객실', '실시간 현황판', 'QR 직원 접속', '배정 알림', '전담 매니저', '맞춤 연동'],
-                highlight: false,
-              },
-            ].map(plan => (
-              <div
-                key={plan.name}
-                style={{
-                  padding: '28px',
-                  background: plan.highlight ? C.accent : C.surface,
-                  border: `1px solid ${plan.highlight ? 'transparent' : C.border}`,
-                  borderRadius: 10,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  position: 'relative',
-                }}
-              >
-                {plan.highlight && (
-                  <span
-                    style={{
-                      position: 'absolute', top: -1, right: 20,
-                      fontSize: 10, fontWeight: 700, letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      background: C.text, color: C.bg,
-                      padding: '3px 10px',
-                      borderRadius: '0 0 6px 6px',
-                    }}
-                  >
-                    추천
-                  </span>
-                )}
-                <div style={{ marginBottom: 24 }}>
-                  <h3
-                    style={{
-                      fontSize: 15, fontWeight: 600,
-                      color: plan.highlight ? '#fff' : C.text,
-                      letterSpacing: '-0.02em', marginBottom: 4,
-                    }}
-                  >
-                    {plan.name}
-                  </h3>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: plan.highlight ? 'rgba(255,255,255,0.6)' : C.textMid,
-                      letterSpacing: '-0.01em',
-                    }}
-                  >
-                    {plan.sub}
-                  </p>
-                </div>
-                <div style={{ marginBottom: 28 }}>
-                  <span
-                    style={{
-                      fontSize: 36, fontWeight: 700,
-                      color: plan.highlight ? '#fff' : C.text,
-                      letterSpacing: '-0.03em',
-                    }}
-                  >
-                    {plan.price}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 12,
-                      color: plan.highlight ? 'rgba(255,255,255,0.5)' : C.textMid,
-                      marginLeft: 4,
-                    }}
-                  >
-                    원 / 월
-                  </span>
-                </div>
-                <ul
-                  style={{
-                    listStyle: 'none', padding: 0, margin: 0,
-                    display: 'flex', flexDirection: 'column', gap: 10,
-                    flex: 1, marginBottom: 28,
-                  }}
+        {/* ════ C — STICKY FEATURES ════ */}
+        <StickyFeatures/>
+
+        {/* ════ STATS ════ */}
+        <section style={{
+          padding: '140px 32px',
+          background: C.surface,
+          borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+        }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: 80 }}>
+              <p className="reveal-clip" style={{
+                fontSize: 11, fontWeight: 700, color: C.accent,
+                letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16,
+              }}>Numbers</p>
+              <h2 className="reveal-clip" style={{
+                fontSize: 'clamp(28px, 4vw, 52px)',
+                fontWeight: 900, letterSpacing: '-0.045em', color: C.text,
+                transitionDelay: '0.12s',
+              }}>숫자가 증명합니다</h2>
+            </div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden',
+              gap: 1, background: C.border,
+            }}>
+              {[
+                { num: '3분',  label: '평균 도입 시간', sub: '설정부터 운영까지', grad: `linear-gradient(135deg, #ffffff 0%, ${C.green} 100%)` },
+                { num: '0원',  label: '도입 비용',      sub: '3개월 완전 무료',   grad: `linear-gradient(135deg, #ffffff 0%, ${C.gold} 100%)` },
+                { num: '100%', label: 'QR 접속률',      sub: '앱 설치 없이',      grad: `linear-gradient(135deg, ${C.accentHi} 0%, ${C.gold} 100%)` },
+                { num: '∞',    label: '동시 접속',      sub: '직원 수 제한 없음', grad: `linear-gradient(135deg, #ffffff 0%, ${C.accentHi} 100%)` },
+              ].map((s, i) => (
+                <div
+                  key={s.label}
+                  className={`reveal-clip reveal-delay-${i}`}
+                  style={{ padding: '52px 28px', background: C.card, textAlign: 'center' }}
                 >
-                  {plan.features.map(f => (
-                    <li
-                      key={f}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                    >
-                      <svg
-                        viewBox="0 0 16 16"
-                        fill={plan.highlight ? 'rgba(255,255,255,0.9)' : C.accent}
-                        style={{ width: 13, height: 13, flexShrink: 0 }}
-                      >
-                        <path fillRule="evenodd" d="M12.707 4.293a1 1 0 0 1 0 1.414L7.414 11 3.293 6.879A1 1 0 0 1 4.707 5.465L7.414 8.172l3.879-3.879a1 1 0 0 1 1.414 0Z" clipRule="evenodd" />
+                  <div style={{
+                    fontSize: 'clamp(44px, 5.5vw, 68px)',
+                    fontWeight: 900, letterSpacing: '-0.04em',
+                    background: s.grad,
+                    WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+                    marginBottom: 10,
+                  }}>{s.num}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: C.textMid, marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 12, color: C.textDim }}>{s.sub}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ════ BEFORE / AFTER ════ */}
+        <section style={{
+          padding: '140px 32px',
+          borderBottom: `1px solid ${C.border}`,
+        }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: 80 }}>
+              <p className="reveal-clip" style={{
+                fontSize: 11, fontWeight: 700, color: C.accent,
+                letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16,
+              }}>Before / After</p>
+              <h2 className="reveal-clip" style={{
+                fontSize: 'clamp(28px, 4.5vw, 60px)',
+                fontWeight: 900, letterSpacing: '-0.048em', color: C.text, lineHeight: 1.0,
+                transitionDelay: '0.1s',
+              }}>이런 상황,<br/>익숙하지 않으신가요?</h2>
+            </div>
+
+            {/* B — alternating clip-path wipe */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+              {/* Before — wipe left→right */}
+              <div className="reveal-left" style={{
+                padding: '52px', background: C.card,
+                border: `1px solid ${C.border}`, borderRadius: 16,
+              }}>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: '#f87171', background: 'rgba(248,113,113,0.08)',
+                  border: '1px solid rgba(248,113,113,0.16)',
+                  padding: '5px 14px', borderRadius: 6, marginBottom: 36,
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f87171' }}/>
+                  Before
+                </div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {[
+                    '카카오톡 단톡방으로 객실 배정',
+                    '수기 체크리스트, 종이 보고',
+                    '완료 확인마다 전화 통화',
+                    '어떤 객실이 끝났는지 파악 불가',
+                  ].map(t => (
+                    <li key={t} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <svg viewBox="0 0 16 16" fill="none" stroke="#f87171" strokeWidth={2}
+                        style={{ width: 14, height: 14, flexShrink: 0, marginTop: 3 }}>
+                        <path strokeLinecap="round" d="M4 4l8 8M12 4l-8 8"/>
                       </svg>
-                      <span
-                        style={{
-                          fontSize: 13,
-                          color: plan.highlight ? 'rgba(255,255,255,0.85)' : C.textMid,
-                          letterSpacing: '-0.01em',
-                        }}
-                      >
-                        {f}
-                      </span>
+                      <span style={{ fontSize: 14, color: C.textMid, lineHeight: 1.65 }}>{t}</span>
                     </li>
                   ))}
                 </ul>
-                <Link
-                  href="/signup"
-                  style={{
-                    display: 'block', textAlign: 'center',
-                    padding: '10px 0', borderRadius: 6,
-                    fontSize: 13, fontWeight: 600,
-                    letterSpacing: '-0.01em',
-                    textDecoration: 'none',
-                    background: plan.highlight ? 'rgba(255,255,255,0.15)' : C.surfaceHi,
-                    color: plan.highlight ? '#fff' : C.text,
-                    border: `1px solid ${plan.highlight ? 'rgba(255,255,255,0.2)' : C.border}`,
-                  }}
-                >
-                  무료로 시작하기
-                </Link>
+              </div>
+
+              {/* After — wipe right→left */}
+              <div className="reveal-right" style={{
+                padding: '52px', background: C.card,
+                border: `1px solid ${C.accent}38`, borderRadius: 16,
+                boxShadow: `0 0 64px ${C.accent}0e`,
+              }}>
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                  fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: C.accent, background: `${C.accent}11`,
+                  border: `1px solid ${C.accent}24`,
+                  padding: '5px 14px', borderRadius: 6, marginBottom: 36,
+                }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.green, boxShadow: `0 0 7px ${C.green}` }}/>
+                  After Roomly
+                </div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {[
+                    'QR 스캔 한 번으로 즉시 접속',
+                    '실시간 현황판으로 모든 상태 파악',
+                    '배정 즉시 직원 폰에 자동 알림',
+                    '완료 순간 관리자에게 즉시 보고',
+                  ].map(t => (
+                    <li key={t} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <svg viewBox="0 0 16 16" fill={C.green} style={{ width: 14, height: 14, flexShrink: 0, marginTop: 3 }}>
+                        <path fillRule="evenodd" d="M12.707 4.293a1 1 0 0 1 0 1.414L7.414 11 3.293 6.879A1 1 0 0 1 4.707 5.465L7.414 8.172l3.879-3.879a1 1 0 0 1 1.414 0Z" clipRule="evenodd"/>
+                      </svg>
+                      <span style={{ fontSize: 14, color: C.text, lineHeight: 1.65 }}>{t}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ════ PRICING ════ */}
+        <section style={{ padding: '140px 32px', maxWidth: 1200, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 80 }}>
+            <p className="reveal-clip" style={{
+              fontSize: 11, fontWeight: 700, color: C.accent,
+              letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 16,
+            }}>Pricing</p>
+            <h2 className="reveal-clip" style={{
+              fontSize: 'clamp(28px, 4.5vw, 60px)',
+              fontWeight: 900, letterSpacing: '-0.048em', color: C.text,
+              marginBottom: 16, lineHeight: 1.0, transitionDelay: '0.1s',
+            }}>투명한 요금제</h2>
+            <p className="reveal" style={{ fontSize: 16, color: C.textMid }}>
+              3개월 무료 체험 후 결정하세요. 언제든 취소 가능합니다.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+            {[
+              { name: '스타터',   sub: '소규모 호텔',     price: '30,000', highlight: false,
+                features: ['최대 50객실', '실시간 현황판', 'QR 직원 접속', '이메일 지원'] },
+              { name: '스탠다드', sub: '중형 호텔',        price: '70,000', highlight: true,
+                features: ['최대 150객실', '실시간 현황판', 'QR 직원 접속', '배정 알림', '우선 지원'] },
+              { name: '프로',     sub: '대형 호텔 · 체인', price: '150,000', highlight: false,
+                features: ['무제한 객실', '실시간 현황판', 'QR 직원 접속', '배정 알림', '전담 매니저'] },
+            ].map((plan, i) => (
+              <div
+                key={plan.name}
+                className={`reveal-clip reveal-delay-${i}`}
+                style={{
+                  padding: '40px 32px',
+                  background: plan.highlight ? C.accent : C.card,
+                  border: `1px solid ${plan.highlight ? 'transparent' : C.border}`,
+                  borderRadius: 16, display: 'flex', flexDirection: 'column',
+                  position: 'relative',
+                  boxShadow: plan.highlight ? `0 0 64px ${C.accent}44, 0 24px 64px rgba(0,0,0,0.45)` : 'none',
+                }}
+              >
+                {plan.highlight && (
+                  <div style={{
+                    position: 'absolute', top: -1, left: '50%', transform: 'translateX(-50%)',
+                    fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase',
+                    background: C.gold, color: '#000',
+                    padding: '4px 16px', borderRadius: '0 0 8px 8px',
+                  }}>추천</div>
+                )}
+                <div style={{ marginBottom: 28 }}>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, color: plan.highlight ? '#fff' : C.text, marginBottom: 6 }}>
+                    {plan.name}
+                  </h3>
+                  <p style={{ fontSize: 13, color: plan.highlight ? 'rgba(255,255,255,0.55)' : C.textMid }}>{plan.sub}</p>
+                </div>
+                <div style={{ marginBottom: 32 }}>
+                  <span style={{ fontSize: 44, fontWeight: 900, color: plan.highlight ? '#fff' : C.text, letterSpacing: '-0.04em' }}>
+                    {plan.price}
+                  </span>
+                  <span style={{ fontSize: 13, color: plan.highlight ? 'rgba(255,255,255,0.45)' : C.textMid, marginLeft: 6 }}>원 / 월</span>
+                </div>
+                <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 32px', display: 'flex', flexDirection: 'column', gap: 12, flex: 1 }}>
+                  {plan.features.map(f => (
+                    <li key={f} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <svg viewBox="0 0 16 16" fill={plan.highlight ? 'rgba(255,255,255,0.8)' : C.accent} style={{ width: 13, height: 13, flexShrink: 0 }}>
+                        <path fillRule="evenodd" d="M12.707 4.293a1 1 0 0 1 0 1.414L7.414 11 3.293 6.879A1 1 0 0 1 4.707 5.465L7.414 8.172l3.879-3.879a1 1 0 0 1 1.414 0Z" clipRule="evenodd"/>
+                      </svg>
+                      <span style={{ fontSize: 13, color: plan.highlight ? 'rgba(255,255,255,0.8)' : C.textMid }}>{f}</span>
+                    </li>
+                  ))}
+                </ul>
+                <Link href="/signup" style={{
+                  display: 'block', textAlign: 'center', padding: '12px 0', borderRadius: 10,
+                  fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                  background: plan.highlight ? 'rgba(255,255,255,0.18)' : C.surface,
+                  color: plan.highlight ? '#fff' : C.text,
+                  border: `1px solid ${plan.highlight ? 'rgba(255,255,255,0.2)' : C.border}`,
+                }}>무료로 시작하기</Link>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Divider */}
-        <div style={{ height: 1, background: C.border, maxWidth: 1100, margin: '0 auto' }} />
-
-        {/* Bottom CTA */}
-        <section style={{ padding: '96px 24px', textAlign: 'center' }}>
-          <div style={{ maxWidth: 560, margin: '0 auto' }}>
-            <h2
-              style={{
-                fontSize: 'clamp(28px, 5vw, 48px)',
-                fontWeight: 800, letterSpacing: '-0.04em',
-                color: C.text, lineHeight: 1.1, marginBottom: 20,
-              }}
-            >
-              지금 바로 시작하세요
+        {/* ════ BOTTOM CTA ════ */}
+        <section style={{
+          padding: '180px 32px', textAlign: 'center',
+          background: C.bgMid, borderTop: `1px solid ${C.border}`,
+          position: 'relative', overflow: 'hidden',
+        }}>
+          <div aria-hidden style={{
+            position: 'absolute', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 800, height: 500, borderRadius: '50%',
+            background: `radial-gradient(ellipse, ${C.accent}1e 0%, transparent 65%)`,
+            pointerEvents: 'none',
+          }}/>
+          <div style={{ maxWidth: 680, margin: '0 auto', position: 'relative' }}>
+            {/* A — word-by-word CTA headline (scroll-triggered via reveal class) */}
+            <h2 className="reveal-clip" style={{
+              fontSize: 'clamp(40px, 6.5vw, 88px)',
+              fontWeight: 900, letterSpacing: '-0.052em',
+              color: C.text, lineHeight: 0.94, marginBottom: 36,
+            }}>
+              지금 바로<br/>
+              <span style={{
+                background: `linear-gradient(135deg, ${C.accentHi}, ${C.gold})`,
+                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+              }}>시작하세요</span>
             </h2>
-            <p
-              style={{
-                fontSize: 15, color: C.textMid, marginBottom: 40,
-                letterSpacing: '-0.01em', lineHeight: 1.6,
-              }}
-            >
+            <p className="reveal" style={{ fontSize: 16, color: C.textMid, marginBottom: 52, letterSpacing: '-0.02em', lineHeight: 1.75 }}>
               3개월 무료 · 신용카드 불필요 · 언제든 취소
             </p>
-            <Link
-              href="/signup"
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                fontSize: 14, fontWeight: 600, color: '#fff',
-                padding: '12px 28px', borderRadius: 8,
-                background: C.accent,
-                textDecoration: 'none', letterSpacing: '-0.01em',
-              }}
-            >
-              무료로 시작하기
-              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 14, height: 14 }}>
-                <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.25 4.25a.75.75 0 0 1 0 1.06L9.28 12.53a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd" />
-              </svg>
-            </Link>
+            <div className="reveal" style={{ transitionDelay: '0.1s' }}>
+              <Link href="/signup" style={{
+                display: 'inline-flex', alignItems: 'center', gap: 12,
+                fontSize: 15, fontWeight: 700, color: '#fff',
+                padding: '16px 36px', borderRadius: 12, background: C.accent,
+                textDecoration: 'none', letterSpacing: '-0.02em',
+                boxShadow: `0 0 64px ${C.accent}60, 0 20px 60px rgba(0,0,0,0.5)`,
+              }}>
+                무료로 시작하기
+                <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 15, height: 15 }}>
+                  <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.25 4.25a.75.75 0 0 1 0 1.06L9.28 12.53a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd"/>
+                </svg>
+              </Link>
+            </div>
           </div>
         </section>
 
-        {/* Footer */}
-        <footer
-          style={{
-            padding: '24px',
-            borderTop: `1px solid ${C.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            maxWidth: 1100,
-            margin: '0 auto',
-            flexWrap: 'wrap',
-            gap: 12,
-          }}
-        >
+        {/* ════ FOOTER ════ */}
+        <footer style={{
+          padding: '28px 32px', borderTop: `1px solid ${C.border}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          maxWidth: 1200, margin: '0 auto', flexWrap: 'wrap', gap: 16,
+        }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                width: 18, height: 18, borderRadius: 4,
-                background: C.accent,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 9, fontWeight: 700,
-              }}
-            >
-              R
-            </span>
-            <span style={{ fontSize: 13, color: C.textMid, letterSpacing: '-0.01em' }}>
-              Roomly
-            </span>
+            <RoomlyMark size={20}/>
+            <span style={{ fontSize: 13, color: C.textMid, fontWeight: 600 }}>Roomly</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
-            <Link href="/privacy" style={{ fontSize: 12, color: C.textDim, textDecoration: 'none', letterSpacing: '-0.01em' }}>개인정보처리방침</Link>
-            <Link href="/terms" style={{ fontSize: 12, color: C.textDim, textDecoration: 'none', letterSpacing: '-0.01em' }}>이용약관</Link>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 28 }}>
+            <Link href="/privacy" style={{ fontSize: 12, color: C.textDim, textDecoration: 'none' }}>개인정보처리방침</Link>
+            <Link href="/terms" style={{ fontSize: 12, color: C.textDim, textDecoration: 'none' }}>이용약관</Link>
             <span style={{ fontSize: 12, color: C.textDim }}>© 2025 Roomly</span>
           </div>
         </footer>

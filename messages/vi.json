@@ -1,0 +1,64 @@
+{
+  "worker": {
+    "greeting": "Xin chào,",
+    "greeting_suffix": "! 👋",
+    "completed": "Hoàn thành",
+    "total": "Tổng",
+    "all_done_title": "Tất cả phòng đã xong!",
+    "all_done_body": "Hôm nay làm tốt lắm 🎉",
+    "no_assignments": "Không có phòng được phân công",
+    "offline_banner": "Bạn đang ngoại tuyến. Đang hiển thị dữ liệu cuối cùng.",
+    "status": {
+      "dirty": "Bẩn",
+      "cleaning": "Đang dọn",
+      "done": "Xong",
+      "inspect": "Kiểm tra"
+    },
+    "action": {
+      "start_cleaning": "Bắt đầu dọn",
+      "mark_done": "Xong",
+      "mark_inspect": "Cần kiểm tra",
+      "revert_dirty": "Đặt lại thành Bẩn",
+      "processing": "Đang xử lý..."
+    },
+    "memo": {
+      "title_done": "Hoàn thành phòng",
+      "title_suffix": "",
+      "body": "Để lại ghi chú nếu có điều gì cần báo cáo",
+      "placeholder": "VD: Cần thêm khăn, minibar trống...",
+      "cancel": "Hủy",
+      "confirm": "Xác nhận hoàn thành"
+    },
+    "maintenance": {
+      "report_button": "Báo hỏng",
+      "title": "Báo cáo sự cố bảo trì",
+      "title_suffix": "",
+      "body": "Mô tả ngắn gọn sự cố",
+      "placeholder": "VD: Vòi nước rò rỉ, điều hòa không hoạt động...",
+      "cancel": "Hủy",
+      "submit": "Gửi báo cáo",
+      "submitting": "Đang gửi...",
+      "success": "Đã gửi báo cáo.",
+      "error": "Gửi báo cáo thất bại."
+    },
+    "push": {
+      "enable": "Bật thông báo",
+      "disable": "Tắt thông báo",
+      "blocked": "Thông báo trình duyệt bị chặn"
+    },
+    "floor": "tầng",
+    "room": "phòng",
+    "checkin": "Check-in",
+    "urgent": "Khẩn",
+    "error_save": "Lưu thất bại. Vui lòng thử lại."
+  },
+  "dirty_worker": {
+    "title": "Phòng Bẩn",
+    "room_count": " phòng",
+    "no_rooms": "Không có phòng cần xử lý",
+    "action": {
+      "mark_dirty": "Bẩn",
+      "processing": "Đang xử lý..."
+    }
+  }
+}

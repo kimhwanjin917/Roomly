@@ -55,6 +55,11 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
   const [memoRoom, setMemoRoom] = useState<Assignment | null>(null)
   const [memo, setMemo] = useState('')
   const [toast, setToast] = useState<Toast | null>(null)
+  const [maintRoom, setMaintRoom] = useState<Assignment | null>(null)
+  const [maintDesc, setMaintDesc] = useState('')
+  const [maintSaving, setMaintSaving] = useState(false)
+  const [supplyNote, setSupplyNote] = useState('')
+  const [supplyEnabled, setSupplyEnabled] = useState(false)
   const [isOnline, setIsOnline] = useState(true)
   const [pushState, setPushState] = useState<PushState>('unsupported')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -327,6 +332,20 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                 </div>
               </div>
 
+              {/* 유지보수 신고 버튼 (T-131) */}
+              <div className="px-4 pb-2 flex justify-end">
+                <button
+                  onClick={() => { setMaintRoom(assignment); setMaintDesc('') }}
+                  className="flex items-center gap-1 text-xs text-[#B0B8C1] hover:text-amber-600 transition-colors"
+                  title="유지보수 신고"
+                >
+                  <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 0 1-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 0 1 .947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 0 1 2.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 0 1 2.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 0 1 .947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 0 1-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 0 1-2.287-.947zM10 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" clipRule="evenodd" />
+                  </svg>
+                  고장 신고
+                </button>
+              </div>
+
               {/* 액션 버튼 */}
               {!finished && (
                 <div className="px-4 pb-4 space-y-2">
@@ -343,7 +362,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                     <>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => { setMemoRoom(assignment); setMemo('') }}
+                          onClick={() => { setMemoRoom(assignment); setMemo(''); setSupplyNote(''); setSupplyEnabled(false) }}
                           disabled={isLoading}
                           className="flex-1 py-3.5 bg-toss-success hover:bg-[#04AD65] text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
                         >완료</button>
@@ -383,7 +402,7 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
             </div>
             <div className="px-6 pt-4 pb-6">
               <h2 className="font-bold text-[#191919] text-lg mb-1">{memoRoom.rooms.number}호 완료 처리</h2>
-              <p className="text-sm text-[#B0B8C1] mb-5">특이사항이 있으면 메모를 남겨주세요</p>
+              <p className="text-sm text-[#B0B8C1] mb-4">특이사항이 있으면 메모를 남겨주세요</p>
               <textarea
                 value={memo}
                 onChange={e => setMemo(e.target.value)}
@@ -392,19 +411,102 @@ export default function WorkerDashboard({ staffId, hotelId, staffName, initialAs
                 autoFocus
                 className="w-full px-4 py-3.5 bg-[#F2F4F6] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white mb-4 transition-all placeholder:text-[#B0B8C1]"
               />
+
+              {/* 비품 요청 (T-121) */}
+              <div className="mb-4" style={{ borderTop: '1px solid #F2F4F6', paddingTop: '16px' }}>
+                <button
+                  onClick={() => setSupplyEnabled(p => !p)}
+                  className={`flex items-center gap-2.5 w-full text-left ${supplyEnabled ? 'text-toss-blue' : 'text-[#6B7684]'}`}
+                >
+                  <span className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${supplyEnabled ? 'bg-toss-blue border-toss-blue' : 'border-[#D1D5DB]'}`}>
+                    {supplyEnabled && (
+                      <svg viewBox="0 0 12 12" fill="white" className="w-3 h-3">
+                        <path d="M2 6l3 3 5-5" stroke="white" strokeWidth={1.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className="text-sm font-semibold">비품 요청하기 <span className="font-normal text-[#B0B8C1]">(선택)</span></span>
+                </button>
+                {supplyEnabled && (
+                  <textarea
+                    value={supplyNote}
+                    onChange={e => setSupplyNote(e.target.value)}
+                    placeholder="예: 욕실 수건 2개, 샴푸, 치약..."
+                    rows={2}
+                    className="w-full mt-2.5 px-4 py-3.5 bg-[#F2F4F6] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white transition-all placeholder:text-[#B0B8C1]"
+                  />
+                )}
+              </div>
+
               <div className="flex gap-2">
                 <button
-                  onClick={() => setMemoRoom(null)}
+                  onClick={() => { setMemoRoom(null); setSupplyNote(''); setSupplyEnabled(false) }}
                   className="flex-1 py-3.5 bg-[#F2F4F6] hover:bg-[#E8EAED] rounded-xl text-sm font-bold text-[#191919] transition-colors"
                 >취소</button>
                 <button
                   onClick={async () => {
                     if (!memoRoom) return
                     await changeStatus(memoRoom, 'done', memo)
+                    if (supplyEnabled && supplyNote.trim()) {
+                      await fetch('/api/worker/supply-request', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ roomId: memoRoom.rooms.id, note: supplyNote.trim() }),
+                      }).catch(() => {})
+                    }
                     setMemoRoom(null)
+                    setSupplyNote('')
+                    setSupplyEnabled(false)
                   }}
                   className="flex-1 py-3.5 bg-toss-success hover:bg-[#04AD65] text-white rounded-xl text-sm font-bold transition-colors"
                 >완료 확인</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 유지보수 신고 바텀시트 (T-131) */}
+      {maintRoom && (
+        <div className="fixed inset-0 bg-black/40 flex items-end justify-center z-20" onClick={() => setMaintRoom(null)}>
+          <div className="bg-white rounded-t-3xl w-full max-w-lg" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }} onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 bg-[#E8EAED] rounded-full" />
+            </div>
+            <div className="px-6 pt-4 pb-6">
+              <h2 className="font-bold text-[#191919] text-lg mb-1">{maintRoom.rooms.number}호 고장·유지보수 신고</h2>
+              <p className="text-sm text-[#B0B8C1] mb-5">고장 내용을 간단히 입력해주세요</p>
+              <textarea
+                value={maintDesc}
+                onChange={e => setMaintDesc(e.target.value)}
+                placeholder="예: 욕실 수도꼭지 누수, 에어컨 작동 불량..."
+                rows={3}
+                autoFocus
+                className="w-full px-4 py-3.5 bg-[#F2F4F6] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white mb-4 transition-all placeholder:text-[#B0B8C1]"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setMaintRoom(null)} className="flex-1 py-3.5 bg-[#F2F4F6] hover:bg-[#E8EAED] rounded-xl text-sm font-bold text-[#191919] transition-colors">취소</button>
+                <button
+                  disabled={!maintDesc.trim() || maintSaving}
+                  onClick={async () => {
+                    if (!maintDesc.trim()) return
+                    setMaintSaving(true)
+                    try {
+                      await fetch('/api/worker/maintenance', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ roomId: maintRoom.rooms.id, description: maintDesc }),
+                      })
+                      showToast('신고가 접수되었습니다.', 'success')
+                    } catch {
+                      showToast('신고 전송에 실패했습니다.')
+                    } finally {
+                      setMaintSaving(false)
+                      setMaintRoom(null)
+                    }
+                  }}
+                  className="flex-1 py-3.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
+                >{maintSaving ? '전송 중...' : '신고 접수'}</button>
               </div>
             </div>
           </div>

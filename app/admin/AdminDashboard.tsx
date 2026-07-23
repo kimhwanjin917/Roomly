@@ -4,6 +4,25 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import AdminNav from '@/components/AdminNav'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
+import { DndContext, DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core'
+import { CSS } from '@dnd-kit/utilities'
+
+const C = {
+  bg:      '#0B1215',
+  bgMid:   '#111518',
+  surface: '#17171B',
+  card:    '#1A1C20',
+  border:  '#212427',
+  borderHi:'#2a2d32',
+  text:    '#F2F3F4',
+  textMid: '#8A8F98',
+  textDim: '#4A4F58',
+  accent:  '#5e6ad2',
+  green:   '#34d399',
+  amber:   '#fbbf24',
+  red:     '#f87171',
+  violet:  '#818cf8',
+}
 
 type Room = {
   id: string
@@ -27,15 +46,68 @@ type Assignment = {
 type Staff = { id: string; name: string }
 type Toast = { msg: string; type: 'error' | 'success' }
 type ViewMode = 'grid' | 'table'
+type RtStatus = 'connected' | 'disconnected'
+
+const PREDICTED_MINUTES: Record<string, number> = {
+  single: 20, double: 30, suite: 45, other: 25,
+}
 
 const STATUS_CONFIG = {
-  dirty:   { label: '더티',     bg: 'bg-slate-100',    text: 'text-slate-500',   dot: 'bg-slate-400',   activeBg: '#F2F4F6' },
-  cleaning:{ label: '청소중',   bg: 'bg-amber-50',     text: 'text-amber-600',   dot: 'bg-amber-400',   activeBg: '#FFFBEB' },
-  done:    { label: '완료',     bg: 'bg-emerald-50',   text: 'text-emerald-600', dot: 'bg-[#05C072]',   activeBg: '#ECFDF5' },
-  inspect: { label: '점검대기', bg: 'bg-violet-50',    text: 'text-violet-600',  dot: 'bg-violet-500',  activeBg: '#F5F3FF' },
+  dirty:   { label: '더티',     bg: 'rgba(74,79,88,0.18)',      text: C.textMid,  dot: C.textDim  },
+  cleaning:{ label: '청소중',   bg: 'rgba(251,191,36,0.10)',    text: C.amber,    dot: C.amber    },
+  done:    { label: '완료',     bg: 'rgba(52,211,153,0.10)',    text: C.green,    dot: C.green    },
+  inspect: { label: '점검대기', bg: 'rgba(129,140,248,0.10)',   text: C.violet,   dot: C.violet   },
 }
 
 const ALERT_MINUTES = Number(process.env.NEXT_PUBLIC_CHECKIN_ALERT_MINUTES ?? 120)
+
+function DraggableStaffChip({ id, name }: { id: string; name: string }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id,
+    data: { staffId: id },
+  })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        opacity: isDragging ? 0.5 : 1,
+        padding: '6px 14px',
+        background: `${C.accent}18`,
+        border: `1px solid ${C.accent}35`,
+        color: C.accent,
+        borderRadius: 999, fontSize: 12, fontWeight: 700,
+        cursor: 'grab', userSelect: 'none',
+        transition: 'background 0.15s',
+      }}
+      {...listeners}
+      {...attributes}
+    >
+      {name}
+    </div>
+  )
+}
+
+function DroppableRoomCard({ roomId, isOver, children, onClick }: { roomId: string; isOver: boolean; children: React.ReactNode; onClick: () => void }) {
+  const { setNodeRef } = useDroppable({ id: roomId })
+  return (
+    <button
+      ref={setNodeRef as (el: HTMLButtonElement | null) => void}
+      onClick={onClick}
+      style={{
+        background: C.card,
+        border: `1px solid ${isOver ? C.accent : C.border}`,
+        borderRadius: 12, padding: '13px 12px',
+        textAlign: 'left', cursor: 'pointer',
+        transition: 'border-color 0.15s, background 0.15s',
+        outline: 'none', width: '100%',
+        boxShadow: isOver ? `0 0 0 3px ${C.accent}28` : 'none',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
 
 function isUrgent(room: Room, now: Date) {
   if (!room.checkin_time) return false
@@ -55,6 +127,21 @@ function toDatetimeLocal(iso: string) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function StatusBadge({ status }: { status: keyof typeof STATUS_CONFIG }) {
+  const cfg = STATUS_CONFIG[status]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '3px 10px', borderRadius: 999,
+      fontSize: 11, fontWeight: 600,
+      background: cfg.bg, color: cfg.text,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }}/>
+      {cfg.label}
+    </span>
+  )
+}
+
 interface Props {
   hotelId: string
   hotelName: string
@@ -63,24 +150,41 @@ interface Props {
   staffList: Staff[]
 }
 
+const inputSt: React.CSSProperties = {
+  width: '100%', padding: '11px 14px',
+  background: C.card, border: `1px solid ${C.border}`,
+  borderRadius: 10, fontSize: 13, color: C.text,
+  outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box',
+  transition: 'border-color 0.15s',
+}
+const selectSt: React.CSSProperties = {
+  ...inputSt, cursor: 'pointer',
+}
+
 export default function AdminDashboard({ hotelId, hotelName, initialRooms, initialAssignments, staffList }: Props) {
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
   const [assignments, setAssignments] = useState<Assignment[]>(initialAssignments)
   const [now, setNow] = useState(new Date())
 
-  const [filterFloor, setFilterFloor] = useState<number | null>(null)
+  const [filterFloor, setFilterFloor]   = useState<number | null>(null)
   const [filterStatus, setFilterStatus] = useState<string | null>(null)
-  const [filterStaff, setFilterStaff] = useState<string | null>(null)
+  const [filterStaff, setFilterStaff]   = useState<string | null>(null)
 
-  const [viewMode, setViewMode] = useState<ViewMode>('table')
-  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null)
-  const [modalAssign, setModalAssign] = useState<string>('')
-  const [modalStatus, setModalStatus] = useState<string>('')
+  const [viewMode, setViewMode]             = useState<ViewMode>('table')
+  const [selectedRoom, setSelectedRoom]     = useState<Room | null>(null)
+  const [modalAssign, setModalAssign]       = useState<string>('')
+  const [modalStatus, setModalStatus]       = useState<string>('')
   const [modalCheckinTime, setModalCheckinTime] = useState<string>('')
-  const [modalMemo, setModalMemo] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState<Toast | null>(null)
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [modalMemo, setModalMemo]           = useState('')
+  const [saving, setSaving]                 = useState(false)
+  const [toast, setToast]                   = useState<Toast | null>(null)
+  const toastTimer                          = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [rtStatus, setRtStatus]             = useState<RtStatus>('connected')
+  const [smartAssigns, setSmartAssigns]     = useState<{ roomId: string; staffId: string; reason: string }[]>([])
+  const [smartLoading, setSmartLoading]     = useState(false)
+  const [showSmartAssign, setShowSmartAssign] = useState(false)
+  const [dragMode, setDragMode]             = useState(false)
+  const [overRoomId, setOverRoomId]         = useState<string | null>(null)
 
   function showToast(msg: string, type: Toast['type'] = 'error') {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -108,7 +212,10 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     const ch = supabase.channel('admin-dashboard')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'rooms' }, refetch)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'assignments' }, refetch)
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') setRtStatus('connected')
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR') setRtStatus('disconnected')
+      })
     return () => { supabase.removeChannel(ch) }
   }, [refetch])
 
@@ -169,6 +276,38 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     }
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    setOverRoomId(null)
+    const { active, over } = event
+    if (!over || !active.data.current?.staffId) return
+    const staffId = active.data.current.staffId as string
+    const roomId = over.id as string
+    try {
+      const res = await fetch('/api/admin/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ roomId, staffId, isGuest: false, unassign: false }),
+      })
+      if (res.ok) { await refetch(); showToast('배정 완료', 'success') }
+    } catch { showToast('배정에 실패했습니다.') }
+  }
+
+  async function handleSmartAssign() {
+    setSmartLoading(true)
+    try {
+      const res = await fetch('/api/admin/ai-assign', { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json()
+        setSmartAssigns(data.recommendations ?? [])
+        setShowSmartAssign(true)
+      }
+    } catch {
+      showToast('AI 배정 분석에 실패했습니다.')
+    } finally {
+      setSmartLoading(false)
+    }
+  }
+
   const floors = Array.from(new Set(rooms.map(r => r.floor))).sort((a, b) => a - b)
 
   const filtered = rooms.filter(r => {
@@ -190,11 +329,26 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     inspect:  rooms.filter(r => r.status === 'inspect').length,
   }
 
+  const chipBase: React.CSSProperties = {
+    padding: '5px 12px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+    cursor: 'pointer', border: `1px solid ${C.border}`, transition: 'all 0.15s',
+    fontFamily: 'inherit',
+  }
+
   return (
-    <div className="min-h-screen bg-toss-bg">
+    <div style={{ minHeight: '100vh', background: C.bg, color: C.text }} className="md:pl-[220px]">
       <AdminNav />
 
-      <main className="max-w-7xl mx-auto px-4 py-5 pb-20 md:pb-6">
+      <main style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px 80px' }} className="md:pb-6">
+
+        {/* Realtime 연결 끊김 배너 */}
+        {rtStatus === 'disconnected' && (
+          <div style={{ marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(251,191,36,0.07)', border: `1px solid rgba(251,191,36,0.18)`, borderRadius: 10 }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: C.amber, flexShrink: 0 }} />
+            <p style={{ fontSize: 13, fontWeight: 600, color: C.amber, flex: 1 }}>실시간 연결이 끊겼습니다. 재연결 중...</p>
+            <button onClick={refetch} style={{ fontSize: 11, fontWeight: 700, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontFamily: 'inherit' }}>새로고침</button>
+          </div>
+        )}
 
         <OnboardingChecklist
           roomCount={rooms.length}
@@ -203,7 +357,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
         />
 
         {/* 상태 카운터 카드 */}
-        <div className="grid grid-cols-4 gap-2.5 mb-5">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 16 }}>
           {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => {
             const cfg = STATUS_CONFIG[s]
             const active = filterStatus === s
@@ -211,47 +365,58 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
               <button
                 key={s}
                 onClick={() => setFilterStatus(active ? null : s)}
-                className={`bg-white rounded-2xl p-4 text-left transition-all shadow-card ${
-                  active ? 'ring-2 ring-toss-blue' : 'hover:shadow-card-hover'
-                }`}
+                style={{
+                  background: active ? cfg.bg : C.card,
+                  border: `1px solid ${active ? cfg.dot + '60' : C.border}`,
+                  borderRadius: 10, padding: '12px 14px',
+                  textAlign: 'left', cursor: 'pointer', outline: 'none',
+                  transition: 'all 0.15s', boxShadow: active ? `0 0 0 3px ${cfg.dot}18` : 'none',
+                  fontFamily: 'inherit',
+                }}
               >
-                <div className="flex items-center gap-1.5 mb-2">
-                  <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                  <span className="text-xs text-[#6B7684] font-medium">{cfg.label}</span>
+                <p style={{ fontSize: 22, fontWeight: 800, color: active ? cfg.text : C.text, letterSpacing: '-0.04em', marginBottom: 6 }}>{counts[s]}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }}/>
+                  <span style={{ fontSize: 11, color: C.textDim }}>{cfg.label}</span>
                 </div>
-                <p className="text-2xl font-bold text-[#191919] leading-none">{counts[s]}</p>
               </button>
             )
           })}
         </div>
 
         {/* 필터 + 뷰모드 */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <div className="flex gap-1.5 flex-wrap">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             <button
               onClick={() => setFilterFloor(null)}
-              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                filterFloor === null
-                  ? 'bg-[#191919] text-white'
-                  : 'bg-white text-[#6B7684] hover:bg-[#E8EAED]'
-              }`}
+              style={{
+                ...chipBase,
+                background: filterFloor === null ? C.text : C.card,
+                color: filterFloor === null ? C.bg : C.textMid,
+                borderColor: filterFloor === null ? 'transparent' : C.border,
+              }}
             >전체</button>
             {floors.map(f => (
               <button
                 key={f}
                 onClick={() => setFilterFloor(filterFloor === f ? null : f)}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                  filterFloor === f
-                    ? 'bg-[#191919] text-white'
-                    : 'bg-white text-[#6B7684] hover:bg-[#E8EAED]'
-                }`}
+                style={{
+                  ...chipBase,
+                  background: filterFloor === f ? C.text : C.card,
+                  color: filterFloor === f ? C.bg : C.textMid,
+                  borderColor: filterFloor === f ? 'transparent' : C.border,
+                }}
               >{f}층</button>
             ))}
           </div>
+
           <select
             value={filterStaff ?? ''}
             onChange={e => setFilterStaff(e.target.value || null)}
-            className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-white text-[#6B7684] focus:outline-none focus:ring-2 focus:ring-toss-blue cursor-pointer"
+            style={{
+              ...chipBase, padding: '5px 10px',
+              background: C.card, color: C.textMid,
+            }}
           >
             <option value="">전체 직원</option>
             <option value="none">미배정</option>
@@ -259,68 +424,120 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
 
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-xs text-[#B0B8C1] font-medium">{filtered.length}개</span>
-            <div className="flex rounded-xl overflow-hidden bg-white shadow-card">
-              <button
-                onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  viewMode === 'table' ? 'bg-[#191919] text-white' : 'text-[#6B7684] hover:bg-[#F2F4F6]'
-                }`}
-              >
-                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                  <rect x="1" y="3" width="14" height="2.5" rx="1" />
-                  <rect x="1" y="7" width="14" height="2.5" rx="1" />
-                  <rect x="1" y="11" width="14" height="2.5" rx="1" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  viewMode === 'grid' ? 'bg-[#191919] text-white' : 'text-[#6B7684] hover:bg-[#F2F4F6]'
-                }`}
-              >
-                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3.5 h-3.5">
-                  <rect x="1" y="1" width="6" height="6" rx="1.5" />
-                  <rect x="9" y="1" width="6" height="6" rx="1.5" />
-                  <rect x="1" y="9" width="6" height="6" rx="1.5" />
-                  <rect x="9" y="9" width="6" height="6" rx="1.5" />
-                </svg>
-              </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+            <button
+              onClick={() => setDragMode(d => !d)}
+              style={{
+                ...chipBase,
+                background: dragMode ? C.accent : C.card,
+                color: dragMode ? '#fff' : C.textMid,
+                borderColor: dragMode ? 'transparent' : C.border,
+                display: 'flex', alignItems: 'center', gap: 5,
+              }}
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 12, height: 12 }}>
+                <path d="M7 2a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM7 6a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM7 10a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM3 2a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM3 6a1 1 0 1 1 2 0 1 1 0 0 1-2 0ZM3 10a1 1 0 1 1 2 0 1 1 0 0 1-2 0Z" />
+              </svg>
+              드래그 배정
+            </button>
+            <button
+              onClick={handleSmartAssign}
+              disabled={smartLoading}
+              style={{
+                ...chipBase,
+                background: 'rgba(129,140,248,0.08)',
+                color: C.violet,
+                borderColor: 'rgba(129,140,248,0.2)',
+                display: 'flex', alignItems: 'center', gap: 5,
+                opacity: smartLoading ? 0.5 : 1,
+              }}
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 12, height: 12 }}>
+                <path d="M8 1.5a.75.75 0 0 1 .75.75V4.5h2.25a.75.75 0 0 1 0 1.5H8.75v2.25a.75.75 0 0 1-1.5 0V6H5a.75.75 0 0 1 0-1.5h2.25V2.25A.75.75 0 0 1 8 1.5ZM4.5 8.75A.75.75 0 0 1 5.25 8h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75ZM3 11.25A.75.75 0 0 1 3.75 10.5h8.5a.75.75 0 0 1 0 1.5h-8.5A.75.75 0 0 1 3 11.25Z" />
+              </svg>
+              {smartLoading ? '분석 중...' : 'AI 배정'}
+            </button>
+            <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>{filtered.length}개</span>
+
+            {/* View mode toggle */}
+            <div style={{ display: 'flex', background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden' }}>
+              {(['table', 'grid'] as ViewMode[]).map(mode => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  style={{
+                    padding: '5px 10px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                    background: viewMode === mode ? C.text : 'transparent',
+                    color: viewMode === mode ? C.bg : C.textMid,
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {mode === 'table' ? (
+                    <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 13, height: 13 }}>
+                      <rect x="1" y="3" width="14" height="2.5" rx="1" />
+                      <rect x="1" y="7" width="14" height="2.5" rx="1" />
+                      <rect x="1" y="11" width="14" height="2.5" rx="1" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 13, height: 13 }}>
+                      <rect x="1" y="1" width="6" height="6" rx="1.5" />
+                      <rect x="9" y="1" width="6" height="6" rx="1.5" />
+                      <rect x="1" y="9" width="6" height="6" rx="1.5" />
+                      <rect x="9" y="9" width="6" height="6" rx="1.5" />
+                    </svg>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
+        {/* 드래그 배정 직원 패널 */}
+        {dragMode && staffList.length > 0 && (
+          <div style={{ background: `${C.accent}0d`, border: `1px solid ${C.accent}25`, borderRadius: 10, padding: '10px 14px', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.accent, marginRight: 4 }}>직원을 드래그 →</span>
+            {staffList.map(s => <DraggableStaffChip key={s.id} id={s.id} name={s.name} />)}
+          </div>
+        )}
+
         {/* 객실 없음 */}
         {rooms.length === 0 && (
-          <div className="bg-white rounded-2xl shadow-card py-20 text-center">
-            <div className="w-12 h-12 bg-[#F2F4F6] rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <svg viewBox="0 0 24 24" fill="none" stroke="#B0B8C1" strokeWidth={1.5} className="w-6 h-6">
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: '80px 20px', textAlign: 'center' }}>
+            <div style={{ width: 48, height: 48, background: C.surface, borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke={C.textDim} strokeWidth={1.5} style={{ width: 22, height: 22 }}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5V19h18v-8.5M3 19v-2h18v2M2 10.5h20M8 10.5V7a4 4 0 0 1 8 0v3.5" />
               </svg>
             </div>
-            <p className="text-[#191919] font-bold mb-1">등록된 객실이 없습니다</p>
-            <p className="text-sm text-[#B0B8C1] mb-6">객실을 먼저 등록하면 현황판을 사용할 수 있습니다.</p>
+            <p style={{ color: C.text, fontWeight: 700, marginBottom: 6 }}>등록된 객실이 없습니다</p>
+            <p style={{ fontSize: 13, color: C.textDim, marginBottom: 20 }}>객실을 먼저 등록하면 현황판을 사용할 수 있습니다.</p>
             <a
               href="/admin/onboarding"
-              className="inline-flex items-center px-6 py-3 bg-toss-blue hover:bg-toss-blue-hover text-white rounded-xl text-sm font-bold transition-colors"
+              style={{
+                display: 'inline-flex', alignItems: 'center', padding: '10px 22px',
+                background: C.accent, color: '#fff', borderRadius: 10,
+                fontSize: 13, fontWeight: 700, textDecoration: 'none',
+                boxShadow: `0 0 20px ${C.accent}44`,
+              }}
             >시작하기</a>
           </div>
         )}
 
         {/* 테이블 뷰 */}
         {rooms.length > 0 && viewMode === 'table' && (
-          <div className="bg-white rounded-2xl shadow-card overflow-hidden">
-            <table className="w-full text-sm">
+          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid #F2F4F6' }}>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-[#B0B8C1]">호수</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-[#B0B8C1]">층</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-[#B0B8C1] hidden sm:table-cell">타입</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-[#B0B8C1]">상태</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-[#B0B8C1] hidden md:table-cell">담당자</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold text-[#B0B8C1]">체크인</th>
-                  <th className="px-5 py-3.5" />
+                <tr style={{ borderBottom: `1px solid ${C.border}` }}>
+                  {['호수', '층', '타입', '상태', '담당자', '체크인', '예상', ''].map((h, i) => (
+                    <th key={i} style={{
+                      padding: '10px 16px', textAlign: 'left',
+                      fontSize: 11, fontWeight: 600, color: C.textDim,
+                      letterSpacing: '0.04em',
+                      display: i === 2 ? undefined : undefined,
+                    }}
+                    className={i === 2 ? 'hidden sm:table-cell' : i === 4 ? 'hidden md:table-cell' : i === 6 ? 'hidden lg:table-cell' : ''}
+                    >{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -334,33 +551,44 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                     <tr
                       key={room.id}
                       onClick={() => openModal(room)}
-                      className={`cursor-pointer transition-colors hover:bg-[#F8F9FB] ${urgent ? 'bg-[#FFF5F5]' : ''}`}
-                      style={!isLast ? { borderBottom: '1px solid #F2F4F6' } : undefined}
+                      style={{
+                        cursor: 'pointer',
+                        background: urgent ? 'rgba(248,113,113,0.04)' : 'transparent',
+                        borderBottom: isLast ? 'none' : `1px solid ${C.border}`,
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLTableRowElement).style.background = urgent ? 'rgba(248,113,113,0.07)' : 'rgba(255,255,255,0.025)' }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLTableRowElement).style.background = urgent ? 'rgba(248,113,113,0.04)' : 'transparent' }}
                     >
-                      <td className="px-5 py-3.5 font-bold text-[#191919]">
-                        <div className="flex items-center gap-2">
+                      <td style={{ padding: '12px 16px', fontWeight: 700, color: C.text }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           {room.number}호
                           {urgent && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-[#FFF0F0] text-toss-error text-[10px] font-bold">긴급</span>
+                            <span style={{
+                              display: 'inline-flex', alignItems: 'center',
+                              padding: '1px 7px', borderRadius: 999,
+                              background: 'rgba(248,113,113,0.12)', color: C.red,
+                              fontSize: 10, fontWeight: 700,
+                            }}>긴급</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-5 py-3.5 text-[#6B7684]">{room.floor}층</td>
-                      <td className="px-5 py-3.5 text-[#6B7684] hidden sm:table-cell">{room.type}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${cfg.bg} ${cfg.text}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                          {cfg.label}
-                        </span>
+                      <td style={{ padding: '12px 16px', color: C.textMid }}>{room.floor}층</td>
+                      <td style={{ padding: '12px 16px', color: C.textMid }} className="hidden sm:table-cell">{room.type}</td>
+                      <td style={{ padding: '12px 16px' }}><StatusBadge status={room.status}/></td>
+                      <td style={{ padding: '12px 16px', color: C.text, fontWeight: 500 }} className="hidden md:table-cell">
+                        {assignedName ?? <span style={{ color: C.textDim }}>—</span>}
                       </td>
-                      <td className="px-5 py-3.5 text-[#191919] font-medium hidden md:table-cell">
-                        {assignedName ?? <span className="text-[#E8EAED]">—</span>}
+                      <td style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, color: urgent ? C.red : C.textMid }}>
+                        {room.checkin_time ? fmtTime(room.checkin_time) : <span style={{ color: C.textDim }}>—</span>}
                       </td>
-                      <td className={`px-5 py-3.5 text-sm font-semibold ${urgent ? 'text-toss-error' : 'text-[#6B7684]'}`}>
-                        {room.checkin_time ? fmtTime(room.checkin_time) : <span className="text-[#E8EAED]">—</span>}
+                      <td style={{ padding: '12px 16px' }} className="hidden lg:table-cell">
+                        {(room.status === 'dirty' || room.status === 'cleaning') && (
+                          <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>~{PREDICTED_MINUTES[room.type] ?? 30}분</span>
+                        )}
                       </td>
-                      <td className="px-5 py-3.5 text-right">
-                        <svg viewBox="0 0 20 20" fill="#B0B8C1" className="w-4 h-4 inline-block">
+                      <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                        <svg viewBox="0 0 20 20" fill={C.textDim} style={{ width: 14, height: 14, display: 'inline-block' }}>
                           <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" />
                         </svg>
                       </td>
@@ -369,7 +597,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                 })}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="text-center py-20 text-[#B0B8C1] text-sm">해당하는 객실이 없습니다</td>
+                    <td colSpan={8} style={{ textAlign: 'center', padding: '60px 0', color: C.textDim, fontSize: 13 }}>해당하는 객실이 없습니다</td>
                   </tr>
                 )}
               </tbody>
@@ -379,57 +607,133 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
         {/* 카드 그리드 뷰 */}
         {rooms.length > 0 && viewMode === 'grid' && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+          <DndContext
+            onDragEnd={handleDragEnd}
+            onDragOver={e => setOverRoomId(e.over ? e.over.id as string : null)}
+            onDragCancel={() => setOverRoomId(null)}
+          >
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" style={{ gap: 8 }}>
             {filtered.map(room => {
               const a = assignments.find(a => a.room_id === room.id)
               const urgent = isUrgent(room, now)
               const cfg = STATUS_CONFIG[room.status]
               const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+              const isOver = overRoomId === room.id && dragMode
 
               return (
-                <button
+                <DroppableRoomCard
                   key={room.id}
-                  onClick={() => openModal(room)}
-                  className={`bg-white rounded-2xl p-4 text-left transition-all shadow-card hover:shadow-card-hover active:scale-95 ${
-                    urgent ? 'ring-1.5 ring-toss-error' : ''
-                  }`}
+                  roomId={room.id}
+                  isOver={isOver}
+                  onClick={() => !dragMode && openModal(room)}
                 >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="text-xl font-bold text-[#191919] leading-none">{room.number}</span>
-                    {urgent && (
-                      <span className="w-2 h-2 rounded-full bg-toss-error mt-1" />
-                    )}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1 }}>{room.number}</span>
+                    {urgent && <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.red, marginTop: 2, flexShrink: 0, boxShadow: `0 0 6px ${C.red}` }}/>}
                   </div>
-                  <div className="flex items-center gap-1.5 mb-2">
-                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                    <span className={`text-xs font-semibold ${cfg.text}`}>{cfg.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }}/>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: cfg.text }}>{cfg.label}</span>
                   </div>
-                  <div className="space-y-0.5">
-                    <p className="text-xs text-[#B0B8C1]">{room.floor}층</p>
-                    {assignedName && (
-                      <p className="text-xs text-[#191919] font-semibold truncate">{assignedName}</p>
-                    )}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <p style={{ fontSize: 10, color: C.textDim }}>{room.floor}층</p>
+                    {assignedName && <p style={{ fontSize: 11, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{assignedName}</p>}
                     {room.checkin_time && (
-                      <p className={`text-xs font-semibold ${urgent ? 'text-toss-error' : 'text-[#6B7684]'}`}>
-                        CI {fmtTime(room.checkin_time)}
-                      </p>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: urgent ? C.red : C.textMid }}>CI {fmtTime(room.checkin_time)}</p>
                     )}
                   </div>
-                </button>
+                </DroppableRoomCard>
               )
             })}
             {filtered.length === 0 && (
-              <p className="col-span-full text-center py-20 text-[#B0B8C1] text-sm">해당하는 객실이 없습니다</p>
+              <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 0', color: C.textDim, fontSize: 13 }}>해당하는 객실이 없습니다</p>
             )}
           </div>
+          </DndContext>
         )}
       </main>
 
+      {/* AI 스마트 배정 모달 */}
+      {showSmartAssign && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 20 }}
+          className="sm:items-center"
+          onClick={() => setShowSmartAssign(false)}
+        >
+          <div
+            style={{ background: C.surface, border: `1px solid ${C.border}`, width: '100%', maxWidth: 480, borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -24px 80px rgba(0,0,0,0.6)' }}
+            className="sm:rounded-2xl sm:max-w-md"
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }} className="sm:hidden">
+              <div style={{ width: 36, height: 4, background: C.border, borderRadius: 9999 }}/>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 14px', borderBottom: `1px solid ${C.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 15 }}>✨</span>
+                <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text }}>AI 배정 추천</h2>
+              </div>
+              <button
+                onClick={() => setShowSmartAssign(false)}
+                style={{ width: 28, height: 28, borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, color: C.textMid, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 13, height: 13 }}>
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ padding: '12px 20px', maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {smartAssigns.length === 0 ? (
+                <p style={{ textAlign: 'center', color: C.textDim, fontSize: 13, padding: '32px 0' }}>추천할 배정이 없습니다</p>
+              ) : (
+                smartAssigns.map((rec, idx) => {
+                  const room = rooms.find(r => r.id === rec.roomId)
+                  const staff = staffList.find(s => s.id === rec.staffId)
+                  if (!room || !staff) return null
+                  return (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '12px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10 }}>
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{room.number}호 → {staff.name}</p>
+                        <p style={{ fontSize: 11, color: C.textMid, marginTop: 3, lineHeight: 1.5 }}>{rec.reason}</p>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          await fetch('/api/admin/assign', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ roomId: rec.roomId, staffId: rec.staffId, isGuest: false, unassign: false }),
+                          })
+                          await refetch()
+                          setSmartAssigns(prev => prev.filter((_, i) => i !== idx))
+                          if (smartAssigns.length <= 1) setShowSmartAssign(false)
+                          showToast(`${room.number}호 배정 완료`, 'success')
+                        }}
+                        style={{ flexShrink: 0, padding: '7px 14px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                      >적용</button>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+            <div style={{ padding: '8px 20px 20px' }}>
+              <button
+                onClick={() => setShowSmartAssign(false)}
+                style={{ width: '100%', padding: '12px 0', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}
+              >닫기</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 토스트 */}
       {toast && (
-        <div className={`fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 px-5 py-3.5 rounded-2xl text-sm font-semibold text-white shadow-modal z-50 whitespace-nowrap ${
-          toast.type === 'error' ? 'bg-toss-error' : 'bg-toss-success'
-        }`}>
+        <div style={{
+          position: 'fixed', bottom: 96, left: '50%', transform: 'translateX(-50%)',
+          padding: '11px 20px', borderRadius: 10, fontSize: 13, fontWeight: 600, color: '#fff',
+          background: toast.type === 'error' ? C.red : C.green,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.4)', zIndex: 50, whiteSpace: 'nowrap',
+          animation: 'fadeInUp 0.3s ease',
+        }} className="md:bottom-6">
           {toast.msg}
         </div>
       )}
@@ -437,40 +741,40 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
       {/* 바텀시트 모달 */}
       {selectedRoom && (
         <div
-          className="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-20"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 20 }}
+          className="sm:items-center"
           onClick={() => setSelectedRoom(null)}
         >
           <div
-            className="bg-white rounded-t-3xl sm:rounded-2xl w-full sm:max-w-sm shadow-modal overflow-hidden"
+            style={{ background: C.surface, border: `1px solid ${C.border}`, width: '100%', maxWidth: 400, borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -24px 80px rgba(0,0,0,0.6)' }}
+            className="sm:rounded-2xl sm:max-w-sm"
             onClick={e => e.stopPropagation()}
           >
-            {/* 핸들 (모바일) */}
-            <div className="flex justify-center pt-3 pb-1 sm:hidden">
-              <div className="w-10 h-1 bg-[#E8EAED] rounded-full" />
+            {/* 핸들 */}
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }} className="sm:hidden">
+              <div style={{ width: 36, height: 4, background: C.border, borderRadius: 9999 }}/>
             </div>
 
             {/* 헤더 */}
-            <div className="px-6 pt-4 pb-5" style={{ borderBottom: '1px solid #F2F4F6' }}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-[#191919]">{selectedRoom.number}호</h2>
-                  <p className="text-xs text-[#B0B8C1] mt-0.5">{selectedRoom.floor}층 · {selectedRoom.type}</p>
-                </div>
-                <span className={`text-xs font-semibold px-3 py-1.5 rounded-full ${STATUS_CONFIG[selectedRoom.status as keyof typeof STATUS_CONFIG].bg} ${STATUS_CONFIG[selectedRoom.status as keyof typeof STATUS_CONFIG].text}`}>
-                  {STATUS_CONFIG[selectedRoom.status as keyof typeof STATUS_CONFIG].label}
-                </span>
+            <div style={{ padding: '14px 20px 14px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.03em' }}>{selectedRoom.number}호</h2>
+                <p style={{ fontSize: 11, color: C.textDim, marginTop: 2 }}>{selectedRoom.floor}층 · {selectedRoom.type}</p>
               </div>
+              <StatusBadge status={selectedRoom.status as keyof typeof STATUS_CONFIG}/>
             </div>
 
-            <div className="px-6 py-5 space-y-5">
+            <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* 담당 직원 배정 */}
               <div>
-                <p className="text-xs font-bold text-[#191919] mb-2">담당 직원</p>
-                <div className="flex gap-2">
+                <p style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 7, letterSpacing: '0.04em', textTransform: 'uppercase' }}>담당 직원</p>
+                <div style={{ display: 'flex', gap: 8 }}>
                   <select
                     value={modalAssign}
                     onChange={e => setModalAssign(e.target.value)}
-                    className="flex-1 px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm text-[#191919] focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white transition-all"
+                    style={{ ...selectSt, flex: 1 }}
+                    onFocus={e => { (e.target as HTMLSelectElement).style.borderColor = C.accent }}
+                    onBlur={e => { (e.target as HTMLSelectElement).style.borderColor = C.border }}
                   >
                     <option value="">미배정</option>
                     {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -479,64 +783,80 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
                   <button
                     onClick={handleAssign}
                     disabled={saving}
-                    className="px-5 py-3 bg-toss-blue hover:bg-toss-blue-hover text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
+                    style={{ padding: '0 18px', background: C.accent, color: '#fff', border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1, fontFamily: 'inherit' }}
                   >배정</button>
                 </div>
               </div>
 
               {/* 체크인 시간 */}
               <div>
-                <p className="text-xs font-bold text-[#191919] mb-2">체크인 시간</p>
-                <div className="flex gap-2 items-center">
+                <p style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 7, letterSpacing: '0.04em', textTransform: 'uppercase' }}>체크인 시간</p>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <input
                     type="datetime-local"
                     value={modalCheckinTime}
                     onChange={e => setModalCheckinTime(e.target.value)}
-                    className="flex-1 px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm text-[#191919] focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white transition-all"
+                    style={{ ...inputSt, flex: 1 }}
+                    onFocus={e => { (e.target as HTMLInputElement).style.borderColor = C.accent }}
+                    onBlur={e => { (e.target as HTMLInputElement).style.borderColor = C.border }}
                   />
                   {modalCheckinTime && (
-                    <button onClick={() => setModalCheckinTime('')} className="text-xs text-[#B0B8C1] hover:text-[#6B7684] shrink-0 font-medium transition-colors">제거</button>
+                    <button onClick={() => setModalCheckinTime('')} style={{ fontSize: 11, color: C.textDim, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>제거</button>
                   )}
                 </div>
               </div>
 
               {/* 상태 변경 */}
               <div>
-                <p className="text-xs font-bold text-[#191919] mb-2">상태 변경</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => (
-                    <button
-                      key={s}
-                      onClick={() => setModalStatus(s)}
-                      className={`py-2.5 rounded-xl text-xs font-bold transition-all ${STATUS_CONFIG[s].bg} ${STATUS_CONFIG[s].text} ${
-                        modalStatus === s ? 'ring-2 ring-[#191919]' : ''
-                      }`}
-                    >{STATUS_CONFIG[s].label}</button>
-                  ))}
+                <p style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 7, letterSpacing: '0.04em', textTransform: 'uppercase' }}>상태 변경</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
+                  {(Object.keys(STATUS_CONFIG) as (keyof typeof STATUS_CONFIG)[]).map(s => {
+                    const cfg = STATUS_CONFIG[s]
+                    const active = modalStatus === s
+                    return (
+                      <button
+                        key={s}
+                        onClick={() => setModalStatus(s)}
+                        style={{
+                          padding: '10px 0', borderRadius: 10, fontSize: 12, fontWeight: 700,
+                          background: active ? cfg.bg : C.card,
+                          color: active ? cfg.text : C.textMid,
+                          border: `1px solid ${active ? cfg.dot + '50' : C.border}`,
+                          cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                        }}
+                      >{cfg.label}</button>
+                    )
+                  })}
                 </div>
               </div>
 
               {/* 메모 */}
               <div>
-                <p className="text-xs font-bold text-[#191919] mb-2">메모 <span className="text-[#B0B8C1] font-normal">(선택)</span></p>
+                <p style={{ fontSize: 11, fontWeight: 600, color: C.textMid, marginBottom: 7, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  메모 <span style={{ color: C.textDim, fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(선택)</span>
+                </p>
                 <textarea
                   value={modalMemo}
                   onChange={e => setModalMemo(e.target.value)}
                   placeholder="특이사항을 입력하세요..."
                   rows={2}
-                  className="w-full px-4 py-3 bg-[#F2F4F6] rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-toss-blue focus:bg-white transition-all placeholder:text-[#B0B8C1]"
+                  style={{
+                    ...inputSt, resize: 'none',
+                  } as React.CSSProperties}
+                  onFocus={e => { (e.target as HTMLTextAreaElement).style.borderColor = C.accent }}
+                  onBlur={e => { (e.target as HTMLTextAreaElement).style.borderColor = C.border }}
                 />
               </div>
 
-              <div className="flex gap-2 pt-1 pb-2">
+              <div style={{ display: 'flex', gap: 8 }}>
                 <button
                   onClick={() => setSelectedRoom(null)}
-                  className="flex-1 py-3.5 bg-[#F2F4F6] hover:bg-[#E8EAED] rounded-xl text-sm font-bold text-[#191919] transition-colors"
+                  style={{ flex: 1, padding: '13px 0', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}
                 >닫기</button>
                 <button
                   onClick={handleStatusSave}
                   disabled={saving}
-                  className="flex-1 py-3.5 bg-[#191919] hover:bg-[#333] text-white rounded-xl text-sm font-bold disabled:opacity-40 transition-colors"
+                  style={{ flex: 1, padding: '13px 0', background: C.text, border: 'none', borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.bg, cursor: saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.5 : 1, fontFamily: 'inherit' }}
                 >{saving ? '저장 중...' : '저장'}</button>
               </div>
             </div>

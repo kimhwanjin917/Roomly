@@ -24,6 +24,7 @@ interface DailyReportEmailProps {
   completed: number
   completionRate: number
   staffStats: StaffStat[]
+  aiSummary?: string
 }
 
 export function DailyReportEmail({
@@ -33,8 +34,8 @@ export function DailyReportEmail({
   completed,
   completionRate,
   staffStats,
+  aiSummary,
 }: DailyReportEmailProps) {
-  // Format date as Korean: YYYY년 MM월 DD일
   const [year, month, day] = date.split('-')
   const dateKo = `${year}년 ${month}월 ${day}일`
 
@@ -80,6 +81,23 @@ export function DailyReportEmail({
             </Row>
           </Section>
 
+          {/* AI Summary */}
+          {aiSummary && (
+            <>
+              <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
+              <Section>
+                <Text style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '15px', marginBottom: '12px' }}>
+                  ✨ AI 오늘의 인사이트
+                </Text>
+                <div style={{ backgroundColor: '#eff6ff', borderRadius: '8px', padding: '16px' }}>
+                  <Text style={{ color: '#1d4ed8', fontSize: '14px', lineHeight: '1.6', margin: '0', whiteSpace: 'pre-line' }}>
+                    {aiSummary}
+                  </Text>
+                </div>
+              </Section>
+            </>
+          )}
+
           <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
 
           {/* Staff stats table */}
@@ -89,7 +107,6 @@ export function DailyReportEmail({
                 직원별 실적
               </Text>
 
-              {/* Table header */}
               <Row style={{ backgroundColor: '#f1f5f9', padding: '8px 0', borderRadius: '4px' }}>
                 <Column style={{ width: '40%', paddingLeft: '12px' }}>
                   <Text style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', margin: '0' }}>
@@ -108,7 +125,6 @@ export function DailyReportEmail({
                 </Column>
               </Row>
 
-              {/* Table rows */}
               {staffStats.map((s, i) => (
                 <Row
                   key={i}
