@@ -1,0 +1,165 @@
+import {
+  Html,
+  Head,
+  Body,
+  Container,
+  Heading,
+  Text,
+  Section,
+  Row,
+  Column,
+  Hr,
+} from '@react-email/components'
+
+interface StaffStat {
+  name: string
+  completed: number
+  avgMinutes: number | null
+}
+
+interface WeeklyReportEmailProps {
+  hotelName: string
+  weekLabel: string
+  totalRooms: number
+  completed: number
+  completionRate: number
+  prevCompleted: number
+  staffStats: StaffStat[]
+}
+
+function diffLabel(current: number, prev: number): string {
+  if (prev === 0) return current > 0 ? '첫 주 기록' : '-'
+  const pct = Math.round(((current - prev) / prev) * 100)
+  if (pct > 0) return `전주 대비 +${pct}%`
+  if (pct < 0) return `전주 대비 ${pct}%`
+  return '전주와 동일'
+}
+
+export function WeeklyReportEmail({
+  hotelName,
+  weekLabel,
+  totalRooms,
+  completed,
+  completionRate,
+  prevCompleted,
+  staffStats,
+}: WeeklyReportEmailProps) {
+  const diff = diffLabel(completed, prevCompleted)
+  const isUp = prevCompleted > 0 && completed > prevCompleted
+  const isDown = prevCompleted > 0 && completed < prevCompleted
+
+  return (
+    <Html>
+      <Head />
+      <Body style={{ backgroundColor: '#f8fafc', fontFamily: 'sans-serif', margin: 0, padding: 0 }}>
+        <Container style={{ maxWidth: '560px', margin: '0 auto', padding: '40px 20px' }}>
+          <Heading style={{ color: '#2563eb', fontSize: '22px', marginBottom: '4px' }}>
+            Roomly 주간 리포트
+          </Heading>
+          <Text style={{ color: '#64748b', fontSize: '14px', marginTop: '0' }}>
+            {hotelName} · {weekLabel}
+          </Text>
+
+          <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
+
+          {/* 핵심 비교 지표 */}
+          <Section style={{
+            backgroundColor: isUp ? '#f0fdf4' : isDown ? '#fff7ed' : '#f8fafc',
+            borderRadius: '8px',
+            padding: '16px 20px',
+            marginBottom: '24px',
+            borderLeft: `3px solid ${isUp ? '#16a34a' : isDown ? '#ea580c' : '#94a3b8'}`,
+          }}>
+            <Text style={{
+              fontSize: '24px',
+              fontWeight: 'bold',
+              color: isUp ? '#16a34a' : isDown ? '#ea580c' : '#475569',
+              margin: '0 0 4px',
+            }}>
+              {diff}
+            </Text>
+            <Text style={{ color: '#64748b', fontSize: '13px', margin: '0' }}>
+              이번 주 청소 완료 {completed}건 · 지난주 {prevCompleted}건
+            </Text>
+          </Section>
+
+          {/* 전체 현황 */}
+          <Section>
+            <Text style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '15px', marginBottom: '12px' }}>
+              이번 주 전체 현황
+            </Text>
+            <Row>
+              <Column style={{ width: '33%', textAlign: 'center' as const }}>
+                <Text style={{ fontSize: '28px', fontWeight: 'bold', color: '#2563eb', margin: '0' }}>
+                  {totalRooms}
+                </Text>
+                <Text style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>전체 객실</Text>
+              </Column>
+              <Column style={{ width: '33%', textAlign: 'center' as const }}>
+                <Text style={{ fontSize: '28px', fontWeight: 'bold', color: '#16a34a', margin: '0' }}>
+                  {completed}
+                </Text>
+                <Text style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>청소 완료</Text>
+              </Column>
+              <Column style={{ width: '33%', textAlign: 'center' as const }}>
+                <Text style={{ fontSize: '28px', fontWeight: 'bold', color: '#ea580c', margin: '0' }}>
+                  {completionRate}%
+                </Text>
+                <Text style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>완료율</Text>
+              </Column>
+            </Row>
+          </Section>
+
+          <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
+
+          {/* 직원별 실적 */}
+          {staffStats.length > 0 && (
+            <Section>
+              <Text style={{ fontWeight: 'bold', color: '#0f172a', fontSize: '15px', marginBottom: '12px' }}>
+                직원별 실적
+              </Text>
+              <Row style={{ backgroundColor: '#f1f5f9', padding: '8px 0', borderRadius: '4px' }}>
+                <Column style={{ width: '40%', paddingLeft: '12px' }}>
+                  <Text style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', margin: '0' }}>이름</Text>
+                </Column>
+                <Column style={{ width: '30%', textAlign: 'center' as const }}>
+                  <Text style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', margin: '0' }}>완료 건수</Text>
+                </Column>
+                <Column style={{ width: '30%', textAlign: 'right' as const, paddingRight: '12px' }}>
+                  <Text style={{ fontSize: '12px', fontWeight: 'bold', color: '#475569', margin: '0' }}>평균 소요</Text>
+                </Column>
+              </Row>
+              {staffStats.map((s, i) => (
+                <Row key={i} style={{ borderBottom: '1px solid #e2e8f0', padding: '10px 0' }}>
+                  <Column style={{ width: '40%', paddingLeft: '12px' }}>
+                    <Text style={{ fontSize: '14px', color: '#0f172a', margin: '0' }}>{s.name}</Text>
+                  </Column>
+                  <Column style={{ width: '30%', textAlign: 'center' as const }}>
+                    <Text style={{ fontSize: '14px', color: '#0f172a', margin: '0' }}>{s.completed}건</Text>
+                  </Column>
+                  <Column style={{ width: '30%', textAlign: 'right' as const, paddingRight: '12px' }}>
+                    <Text style={{ fontSize: '14px', color: '#64748b', margin: '0' }}>
+                      {s.avgMinutes !== null ? `${s.avgMinutes}분` : '-'}
+                    </Text>
+                  </Column>
+                </Row>
+              ))}
+            </Section>
+          )}
+
+          {staffStats.length === 0 && (
+            <Text style={{ color: '#94a3b8', fontSize: '14px', textAlign: 'center' as const }}>
+              이번 주 완료된 청소 기록이 없습니다.
+            </Text>
+          )}
+
+          <Hr style={{ borderColor: '#e2e8f0', margin: '24px 0' }} />
+
+          <Text style={{ color: '#94a3b8', fontSize: '12px' }}>
+            © 2025 Roomly. 문의: support@roomly.app · 매주 월요일 발송
+          </Text>
+        </Container>
+      </Body>
+    </Html>
+  )
+}
