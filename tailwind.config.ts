@@ -8,7 +8,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
+        sans: ['Inter', 'Pretendard', '-apple-system', 'BlinkMacSystemFont', 'system-ui', 'sans-serif'],
       },
       colors: {
         toss: {
@@ -28,6 +28,7 @@ const config: Config = {
       },
     },
   },
+  safelist: ['md:pl-[220px]'],
   plugins: [],
 }
 
