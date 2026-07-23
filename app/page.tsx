@@ -519,6 +519,10 @@ export default function LandingPage() {
               </span>
             </div>
             <nav style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <a href="/api/demo" style={{
+                fontSize: 13, fontWeight: 500, color: C.textMid,
+                padding: '7px 14px', borderRadius: 8, textDecoration: 'none', letterSpacing: '-0.02em',
+              }}>데모 체험하기</a>
               <Link href="/login" style={{
                 fontSize: 13, fontWeight: 500, color: C.textMid,
                 padding: '7px 14px', borderRadius: 8, textDecoration: 'none', letterSpacing: '-0.02em',
@@ -528,7 +532,7 @@ export default function LandingPage() {
                 padding: '7px 18px', borderRadius: 8, background: C.accent,
                 textDecoration: 'none', letterSpacing: '-0.02em',
                 boxShadow: `0 0 24px ${C.accent}50`,
-              }}>무료 시작</Link>
+              }}>호텔 등록</Link>
             </nav>
           </div>
         </header>
@@ -606,11 +610,20 @@ export default function LandingPage() {
               textDecoration: 'none', letterSpacing: '-0.02em',
               boxShadow: `0 0 44px ${C.accent}55, 0 8px 32px rgba(0,0,0,0.4)`,
             }}>
-              무료로 시작하기
+              호텔 등록하기
               <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 14, height: 14 }}>
                 <path fillRule="evenodd" d="M2 8a.75.75 0 0 1 .75-.75h8.69L8.22 4.03a.75.75 0 0 1 1.06-1.06l4.25 4.25a.75.75 0 0 1 0 1.06L9.28 12.53a.75.75 0 0 1-1.06-1.06l3.22-3.22H2.75A.75.75 0 0 1 2 8Z" clipRule="evenodd"/>
               </svg>
             </Link>
+            <a href="/api/demo" style={{
+              display: 'inline-flex', alignItems: 'center',
+              fontSize: 14, fontWeight: 500, color: C.textMid,
+              padding: '14px 24px', borderRadius: 10,
+              border: `1px solid ${C.border}`,
+              textDecoration: 'none', letterSpacing: '-0.02em',
+            }}>
+              데모 체험하기
+            </a>
             <Link href="/login" style={{
               display: 'inline-flex', alignItems: 'center',
               fontSize: 14, fontWeight: 500, color: C.textMid,
@@ -908,7 +921,7 @@ export default function LandingPage() {
                   background: plan.highlight ? 'rgba(255,255,255,0.18)' : C.surface,
                   color: plan.highlight ? '#fff' : C.text,
                   border: `1px solid ${plan.highlight ? 'rgba(255,255,255,0.2)' : C.border}`,
-                }}>무료로 시작하기</Link>
+                }}>호텔 등록하기</Link>
               </div>
             ))}
           </div>

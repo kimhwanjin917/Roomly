@@ -20,6 +20,7 @@ function LoginForm() {
   const registered    = params.get('registered') === '1'
   const qrExpired     = params.get('error') === 'qr_expired'
   const sessionExpired= params.get('error') === 'session_expired'
+  const demoUnavailable = params.get('error') === 'demo_unavailable'
   const passwordReset = params.get('reset') === '1'
   const [email, setEmail]     = useState('')
   const [password, setPassword] = useState('')
@@ -97,6 +98,11 @@ function LoginForm() {
             <p style={{ fontSize: 13, color: C.green, fontWeight: 600 }}>비밀번호가 변경되었습니다. 새 비밀번호로 로그인해주세요.</p>
           </div>
         )}
+        {demoUnavailable && (
+          <div style={{ marginBottom: 16, padding: '11px 14px', background: 'rgba(248,113,113,0.07)', border: `1px solid rgba(248,113,113,0.16)`, borderRadius: 10 }}>
+            <p style={{ fontSize: 13, color: C.red, fontWeight: 600 }}>데모 계정에 일시적으로 접속할 수 없습니다. 잠시 후 다시 시도해주세요.</p>
+          </div>
+        )}
 
         {/* Card */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
@@ -162,8 +168,11 @@ function LoginForm() {
         {/* Bottom links */}
         <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14, textAlign: 'center' }}>
           <Link href="/signup" style={{ fontSize: 13, fontWeight: 600, color: C.text, textDecoration: 'none', letterSpacing: '-0.01em' }}>
-            무료로 시작하기 →
+            호텔 등록하기 →
           </Link>
+          <a href="/api/demo" style={{ fontSize: 13, fontWeight: 600, color: C.accent, textDecoration: 'none', letterSpacing: '-0.01em' }}>
+            데모 체험하기
+          </a>
           <Link href="/forgot-password" style={{ fontSize: 13, color: C.textMid, textDecoration: 'none' }}>
             비밀번호를 잊으셨나요?
           </Link>

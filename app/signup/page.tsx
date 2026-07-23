@@ -88,7 +88,7 @@ export default function SignupPage() {
         {/* Card */}
         <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
           <div style={{ padding: '24px 24px 8px' }}>
-            <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em', marginBottom: 4 }}>무료로 시작하기</h1>
+            <h1 style={{ fontSize: 20, fontWeight: 800, color: C.text, letterSpacing: '-0.04em', marginBottom: 4 }}>호텔 등록</h1>
             <p style={{ fontSize: 13, color: C.textDim }}>호텔명과 이메일만 입력하면 바로 시작됩니다</p>
           </div>
 
@@ -168,7 +168,7 @@ export default function SignupPage() {
                 fontFamily: 'inherit',
               }}
             >
-              {loading ? '등록 중...' : '무료로 시작하기'}
+              {loading ? '등록 중...' : '호텔 등록하기'}
             </button>
           </form>
         </div>
