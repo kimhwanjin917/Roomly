@@ -10,7 +10,7 @@ type MaintenanceRequest = {
   id: string
   description: string
   status: 'open' | 'in_progress' | 'resolved'
-  reported_at: string
+  created_at: string
   resolved_at: string | null
   staff: { name: string } | null
   rooms: { number: string; floor: number } | null
@@ -49,7 +49,7 @@ export default function MaintenancePage() {
       .from('maintenance_requests')
       .select('*, staff(name), rooms(number, floor)')
       .eq('hotel_id', hid ?? hotelId)
-      .order('reported_at', { ascending: false })
+      .order('created_at', { ascending: false })
     setItems(data as unknown as MaintenanceRequest[] ?? [])
   }
 
@@ -121,7 +121,7 @@ export default function MaintenancePage() {
                     </div>
                     <p style={{ fontSize: 13, fontWeight: 500, color: C.text, lineHeight: 1.6 }}>{item.description}</p>
                     <p style={{ fontSize: 11, color: C.textDim, marginTop: 8 }}>
-                      {item.staff?.name ?? '—'} · {new Date(item.reported_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      {item.staff?.name ?? '—'} · {new Date(item.created_at).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
 
