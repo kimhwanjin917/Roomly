@@ -3,8 +3,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
-import { DndContext, DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core'
-import { CSS } from '@dnd-kit/utilities'
 import { C, inputSt, selectSt, chipSt } from '@/lib/theme'
 import { useToast } from '@/lib/hooks/useToast'
 import {
@@ -41,41 +39,45 @@ type RtStatus = 'connected' | 'disconnected'
 
 const STATUS_KEYS = Object.keys(STATUS_CONFIG) as RoomStatus[]
 
-function DraggableStaffChip({ id, name }: { id: string; name: string }) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
-    id,
-    data: { staffId: id },
-  })
+function DraggableStaffChip({ staffId, name }: { staffId: string; name: string }) {
   return (
     <div
-      ref={setNodeRef}
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('staffId', staffId)
+        e.dataTransfer.setData('staffName', name)
+      }}
       style={{
-        transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.5 : 1,
         padding: '6px 14px',
-        background: `${C.accent}18`,
-        border: `1px solid ${C.accent}35`,
+        background: `${C.accent}22`,
+        border: `1.5px solid ${C.accent}55`,
         color: C.accent,
         borderRadius: 999, fontSize: 12, fontWeight: 700,
         cursor: 'grab', userSelect: 'none',
-        transition: 'background 0.15s',
       }}
-      {...listeners}
-      {...attributes}
     >
       {name}
     </div>
   )
 }
 
-function DroppableRoomCard({ roomId, isOver, children, onClick }: { roomId: string; isOver: boolean; children: React.ReactNode; onClick: () => void }) {
-  const { setNodeRef } = useDroppable({ id: roomId })
+function DroppableRoomCard({ isOver, onDragOver, onDragLeave, onDrop, children, onClick }: {
+  isOver: boolean
+  onDragOver: (e: React.DragEvent) => void
+  onDragLeave: () => void
+  onDrop: (e: React.DragEvent) => void
+  children: React.ReactNode
+  onClick: () => void
+}) {
   return (
     <button
-      ref={setNodeRef as (el: HTMLButtonElement | null) => void}
       onClick={onClick}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
       style={{
-        background: C.card,
+        background: isOver ? `${C.accent}12` : C.card,
         border: `1px solid ${isOver ? C.accent : C.border}`,
         borderRadius: 12, padding: '13px 12px',
         textAlign: 'left', cursor: 'pointer',
@@ -223,20 +225,32 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     }
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
+  async function handleDrop(roomId: string, e: React.DragEvent) {
+    e.preventDefault()
     setOverRoomId(null)
-    const { active, over } = event
-    if (!over || !active.data.current?.staffId) return
-    const staffId = active.data.current.staffId as string
-    const roomId = over.id as string
+    const staffId = e.dataTransfer.getData('staffId')
+    if (!staffId) return
+
+    // 즉시 UI 반영 (낙관적 업데이트)
+    const staff = staffList.find(s => s.id === staffId) ?? null
+    const prevAssignments = assignments
+    setAssignments(prev => [
+      ...prev.filter(a => a.room_id !== roomId),
+      { id: `optimistic-${Date.now()}`, room_id: roomId, staff_id: staffId, is_guest: false, assigned_at: new Date().toISOString(), staff },
+    ])
+    showToast('배정 완료', 'success')
+
     try {
       const res = await fetch('/api/admin/assign', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roomId, staffId, isGuest: false, unassign: false }),
       })
-      if (res.ok) { await refetch(); showToast('배정 완료', 'success') }
-    } catch { showToast('배정에 실패했습니다.') }
+      if (!res.ok) throw new Error()
+    } catch {
+      setAssignments(prevAssignments) // 실패 시 롤백
+      showToast('배정에 실패했습니다.')
+    }
   }
 
   async function handleSmartAssign() {
@@ -365,7 +379,11 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
             <button
-              onClick={() => setDragMode(d => !d)}
+              onClick={() => {
+                const next = !dragMode
+                setDragMode(next)
+                if (next) setViewMode('grid')
+              }}
               style={{
                 ...chipSt,
                 background: dragMode ? C.accent : C.card,
@@ -430,14 +448,6 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
             </div>
           </div>
         </div>
-
-        {/* 드래그 배정 직원 패널 */}
-        {dragMode && staffList.length > 0 && (
-          <div style={{ background: `${C.accent}0d`, border: `1px solid ${C.accent}25`, borderRadius: 10, padding: '10px 14px', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.accent, marginRight: 4 }}>직원을 드래그 →</span>
-            {staffList.map(s => <DraggableStaffChip key={s.id} id={s.id} name={s.name} />)}
-          </div>
-        )}
 
         {/* 객실 없음 */}
         {rooms.length === 0 && (
@@ -544,51 +554,56 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           </div>
         )}
 
-        {/* 카드 그리드 뷰 */}
+        {/* 카드 그리드 뷰 (드래그 배정 포함) */}
         {rooms.length > 0 && viewMode === 'grid' && (
-          <DndContext
-            onDragEnd={handleDragEnd}
-            onDragOver={e => setOverRoomId(e.over ? e.over.id as string : null)}
-            onDragCancel={() => setOverRoomId(null)}
-          >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" style={{ gap: 8 }}>
-            {filtered.map(room => {
-              const a = assignments.find(a => a.room_id === room.id)
-              const urgent = isUrgent(room, now)
-              const cfg = STATUS_CONFIG[room.status]
-              const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
-              const isOver = overRoomId === room.id && dragMode
-
-              return (
-                <DroppableRoomCard
-                  key={room.id}
-                  roomId={room.id}
-                  isOver={isOver}
-                  onClick={() => !dragMode && openModal(room)}
-                >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
-                    <span style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1 }}>{room.number}</span>
-                    {urgent && <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.red, marginTop: 2, flexShrink: 0, boxShadow: `0 0 6px ${C.red}` }}/>}
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
-                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }}/>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: cfg.text }}>{cfg.label}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    <p style={{ fontSize: 10, color: C.textDim }}>{room.floor}층</p>
-                    {assignedName && <p style={{ fontSize: 11, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{assignedName}</p>}
-                    {room.checkin_time && (
-                      <p style={{ fontSize: 11, fontWeight: 600, color: urgent ? C.red : C.textMid }}>CI {fmtTime(room.checkin_time)}</p>
-                    )}
-                  </div>
-                </DroppableRoomCard>
-              )
-            })}
-            {filtered.length === 0 && (
-              <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 0', color: C.textDim, fontSize: 13 }}>해당하는 객실이 없습니다</p>
+          <>
+            {/* 드래그 배정 직원 패널 */}
+            {dragMode && staffList.length > 0 && (
+              <div style={{ background: `${C.accent}0d`, border: `1px solid ${C.accent}25`, borderRadius: 10, padding: '10px 14px', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: C.accent, marginRight: 4 }}>직원 이름을 잡고 아래 객실에 드래그하세요</span>
+                {staffList.map(s => <DraggableStaffChip key={s.id} staffId={s.id} name={s.name} />)}
+              </div>
             )}
-          </div>
-          </DndContext>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6" style={{ gap: 8 }}>
+              {filtered.map(room => {
+                const a = assignments.find(a => a.room_id === room.id)
+                const urgent = isUrgent(room, now)
+                const cfg = STATUS_CONFIG[room.status]
+                const assignedName = a?.is_guest ? '게스트' : a?.staff?.name
+                const isOver = overRoomId === room.id && dragMode
+
+                return (
+                  <DroppableRoomCard
+                    key={room.id}
+                    isOver={isOver}
+                    onDragOver={e => { if (dragMode) { e.preventDefault(); setOverRoomId(room.id) } }}
+                    onDragLeave={() => setOverRoomId(null)}
+                    onDrop={e => handleDrop(room.id, e)}
+                    onClick={() => openModal(room)}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <span style={{ fontSize: 18, fontWeight: 800, color: C.text, letterSpacing: '-0.03em', lineHeight: 1 }}>{room.number}</span>
+                      {urgent && <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.red, marginTop: 2, flexShrink: 0, boxShadow: `0 0 6px ${C.red}` }}/>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.dot, flexShrink: 0 }}/>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: cfg.text }}>{cfg.label}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <p style={{ fontSize: 10, color: C.textDim }}>{room.floor}층</p>
+                      {assignedName && <p style={{ fontSize: 11, color: C.text, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{assignedName}</p>}
+                      {room.checkin_time && (
+                        <p style={{ fontSize: 11, fontWeight: 600, color: urgent ? C.red : C.textMid }}>CI {fmtTime(room.checkin_time)}</p>
+                      )}
+                    </div>
+                  </DroppableRoomCard>
+                )
+              })}
+              {filtered.length === 0 && (
+                <p style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '60px 0', color: C.textDim, fontSize: 13 }}>해당하는 객실이 없습니다</p>
+              )}
+            </div>
+          </>
         )}
       </main>
 
