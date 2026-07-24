@@ -1,13 +1,16 @@
-# Roomly 네이티브 앱 가이드 (T-204 / T-205 / T-206)
+# Roomly 네이티브 앱 가이드
 
-> 2026-07-09 작성. Capacitor 8 기반 Android/iOS 래퍼 앱.
+> Capacitor 8 기반 Android/iOS 래퍼 앱.  
 > Next.js가 SSR이라 정적 export가 불가능하므로 **리모트 URL 방식**을 쓴다 —
 > 네이티브 앱은 배포된 웹앱(`https://roomly-plum-eight.vercel.app`)을 WebView로 감싸고,
 > 푸시 알림만 네이티브(FCM/APNs)로 처리한다.
+>
+> **현재 상태**: Capacitor 구조(android/, ios/) 설정 완료. FCM 인프라 코드(`lib/fcm.ts`) 준비됨.  
+> Firebase 프로젝트 미설정 → FCM 발송 비활성(자동 스킵). 브라우저 Web Push는 정상 동작.
 
 ---
 
-## 1. 구조 (T-204)
+## 1. 구조
 
 | 경로 | 역할 |
 |---|---|
@@ -15,7 +18,7 @@
 | `capacitor-shell/` | 네트워크 실패 시에만 보이는 오프라인 폴백 셸 (webDir) |
 | `android/`, `ios/` | 네이티브 프로젝트 (커밋 대상 — 빌드 산출물은 gitignore) |
 | `lib/native-push.ts` | 클라이언트: 주입된 Capacitor 브리지로 FCM 토큰 등록 |
-| `lib/fcm.ts` | 서버: FCM HTTP v1 발송 (서비스 계정 키 → OAuth2) |
+| `lib/fcm.ts` | 서버: FCM HTTP v1 발송 (서비스 계정 키 → OAuth2) — Firebase 환경변수 없으면 자동 스킵 |
 | `supabase/migrations/016_native_push.sql` | `push_subscriptions.platform`/`fcm_token` 컬럼 |
 | `scripts/sync-native-version.mjs` | package.json 버전 → Android/iOS 동기화 |
 | `assets/logo.png` | 아이콘/스플래시 소스 (scripts/generate-icons.js가 생성) |
@@ -42,7 +45,10 @@ npm run cap:build:android  # AAB 릴리스 빌드 (키스토어 설정 후)
 
 ---
 
-## 2. 네이티브 푸시 — FCM (T-205)
+## 2. 네이티브 푸시 — FCM (선택사항)
+
+> FCM 인프라 코드는 준비되어 있다. Firebase 프로젝트를 설정하고 `FIREBASE_*` 환경변수를 넣으면 활성화된다.  
+> **환경변수가 없으면** `lib/fcm.ts`의 `fcmInitialized = false` → FCM 발송만 조용히 스킵되고 Web Push는 정상 동작한다.
 
 ### 동작 방식
 1. 네이티브 앱에서 벨 버튼 → `lib/native-push.ts`가 권한 요청 → `PushNotifications.register()` → FCM 토큰 수신
@@ -52,7 +58,8 @@ npm run cap:build:android  # AAB 릴리스 빌드 (키스토어 설정 후)
    - `web` → 기존 Web Push (VAPID)
    - `fcm` → `lib/fcm.ts` (FCM HTTP v1, 토큰 무효 시 구독 자동 삭제)
 
-### Firebase 설정 (최초 1회)
+### FCM 활성화 방법 (Firebase 프로젝트 없는 경우)
+
 1. [Firebase 콘솔](https://console.firebase.google.com)에서 프로젝트 생성 (예: `roomly-prod`)
 2. **Android 앱 추가**: 패키지명 `com.roomly.app` → `google-services.json` 다운로드
    → `android/app/google-services.json`에 배치 (**gitignore됨 — 커밋 금지**)
@@ -64,9 +71,7 @@ npm run cap:build:android  # AAB 릴리스 빌드 (키스토어 설정 후)
    - `FIREBASE_CLIENT_EMAIL`
    - `FIREBASE_PRIVATE_KEY` (JSON의 `private_key` 값 그대로 — `\n` 포함 문자열)
 
-환경변수가 없으면 FCM 발송만 조용히 스킵되고 Web Push는 정상 동작한다.
-
-### iOS 추가 작업 (macOS에서)
+### iOS 추가 작업 (FCM 활성화 시, macOS에서)
 - Xcode → Signing & Capabilities → **Push Notifications** capability 추가
 - Apple Developer → Keys에서 **APNs 인증 키(.p8)** 생성 → Firebase 프로젝트 설정 →
   클라우드 메시징 → Apple 앱 구성에 업로드
@@ -76,10 +81,11 @@ npm run cap:build:android  # AAB 릴리스 빌드 (키스토어 설정 후)
 
 ### DB 마이그레이션
 프로덕션 Supabase에 `016_native_push.sql` 실행 필요 (컬럼 추가 + p256dh/auth NOT NULL 해제).
+→ 2026-07-11 SQL Editor에서 실행 완료.
 
 ---
 
-## 3. 스토어 배포 준비 (T-206)
+## 3. 스토어 배포 준비
 
 ### 앱 아이콘 / 스플래시
 `assets/logo.png`(1024×1024)에서 `npm run cap:assets`로 Android/iOS 리소스 자동 생성.
@@ -115,17 +121,17 @@ npm run cap:build:android  # AAB 릴리스 빌드 (키스토어 설정 후)
 ### iOS — App Store (macOS 필요)
 1. Apple Developer Program 가입 ($99/년)
 2. Xcode → Signing & Capabilities: Team 선택, Bundle ID `com.roomly.app` 자동 프로비저닝
-3. capability: Push Notifications 추가 (위 2절)
+3. capability: Push Notifications 추가 (FCM 활성화 시)
 4. `npm run cap:ios` → Xcode에서 Product → Archive → App Store Connect 업로드
 5. App Store Connect: 앱 등록 → 스크린샷/설명 → 심사 제출
    - 심사용 데모 계정 준비 (관리자 계정 + 직원 QR 링크)
    - 리모트 URL 래퍼는 4.2(최소 기능) 리젝 가능성이 있음 — 푸시 알림·홈스크린 통합이
      네이티브 가치라는 점을 심사 노트에 명시
 
-### 출시 전 체크리스트
-- [ ] 프로덕션 Supabase에 `016_native_push.sql` 적용
-- [ ] Firebase 프로젝트 + `google-services.json` / `GoogleService-Info.plist` 배치
-- [ ] Vercel에 `FIREBASE_*` 환경변수 3종 설정
+### 스토어 출시 전 체크리스트
+- [ ] 프로덕션 Supabase에 `016_native_push.sql` 적용 (완료 — 2026-07-11)
+- [ ] FCM 사용 시: Firebase 프로젝트 + `google-services.json` / `GoogleService-Info.plist` 배치
+- [ ] FCM 사용 시: Vercel에 `FIREBASE_*` 환경변수 3종 설정
 - [ ] 커스텀 도메인 확정 시 `capacitor.config.ts`의 `server.url` 변경 후 재빌드
 - [ ] Android 실기기에서: QR 로그인 → 벨 버튼 → 배정 시 푸시 수신 확인
 - [ ] 키스토어/.p8 키 오프사이트 백업

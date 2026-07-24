@@ -32,7 +32,7 @@
 | `RESEND_API_KEY` / `EMAIL_FROM` | 이메일 발송 | 도메인 인증 후 실제 발신 주소로 |
 | `ANTHROPIC_API_KEY` | AI 기능 (AI-01~04) | 없으면 AI 기능만 비활성 |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Rate limit (T-070) | 없으면 인메모리 폴백 (멀티 인스턴스에서 부정확) |
-| `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` | 네이티브 앱 FCM 푸시 (T-205) | 없으면 네이티브 푸시만 비활성 — docs/Roomly_네이티브앱.md |
+| `FIREBASE_PROJECT_ID` / `FIREBASE_CLIENT_EMAIL` / `FIREBASE_PRIVATE_KEY` | **선택사항** — 네이티브 앱 FCM 푸시. 미설정 시 FCM만 비활성(Web Push는 정상) — docs/Roomly_네이티브앱.md §2 | 현재 미사용 |
 | `SENTRY_DSN` / `NEXT_PUBLIC_SENTRY_DSN` / `SENTRY_ORG` / `SENTRY_PROJECT` / `SENTRY_AUTH_TOKEN` | 에러 추적 (T-170) | AUTH_TOKEN은 소스맵 업로드용 |
 
 ### Cron (vercel.json에 이미 정의됨 — 배포 후 동작 확인)

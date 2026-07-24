@@ -1,9 +1,9 @@
 # Roomly 🏨
 > 텔레그램 단톡방을 대체하는, 호텔 하우스키핑 실시간 관리 툴
 
-**버전**: v2.2  
-**작성일**: 2026-06-22  
-**기술 스택**: Next.js + Supabase + Vercel
+**버전**: v1.22  
+**최종 업데이트**: 2026-07-24  
+**기술 스택**: Next.js + Supabase + Vercel + Toss Payments
 
 ---
 
@@ -85,6 +85,9 @@
 | Vercel | Next.js 만든 회사. 배포 1분. 무료 플랜으로 MVP까지 비용 0원 |
 | PWA | 앱 설치 없이 QR 찍으면 폰에서 바로 실행. 오프라인 시 마지막 배정 목록 캐시 유지 |
 | Tailwind CSS | 빠른 UI 개발. 모바일 반응형 쉽게 구현 |
+| Toss Payments | 국내 카드 결제 + 정기 빌링키. 중소 사업자 대상 SaaS에 적합 |
+| Capacitor | PWA를 iOS/Android 네이티브 앱으로 래핑. 스토어 배포 + FCM 푸시 지원 |
+| next-intl | 다국어 지원 (한국어/영어/베트남어). 직원 화면 현지화 |
 
 ---
 
@@ -160,14 +163,17 @@ room_logs (id, room_id, status, changed_by, changed_at, memo, alert_type)
 - 랜딩 페이지 (`/`)
 
 ### 2단계 — MVP 출시 🚧 진행 중
-- ✅ 푸시 알림 인프라 (VAPID, push_subscriptions)
-- ✅ Stripe 결제 기반 세팅 (checkout, webhook)
+- ✅ 푸시 알림 인프라 (VAPID Web Push, push_subscriptions)
+- ✅ Toss Payments 결제 기반 세팅 (checkout, webhook, 빌링키 정기결제)
 - ✅ Resend 이메일 (가입 환영 메일)
-- 🔲 푸시 알림 구독 UI + 배정 시 자동 발송
+- ✅ 직원 화면 다국어 (한/EN/VI, next-intl)
+- ✅ 배정 드래그앤드롭 (@dnd-kit)
+- ✅ Capacitor 네이티브 앱 구조 (android/, ios/)
+- 🔲 결제 라이브 상점 심사 + 빌링키 계약
 - 🔲 결제 플랜 만료 잠금
 - 🔲 일일 리포트 이메일 크론
 - 🔲 통계 주간/월간 차트
-- 🔲 Rate Limiting
+- 🔲 Rate Limiting (Upstash Redis)
 
 ### 3단계 — 정식 서비스
 - PMS 연동 + 다국어(영어·베트남어) + 체인 호텔 관리

@@ -214,7 +214,7 @@ npm install resend react-email @react-email/components
 
 ---
 
-## Toss Payments (결제 — T-096에서 Stripe 전면 대체)
+## Toss Payments (결제)
 
 | 변수명 | 용도 | 노출 범위 |
 |--------|------|-----------|
@@ -276,13 +276,34 @@ UPSTASH_REDIS_REST_TOKEN=AXxx...
 
 ---
 
-## Anthropic (AI 기능 — AI-01~04)
+## Anthropic (AI 기능 — Phase 3)
 
 | 변수명 | 용도 | 노출 범위 |
 |--------|------|-----------|
 | `ANTHROPIC_API_KEY` | AI 인사이트·스마트 배정·리포트 요약 | 서버만 (**절대 클라이언트 노출 금지**) |
 
 > 미설정 시 AI 기능만 비활성화되고 나머지는 정상 동작.
+
+---
+
+## Firebase FCM (네이티브 앱 푸시 — 선택사항)
+
+> **현재 미사용.** FCM 발송 인프라(`lib/fcm.ts`)는 코드에 존재하지만, Firebase 프로젝트가 설정되지 않아 비활성 상태.  
+> 아래 환경변수가 없으면 FCM 발송만 조용히 스킵되고 **Web Push(VAPID)는 정상 동작**한다.  
+> FCM을 활성화하려면 Firebase 프로젝트를 생성하고 아래 3개 변수를 설정할 것 — `docs/Roomly_네이티브앱.md` §2 참고.
+
+| 변수명 | 용도 | 노출 범위 |
+|--------|------|-----------|
+| `FIREBASE_PROJECT_ID` | Firebase 프로젝트 ID | 서버만 |
+| `FIREBASE_CLIENT_EMAIL` | 서비스 계정 이메일 | 서버만 (**절대 클라이언트 노출 금지**) |
+| `FIREBASE_PRIVATE_KEY` | 서비스 계정 비공개 키 (`\n` 포함 문자열) | 서버만 (**절대 클라이언트 노출 금지**) |
+
+```bash
+# Firebase FCM (선택 — 없으면 네이티브 앱 푸시만 비활성, Web Push는 정상 동작)
+FIREBASE_PROJECT_ID=roomly-prod
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxx@roomly-prod.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----\n"
+```
 
 ---
 
