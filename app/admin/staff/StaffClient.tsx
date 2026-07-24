@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { useRealtimeRefetch } from '@/lib/hooks/useLive'
 import QRCode from 'qrcode'
 import { C } from '@/lib/theme'
 import { appUrl } from '@/lib/constants'
@@ -57,29 +58,28 @@ export default function StaffClient({ hotelId, initialStaffList }: { hotelId: st
   const [guestQrDataUrl, setGuestQrDataUrl] = useState('')
   const [showRegenConfirm, setShowRegenConfirm] = useState(false)
 
+  const refreshList = useCallback(async () => {
+    const supabase = createClient()
+    const { data } = await supabase.from('staff').select('*').eq('hotel_id', hotelId).order('name')
+    setStaffList(data ?? [])
+  }, [hotelId])
+
   useEffect(() => {
     fetch('/api/admin/guest-code').then(r => r.json()).then(data => { if (data) setGuestCode(data) })
   }, [])
 
+  useRealtimeRefetch({ channel: 'staff-list', tables: ['staff'], onChange: refreshList })
+
+  // 실시간 구독이 누락될 경우를 대비한 폴링 백업 (10초)
   useEffect(() => {
-    const supabase = createClient()
-    const ch = supabase.channel('staff-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'staff', filter: `hotel_id=eq.${hotelId}` }, () => { refreshList() })
-      .subscribe()
-    return () => { supabase.removeChannel(ch) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hotelId])
+    const t = setInterval(refreshList, 10_000)
+    return () => clearInterval(t)
+  }, [refreshList])
 
   useEffect(() => {
     if (!qrModal?.qrUrl) { setQrDataUrl(''); return }
     QRCode.toDataURL(qrModal.qrUrl, { width: 240, margin: 2 }).then(setQrDataUrl)
   }, [qrModal?.qrUrl])
-
-  async function refreshList() {
-    const supabase = createClient()
-    const { data } = await supabase.from('staff').select('*').eq('hotel_id', hotelId).order('name')
-    setStaffList(data ?? [])
-  }
 
   async function handleAdd() {
     if (!form.name.trim()) { setAddError('이름을 입력해 주세요.'); return }
