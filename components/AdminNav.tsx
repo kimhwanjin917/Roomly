@@ -129,6 +129,7 @@ function SidebarItem({
   return (
     <Link
       href={href}
+      prefetch={true}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{
@@ -251,6 +252,7 @@ export default function AdminNav() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={true}
               className="flex-1 flex flex-col items-center justify-center"
               style={{ paddingTop: 8, paddingBottom: 6, gap: 2, textDecoration: 'none' }}
             >

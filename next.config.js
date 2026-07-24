@@ -22,14 +22,6 @@ const withPWA = require('next-pwa')({
       },
     },
     {
-      urlPattern: /^\/admin.*/,
-      handler: 'StaleWhileRevalidate',
-      options: {
-        cacheName: 'admin-pages',
-        expiration: { maxEntries: 5, maxAgeSeconds: 24 * 60 * 60 },
-      },
-    },
-    {
       urlPattern: /^\/api\/worker\/assignments/,
       handler: 'NetworkFirst',
       options: {

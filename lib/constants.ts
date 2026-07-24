@@ -62,12 +62,4 @@ export function appUrl(): string {
   return /^https?:\/\//.test(raw) ? raw : `https://${raw}`
 }
 
-/**
- * 공개 데모 계정 — 랜딩 페이지의 "데모 체험하기" 버튼(/api/demo)이 사용한다.
- * 더미 데이터만 담긴 별도 호텔이며, 자동 이메일 발송 대상에서는 제외돼 있다.
- */
-export const DEMO_ACCOUNT = {
-  email: 'demo@example.com',
-  password: 'demo1234',
-} as const
 

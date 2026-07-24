@@ -144,9 +144,15 @@ export function superAdminHash(password: string): string {
 }
 
 export function requireSuperAdmin(): { service: SupabaseClient } {
-  const session = cookies().get(COOKIES.superAdmin)?.value
-  const expected = process.env.SUPER_ADMIN_PASSWORD_HASH
-  if (!session || !expected || session !== expected) throw ApiError.unauthorized()
+  const token = cookies().get(COOKIES.superAdmin)?.value
+  if (!token) throw ApiError.unauthorized()
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as jwt.JwtPayload
+    if (payload.role !== 'super_admin') throw new Error('role mismatch')
+  } catch {
+    throw ApiError.unauthorized()
+  }
 
   return { service: createServiceClient() as unknown as SupabaseClient }
 }

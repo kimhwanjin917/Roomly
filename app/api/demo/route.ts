@@ -1,18 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { withApiError } from '@/lib/api-error'
-import { DEMO_ACCOUNT } from '@/lib/constants'
 
-/**
- * 공개 데모 진입점 — 랜딩 페이지의 "데모 체험하기" 버튼이 호출한다.
- * 별도 로그인 없이 공개 데모 관리자 계정으로 즉시 입장시킨다.
- */
 async function getHandler(request: NextRequest) {
+  const email = process.env.DEMO_EMAIL
+  const password = process.env.DEMO_PASSWORD
+
+  if (!email || !password) {
+    console.error('[demo] DEMO_EMAIL 또는 DEMO_PASSWORD 환경변수가 설정되지 않았습니다.')
+    return NextResponse.redirect(new URL('/login?error=demo_unavailable', request.url))
+  }
+
   const supabase = createClient()
-  const { error } = await supabase.auth.signInWithPassword(DEMO_ACCOUNT)
+  const { error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
-    console.error('[demo] 데모 계정 로그인 실패', error)
+    console.error('[demo] 데모 계정 로그인 실패:', error.code, error.message)
     return NextResponse.redirect(new URL('/login?error=demo_unavailable', request.url))
   }
 

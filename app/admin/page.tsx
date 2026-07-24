@@ -13,12 +13,16 @@ export default async function AdminPage() {
 
   const service = createServiceClient()
 
-  const [hotelRes, roomsRes, assignmentsRes, staffRes] = await Promise.all([
+  const [hotelRes, roomsRes, staffRes] = await Promise.all([
     service.from('hotels').select('name, checkin_alert_minutes, subscription_plan, trial_ends_at').eq('id', hotelId).single(),
     service.from('rooms').select('*').eq('hotel_id', hotelId).is('deleted_at', null).order('floor').order('number'),
-    service.from('assignments').select('id, room_id, staff_id, is_guest, assigned_at, staff(id, name)').is('completed_at', null).is('cancelled_at', null),
     service.from('staff').select('id, name').eq('hotel_id', hotelId).order('name'),
   ])
+
+  const roomIds = roomsRes.data?.map(r => r.id) ?? []
+  const assignmentsRes = roomIds.length > 0
+    ? await service.from('assignments').select('id, room_id, staff_id, is_guest, assigned_at, staff(id, name)').in('room_id', roomIds).is('completed_at', null).is('cancelled_at', null)
+    : { data: [] }
 
   return (
     <AdminDashboard

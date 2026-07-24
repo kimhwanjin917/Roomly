@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { timingSafeEqual } from 'crypto'
+import { sign } from 'jsonwebtoken'
 import { superAdminHash } from '@/lib/auth'
 import { ApiError, withApiError } from '@/lib/api-error'
 import { COOKIES } from '@/lib/constants'
@@ -18,13 +19,19 @@ async function postHandler(request: NextRequest) {
   if (!password) throw ApiError.badRequest('비밀번호를 입력해주세요.', 'missing_password')
 
   const expected = process.env.SUPER_ADMIN_PASSWORD_HASH
+  const jwtSecret = process.env.JWT_SECRET
+  if (!expected || !jwtSecret) throw ApiError.internal()
+
   const hash = superAdminHash(password)
-  if (!expected || !safeEqual(hash, expected)) {
+  if (!safeEqual(hash, expected)) {
     throw ApiError.unauthorized('비밀번호가 올바르지 않습니다.', 'invalid_password')
   }
 
+  // 비밀번호 해시가 아닌 서명된 불투명 JWT를 세션 토큰으로 사용
+  const token = sign({ role: 'super_admin' }, jwtSecret, { expiresIn: SESSION_MAX_AGE })
+
   const response = NextResponse.json({ ok: true })
-  response.cookies.set(COOKIES.superAdmin, hash, {
+  response.cookies.set(COOKIES.superAdmin, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',

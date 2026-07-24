@@ -53,6 +53,27 @@ async function putHandler(request: NextRequest) {
   return NextResponse.json(data)
 }
 
+async function patchHandler(request: NextRequest) {
+  const { hotelId, service } = await requireAdmin()
+
+  const { id, delta } = await request.json()
+  if (!id || delta == null) throw ApiError.badRequest('비품 ID와 delta가 필요합니다.')
+  if (typeof delta !== 'number' || !Number.isInteger(delta)) throw ApiError.badRequest('delta는 정수여야 합니다.')
+
+  const { data, error } = await service.rpc('adjust_supply_stock', {
+    p_supply_id: id,
+    p_hotel_id: hotelId,
+    p_delta: delta,
+  })
+
+  if (error) {
+    console.error('[admin/supplies PATCH]', error)
+    throw ApiError.internal()
+  }
+  return NextResponse.json({ stock: data as number })
+}
+
 export const GET = withApiError(getHandler)
 export const POST = withApiError(postHandler)
 export const PUT = withApiError(putHandler)
+export const PATCH = withApiError(patchHandler)
