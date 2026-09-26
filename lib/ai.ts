@@ -5,7 +5,7 @@ import Anthropic from '@anthropic-ai/sdk'
  * ANTHROPIC_API_KEY가 없으면 AI 기능만 비활성화되고 나머지 흐름은 그대로 동작한다.
  */
 
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = 'claude-haiku-4-5'
 
 export const aiEnabled = () => !!process.env.ANTHROPIC_API_KEY
 

@@ -13,7 +13,7 @@ import { ALERT_MINUTES } from '@/lib/rooms'
  * 거부 사유가 tool_result로 돌아가 같은 루프 안에서 다시 계획한다.
  */
 
-const MODEL = 'claude-haiku-4-5-20251001'
+const MODEL = 'claude-haiku-4-5'
 
 /** 도구 호출 왕복 상한 — 무한 루프와 비용 폭주를 막는 안전장치 */
 const MAX_TURNS = 8
