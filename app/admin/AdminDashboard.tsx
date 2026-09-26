@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
+import AgentPanel from '@/components/AgentPanel'
 import { C, inputSt, selectSt, chipSt } from '@/lib/theme'
 import { useToast } from '@/lib/hooks/useToast'
 import {
@@ -135,9 +136,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
   const [saving, setSaving]                 = useState(false)
   const { toast, showToast }                = useToast()
   const [rtStatus, setRtStatus]             = useState<RtStatus>('connected')
-  const [smartAssigns, setSmartAssigns]     = useState<{ roomId: string; staffId: string; reason: string }[]>([])
-  const [smartLoading, setSmartLoading]     = useState(false)
-  const [showSmartAssign, setShowSmartAssign] = useState(false)
+  const [showAgent, setShowAgent]           = useState(false)
   const [dragMode, setDragMode]             = useState(false)
   const [overRoomId, setOverRoomId]         = useState<string | null>(null)
 
@@ -250,22 +249,6 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
     } catch {
       setAssignments(prevAssignments) // 실패 시 롤백
       showToast('배정에 실패했습니다.')
-    }
-  }
-
-  async function handleSmartAssign() {
-    setSmartLoading(true)
-    try {
-      const res = await fetch('/api/admin/ai-assign', { method: 'POST' })
-      if (res.ok) {
-        const data = await res.json()
-        setSmartAssigns(data.recommendations ?? [])
-        setShowSmartAssign(true)
-      }
-    } catch {
-      showToast('AI 배정 분석에 실패했습니다.')
-    } finally {
-      setSmartLoading(false)
     }
   }
 
@@ -398,21 +381,19 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
               드래그 배정
             </button>
             <button
-              onClick={handleSmartAssign}
-              disabled={smartLoading}
+              onClick={() => setShowAgent(true)}
               style={{
                 ...chipSt,
                 background: 'rgba(129,140,248,0.08)',
                 color: C.violet,
                 borderColor: 'rgba(129,140,248,0.2)',
                 display: 'flex', alignItems: 'center', gap: 5,
-                opacity: smartLoading ? 0.5 : 1,
               }}
             >
               <svg viewBox="0 0 16 16" fill="currentColor" style={{ width: 12, height: 12 }}>
                 <path d="M8 1.5a.75.75 0 0 1 .75.75V4.5h2.25a.75.75 0 0 1 0 1.5H8.75v2.25a.75.75 0 0 1-1.5 0V6H5a.75.75 0 0 1 0-1.5h2.25V2.25A.75.75 0 0 1 8 1.5ZM4.5 8.75A.75.75 0 0 1 5.25 8h5.5a.75.75 0 0 1 0 1.5h-5.5a.75.75 0 0 1-.75-.75ZM3 11.25A.75.75 0 0 1 3.75 10.5h8.5a.75.75 0 0 1 0 1.5h-8.5A.75.75 0 0 1 3 11.25Z" />
               </svg>
-              {smartLoading ? '분석 중...' : 'AI 배정'}
+              에이전트
             </button>
             <span style={{ fontSize: 11, color: C.textDim, fontWeight: 500 }}>{filtered.length}개</span>
 
@@ -607,76 +588,13 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
         )}
       </main>
 
-      {/* AI 스마트 배정 모달 */}
-      {showSmartAssign && (
-        <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 20 }}
-          className="sm:items-center"
-          onClick={() => setShowSmartAssign(false)}
-        >
-          <div
-            style={{ background: C.surface, border: `1px solid ${C.border}`, width: '100%', maxWidth: 480, borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -24px 80px rgba(0,0,0,0.6)' }}
-            className="sm:rounded-2xl sm:max-w-md"
-            onClick={e => e.stopPropagation()}
-          >
-            <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }} className="sm:hidden">
-              <div style={{ width: 36, height: 4, background: C.border, borderRadius: 9999 }}/>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 20px 14px', borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 15 }}>✨</span>
-                <h2 style={{ fontSize: 16, fontWeight: 700, color: C.text }}>AI 배정 추천</h2>
-              </div>
-              <button
-                onClick={() => setShowSmartAssign(false)}
-                style={{ width: 28, height: 28, borderRadius: 8, background: C.card, border: `1px solid ${C.border}`, color: C.textMid, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-              >
-                <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 13, height: 13 }}>
-                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-                </svg>
-              </button>
-            </div>
-            <div style={{ padding: '12px 20px', maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {smartAssigns.length === 0 ? (
-                <p style={{ textAlign: 'center', color: C.textDim, fontSize: 13, padding: '32px 0' }}>추천할 배정이 없습니다</p>
-              ) : (
-                smartAssigns.map((rec, idx) => {
-                  const room = rooms.find(r => r.id === rec.roomId)
-                  const staff = staffList.find(s => s.id === rec.staffId)
-                  if (!room || !staff) return null
-                  return (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '12px 14px', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10 }}>
-                      <div style={{ minWidth: 0 }}>
-                        <p style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{room.number}호 → {staff.name}</p>
-                        <p style={{ fontSize: 11, color: C.textMid, marginTop: 3, lineHeight: 1.5 }}>{rec.reason}</p>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          await fetch('/api/admin/assign', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ roomId: rec.roomId, staffId: rec.staffId, isGuest: false, unassign: false }),
-                          })
-                          await refetch()
-                          setSmartAssigns(prev => prev.filter((_, i) => i !== idx))
-                          if (smartAssigns.length <= 1) setShowSmartAssign(false)
-                          showToast(`${room.number}호 배정 완료`, 'success')
-                        }}
-                        style={{ flexShrink: 0, padding: '7px 14px', background: C.accent, color: '#fff', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
-                      >적용</button>
-                    </div>
-                  )
-                })
-              )}
-            </div>
-            <div style={{ padding: '8px 20px 20px' }}>
-              <button
-                onClick={() => setShowSmartAssign(false)}
-                style={{ width: '100%', padding: '12px 0', background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 13, fontWeight: 700, color: C.textMid, cursor: 'pointer', fontFamily: 'inherit' }}
-              >닫기</button>
-            </div>
-          </div>
-        </div>
+      {/* 하우스키핑 에이전트 패널 */}
+      {showAgent && (
+        <AgentPanel
+          onClose={() => setShowAgent(false)}
+          onChanged={refetch}
+          showToast={showToast}
+        />
       )}
 
       {/* 토스트 */}
