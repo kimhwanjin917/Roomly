@@ -12,6 +12,13 @@ export const dynamic = 'force-dynamic'
  *
  * 한 호텔에서 실패해도 다음 호텔로 넘어간다 (runAgentCycle이 예외를 삼킨다).
  * ponytail: 호텔을 순차 처리한다. 호텔 수가 늘면 배치로 나눠야 한다.
+ *
+ * 주기: vercel.json은 하루 1회로 잡혀 있다. Vercel Hobby 플랜이 하루 1회
+ * 스케줄만 허용하기 때문이다. 원래 의도한 5분 주기로 돌리려면 둘 중 하나:
+ *   - Vercel Pro로 올리고 vercel.json을 "*\/5 * * * *"로 되돌린다
+ *   - 외부 스케줄러(cron-job.org 등)가 Authorization: Bearer $CRON_SECRET 헤더로
+ *     이 엔드포인트를 5분마다 호출한다
+ * 어느 쪽이든 이 핸들러는 그대로다.
  */
 async function getHandler(request: NextRequest) {
   const { service } = await requireCron(request)

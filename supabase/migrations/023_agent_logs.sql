@@ -24,5 +24,5 @@ CREATE INDEX IF NOT EXISTS agent_logs_hotel_created_idx
   ON agent_logs (hotel_id, created_at DESC);
 
 -- 정책 없음 = service role 전용 (payment_logs, email_logs와 동일한 의도).
--- 관리자는 /api/admin/agent-logs 라우트를 통해서만 읽는다.
+-- 관리자는 /api/admin/agent 라우트를 통해서만 읽는다.
 ALTER TABLE agent_logs ENABLE ROW LEVEL SECURITY;
