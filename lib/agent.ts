@@ -99,7 +99,9 @@ export async function runAgentCycle(
 
       const response = await client.messages.create({
         model: MODEL,
-        max_tokens: 2048,
+        // 미배정 객실이 수십 개면 assign_rooms 인자만으로 수천 토큰이 된다.
+        // 모자라면 tool_use 블록이 잘린 채 끝나 아무것도 실행되지 않는다.
+        max_tokens: 8192,
         system: SYSTEM_PROMPT,
         tools: AGENT_TOOLS,
         messages,
@@ -111,6 +113,12 @@ export async function runAgentCycle(
         .join(' ')
         .trim()
       if (text) summary = text
+
+      // 응답이 잘리면 도구 호출이 반쪽이라 실행할 수 없다 — 조용히 끝내지 않고 남긴다
+      if (response.stop_reason === 'max_tokens') {
+        await ctx.log('error', '모델 응답이 토큰 상한에서 잘려 이번 사이클을 중단했습니다.')
+        break
+      }
 
       if (response.stop_reason !== 'tool_use') break
 
