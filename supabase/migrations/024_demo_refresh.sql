@@ -12,7 +12,7 @@
 --   - 시나리오가 소진됐으면 다시 깐다
 -- ───────────────────────────────────────────
 
-CREATE OR REPLACE FUNCTION refresh_demo_hotel(hotel uuid)
+CREATE OR REPLACE FUNCTION refresh_demo_hotel(hotel uuid, force boolean DEFAULT false)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -61,7 +61,8 @@ BEGIN
       WHERE a.room_id = r.id AND a.completed_at IS NULL AND a.cancelled_at IS NULL
     );
 
-  IF urgent_left >= 2 THEN
+  -- force가 아니면, 처리할 긴급 객실이 남아 있는 동안은 건드리지 않는다
+  IF NOT force AND urgent_left >= 2 THEN
     RETURN jsonb_build_object('reset', false, 'shifted', did_shift, 'urgent', urgent_left);
   END IF;
 
@@ -127,11 +128,11 @@ BEGIN
   ) AS pick
   WHERE rooms.number = pick.number AND rooms.hotel_id = hotel;
 
-  RETURN jsonb_build_object('reset', true, 'shifted', did_shift, 'urgent', 4);
+  RETURN jsonb_build_object('reset', true, 'shifted', did_shift, 'urgent', 4, 'forced', force);
 END;
 $$;
 
 -- service role만 호출한다 (/api/demo 라우트). 그 외에는 실행 권한이 없다.
-REVOKE ALL ON FUNCTION refresh_demo_hotel(uuid) FROM PUBLIC;
-REVOKE ALL ON FUNCTION refresh_demo_hotel(uuid) FROM anon;
-REVOKE ALL ON FUNCTION refresh_demo_hotel(uuid) FROM authenticated;
+REVOKE ALL ON FUNCTION refresh_demo_hotel(uuid, boolean) FROM PUBLIC;
+REVOKE ALL ON FUNCTION refresh_demo_hotel(uuid, boolean) FROM anon;
+REVOKE ALL ON FUNCTION refresh_demo_hotel(uuid, boolean) FROM authenticated;

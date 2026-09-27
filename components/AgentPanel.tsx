@@ -170,6 +170,7 @@ export default function AgentPanel({
 
         <div style={{ display: 'flex', gap: 8, padding: '12px 20px', borderBottom: `1px solid ${C.border}` }}>
           <button
+            data-tour="run"
             onClick={run}
             disabled={running || !enabled}
             style={{ ...btn, flex: 1, background: C.accent, color: '#fff', borderColor: C.accent, opacity: running || !enabled ? 0.5 : 1 }}
@@ -177,6 +178,7 @@ export default function AgentPanel({
             {running ? '판단 중...' : '지금 실행'}
           </button>
           <button
+            data-tour="simulate"
             onClick={simulateCheckout}
             disabled={simulating}
             style={{ ...btn, background: C.card, color: C.textMid, opacity: simulating ? 0.5 : 1 }}

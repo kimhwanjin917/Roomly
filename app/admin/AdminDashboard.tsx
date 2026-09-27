@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import AgentPanel from '@/components/AgentPanel'
-import DemoIntro from '@/components/DemoIntro'
+import DemoTour from '@/components/DemoTour'
 import { C, inputSt, selectSt, chipSt } from '@/lib/theme'
 import { useToast } from '@/lib/hooks/useToast'
 import {
@@ -382,6 +382,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
               드래그 배정
             </button>
             <button
+              data-tour="agent"
               onClick={() => setShowAgent(true)}
               style={{
                 ...chipSt,
@@ -455,7 +456,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
 
         {/* 테이블 뷰 */}
         {rooms.length > 0 && viewMode === 'table' && (
-          <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
+          <div data-tour="board" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, overflow: 'hidden' }}>
             <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ borderBottom: `1px solid ${C.border}` }}>
@@ -589,7 +590,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
         )}
       </main>
 
-      <DemoIntro/>
+      <DemoTour/>
 
       {/* 하우스키핑 에이전트 패널 */}
       {showAgent && (
