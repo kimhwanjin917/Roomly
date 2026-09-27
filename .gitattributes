@@ -1,2 +1,6 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# 바이너리 — LF 정규화 금지 (PDF/PPTX 손상 방지)
+*.pdf binary
+*.pptx binary
