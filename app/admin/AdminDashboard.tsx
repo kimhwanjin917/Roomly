@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import OnboardingChecklist from '@/components/OnboardingChecklist'
 import AgentPanel from '@/components/AgentPanel'
+import DemoIntro from '@/components/DemoIntro'
 import { C, inputSt, selectSt, chipSt } from '@/lib/theme'
 import { useToast } from '@/lib/hooks/useToast'
 import {
@@ -587,6 +588,8 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
           </>
         )}
       </main>
+
+      <DemoIntro/>
 
       {/* 하우스키핑 에이전트 패널 */}
       {showAgent && (

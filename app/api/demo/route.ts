@@ -19,7 +19,8 @@ async function getHandler(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?error=demo_unavailable', request.url))
   }
 
-  return NextResponse.redirect(new URL('/admin', request.url))
+  // ?demo=1 은 현황판이 안내 오버레이를 띄울지 판단하는 신호다
+  return NextResponse.redirect(new URL('/admin?demo=1', request.url))
 }
 
 export const GET = withApiError(getHandler)

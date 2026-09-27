@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useEffect } from 'react'
 import { C } from '@/lib/theme'
 import RoomlyMark from '@/components/RoomlyMark'
+import AgentShowcase from '@/components/AgentShowcase'
 
 /* ── Palette ─────────────────────────────────────────────────── */
 
@@ -705,6 +706,9 @@ export default function LandingPage() {
             </p>
           </div>
         </section>
+
+        {/* ════ AI AGENT ════ */}
+        <AgentShowcase/>
 
         {/* ════ C — STICKY FEATURES ════ */}
         <StickyFeatures/>
