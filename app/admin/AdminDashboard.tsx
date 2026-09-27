@@ -590,7 +590,7 @@ export default function AdminDashboard({ hotelId, hotelName, initialRooms, initi
         )}
       </main>
 
-      <DemoTour/>
+      <DemoTour onOpenAgent={() => setShowAgent(true)}/>
 
       {/* 하우스키핑 에이전트 패널 */}
       {showAgent && (

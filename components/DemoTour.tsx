@@ -4,88 +4,106 @@ import { useState, useEffect, useCallback } from 'react'
 import { C } from '@/lib/theme'
 
 /**
- * 데모 안내 — 게임 튜토리얼처럼 한 단계씩 짚어준다.
+ * 데모 안내.
  *
- * 처음 보는 사람은 어떤 버튼이 무엇을 하는지, 어디가 볼거리인지 알 수 없다.
- * 그래서 각 단계마다 실제 버튼에 테두리를 씌우고, 그 버튼이 무엇을 하는지와
- * 무엇을 보게 되는지를 옆에 붙여 말한다.
+ * 처음 들어온 사람은 어느 버튼이 무엇을 하는지 모른다. 그래서 한 단계씩
+ * 짚어준다. 지금 눌러야 할 것만 뚫어두고 나머지는 덮어서, 엉뚱한 데를
+ * 눌러 길을 잃지 않게 한다.
  *
- * 닫기(X)는 영구적이다. 한 번 닫으면 이 브라우저에서는 다시 뜨지 않는다.
+ * 에이전트 패널은 안내가 알아서 열어준다. 체크아웃과 실행은 직접 눌러야
+ * 하는 대목이라 그대로 둔다.
+ *
+ * 오른쪽 위 X는 영구적이다.
  */
 
 const DISMISS_KEY = 'roomly_demo_tour_dismissed'
 const DEMO_KEY = 'roomly_demo_session'
 
 interface Step {
-  /** 강조할 요소의 data-tour 값. 없으면 화면 가운데 카드만 띄운다 */
+  /** 뚫어둘 요소의 data-tour 값. 없으면 화면 전체를 덮는다 */
   target?: string
   badge: string
   title: string
   body: string
-  /** 이 단계에서 무엇이 보이는지 — 와우 포인트 */
-  wow?: string
+  /** 여기서 무엇을 보게 되는지 */
+  watch?: string
   cta: string
+  /** 이 단계에 들어올 때 안내가 대신 해주는 일 */
+  open?: boolean
 }
 
 const STEPS: Step[] = [
   {
-    badge: '들어가기 전에',
-    title: '관리자가 하루 종일 하던 판단입니다',
+    badge: '데모',
+    title: '손님이 나갈 때마다\n관리자가 정해야 하는 것들',
     body:
-      '객실 하나가 비면 관리자는 매번 네 가지를 정했습니다. 어느 방이 비었는지, 누구에게 맡길지, ' +
-      '어느 방을 먼저 할지, 그걸 어떻게 전달할지. 객실 50개면 하루에 수십 번입니다.',
-    wow: 'Roomly는 이 판단을 AI 에이전트에게 넘겼습니다. 4단계로 직접 확인해 보세요.',
-    cta: '시작하기',
+      '어느 방이 비었는지 확인하고, 누구한테 맡길지 정하고, 체크인이 가까운 방을 먼저 하라고 알려주고. ' +
+      '객실 50개짜리 호텔이면 하루에 수십 번입니다.',
+    watch: '이 판단을 AI 에이전트에게 넘겼습니다. 네 단계로 직접 확인해 보세요.',
+    cta: '시작',
   },
   {
     target: 'board',
     badge: '1 / 4',
-    title: '지금 현장의 상태입니다',
+    title: '지금 객실 상태입니다',
     body:
-      '객실마다 청소 상태와 체크인 시각이 한 줄에 있습니다. 빨간 긴급 표시는 체크인이 2시간 안으로 ' +
-      '다가왔는데 아직 청소가 끝나지 않은 방입니다.',
-    wow: '관리자가 엑셀을 열어 하나씩 맞춰보던 것이 이 한 화면입니다.',
+      '한 줄에 객실 번호, 청소 상태, 담당자, 체크인 시각이 있습니다. ' +
+      '빨간 긴급은 손님이 두 시간 안에 오는데 아직 청소가 안 끝난 방입니다.',
+    watch: '관리자가 엑셀을 열어 하나씩 맞춰보던 게 이 한 화면입니다.',
     cta: '다음',
   },
   {
-    target: 'agent',
+    target: 'panel',
     badge: '2 / 4',
-    title: '여기서 에이전트를 엽니다',
+    title: '에이전트 패널을 열었습니다',
     body:
-      '이 버튼을 누르면 에이전트 패널이 열립니다. 에이전트가 무엇을 보고 무엇을 결정했는지가 ' +
-      '여기에 기록됩니다.',
-    wow: '버튼을 눌러 패널을 연 다음 계속 진행하세요.',
-    cta: '패널을 열었습니다',
+      '여기서 에이전트를 돌리고, 무엇을 왜 그렇게 정했는지 확인합니다. ' +
+      '평소에는 5분마다 알아서 돌지만 지금은 직접 눌러서 봅니다.',
+    cta: '다음',
+    open: true,
   },
   {
     target: 'simulate',
     badge: '3 / 4',
-    title: '체크아웃을 일으켜 봅니다',
+    title: '손님을 내보내 보세요',
     body:
-      '완료된 객실 세 개가 더티로 바뀌고, 체크인이 90분 뒤로 잡힙니다. 방금 손님이 나간 상황을 ' +
-      '만드는 버튼입니다.',
-    wow: '현황판에 빨간 긴급 표시가 늘어나는 것이 보입니다.',
-    cta: '다음',
+      '이 버튼을 누르면 객실 세 개가 비면서 청소 대기로 바뀝니다. 체크인은 90분 뒤로 잡힙니다. ' +
+      '방금 손님이 나간 상황을 만드는 겁니다.',
+    watch: '누른 뒤 뒤쪽 현황판을 보면 빨간 긴급이 늘어나 있습니다.',
+    cta: '눌렀습니다',
+    open: true,
   },
   {
     target: 'run',
     badge: '4 / 4',
-    title: '에이전트에게 맡깁니다',
+    title: '이제 에이전트에게 맡겨보세요',
     body:
-      '에이전트가 현황판과 직원 실적을 스스로 조회하고, 누구에게 어느 방을 줄지 정해 실제로 ' +
-      '배정합니다. 15초쯤 걸립니다.',
-    wow:
-      '배정 이유가 한 줄씩 쌓입니다 — "45분 무거운 객실은 평균 가장 빠른 직원(22분)에게". ' +
-      '규칙을 어긴 계획은 스스로 되돌리고 다시 만듭니다.',
-    cta: '해보겠습니다',
+      '현황판과 직원별 기록을 스스로 읽고, 누구에게 어느 방을 줄지 정해서 실제로 배정합니다. ' +
+      '15초쯤 걸립니다.',
+    watch:
+      '아래에 이유가 한 줄씩 쌓입니다. "45분짜리 스위트는 평균이 가장 빠른 직원(22분)에게" 같은 식으로요. ' +
+      '규칙에 어긋난 배정은 스스로 물리고 다시 짭니다.',
+    cta: '눌렀습니다',
+    open: true,
+  },
+  {
+    target: 'log',
+    badge: '끝',
+    title: '여기가 보실 곳입니다',
+    body:
+      '에이전트가 무엇을 보고 어떻게 판단했는지 한 줄씩 남습니다. 노란 줄이 있으면 스스로 물린 배정입니다. ' +
+      '관리자가 읽고 어디까지 맡길지 정할 수 있습니다.',
+    cta: '닫기',
+    open: true,
   },
 ]
 
-export default function DemoTour() {
+const PAD = 6
+
+export default function DemoTour({ onOpenAgent }: { onOpenAgent?: () => void }) {
   const [step, setStep] = useState<number | null>(null)
   const [rect, setRect] = useState<DOMRect | null>(null)
 
-  // 데모로 들어온 브라우저인지 기억해 둔다 — 화면을 옮겨다녀도 안내가 유지된다
   useEffect(() => {
     let isDemo = false
     try {
@@ -97,24 +115,29 @@ export default function DemoTour() {
       }
       if (isDemo && localStorage.getItem(DISMISS_KEY) !== '1') setStep(0)
     } catch {
-      // storage가 막힌 브라우저에서는 이번 방문에만 보여준다
       if (new URLSearchParams(window.location.search).has('demo')) setStep(0)
     }
   }, [])
 
-  const target = step !== null ? STEPS[step].target : undefined
+  const current = step !== null ? STEPS[step] : null
 
-  // 강조할 요소의 위치를 따라다닌다
+  // 패널이 필요한 단계에서는 안내가 대신 열어둔다.
+  // 이미 열려 있으면 아무 일도 없으므로 매번 불러도 된다.
   useEffect(() => {
-    if (!target) { setRect(null); return }
+    if (current?.open) onOpenAgent?.()
+  }, [current, onOpenAgent])
+
+  // 뚫어둘 요소의 위치를 따라간다
+  useEffect(() => {
+    const name = current?.target
+    if (!name) { setRect(null); return }
 
     const measure = () => {
-      const el = document.querySelector(`[data-tour="${target}"]`)
+      const el = document.querySelector(`[data-tour="${name}"]`)
       setRect(el ? el.getBoundingClientRect() : null)
     }
-
     measure()
-    const id = setInterval(measure, 400)
+    const id = setInterval(measure, 250)
     window.addEventListener('resize', measure)
     window.addEventListener('scroll', measure, true)
     return () => {
@@ -122,52 +145,55 @@ export default function DemoTour() {
       window.removeEventListener('resize', measure)
       window.removeEventListener('scroll', measure, true)
     }
-  }, [target])
+  }, [current])
 
   const dismiss = useCallback(() => {
     setStep(null)
     try { localStorage.setItem(DISMISS_KEY, '1') } catch { /* 닫히기만 하면 된다 */ }
   }, [])
 
-  if (step === null) return null
+  if (step === null || !current) return null
 
-  const s = STEPS[step]
   const last = step === STEPS.length - 1
+  const block: React.CSSProperties = { position: 'fixed', background: 'rgba(0,0,0,0.66)', zIndex: 80 }
 
-  // 카드는 강조 요소를 가리지 않는 쪽에 붙인다
-  const card: React.CSSProperties = { position: 'fixed', zIndex: 82, width: 420 }
+  // 카드 위치 — 뚫린 자리를 가리지 않는 쪽에 붙인다
+  const W = 400
+  const card: React.CSSProperties = { position: 'fixed', zIndex: 82, width: W }
   if (!rect) {
     card.left = '50%'
     card.top = '50%'
     card.transform = 'translate(-50%, -50%)'
-    card.width = 540
-  } else if (rect.bottom + 300 < window.innerHeight) {
-    card.top = rect.bottom + 16
-    card.left = Math.min(Math.max(16, rect.left), window.innerWidth - 436)
+    card.width = 520
   } else {
-    card.top = Math.max(16, rect.top - 300)
-    card.left = Math.min(Math.max(16, rect.left), window.innerWidth - 436)
+    const below = rect.bottom + 16
+    const fitsBelow = below + 340 < window.innerHeight
+    card.top = fitsBelow ? below : Math.max(16, rect.top - 356)
+    card.left = Math.min(Math.max(16, rect.left), Math.max(16, window.innerWidth - W - 16))
   }
 
   return (
     <>
-      {/* 강조 테두리 — 아래 요소를 클릭할 수 있도록 통과시킨다 */}
-      {rect && (
-        <div
-          style={{
-            position: 'fixed', zIndex: 80, pointerEvents: 'none',
-            left: rect.left - 6, top: rect.top - 6,
-            width: rect.width + 12, height: rect.height + 12,
-            border: `2px solid ${C.accentHi}`, borderRadius: 12,
-            boxShadow: `0 0 0 9999px rgba(0,0,0,0.55), 0 0 24px ${C.accent}88`,
-            transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-        />
-      )}
-
-      {/* 첫 단계는 강조할 대상이 없으므로 화면 전체를 덮는다 */}
-      {!rect && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 80, background: 'rgba(0,0,0,0.72)' }} />
+      {/* 지금 눌러야 할 곳만 남기고 덮는다. 네 조각으로 나눠 가운데를 비운다 */}
+      {rect ? (
+        <>
+          <div style={{ ...block, left: 0, top: 0, width: '100%', height: Math.max(0, rect.top - PAD) }} />
+          <div style={{ ...block, left: 0, top: rect.bottom + PAD, width: '100%', bottom: 0 }} />
+          <div style={{ ...block, left: 0, top: rect.top - PAD, width: Math.max(0, rect.left - PAD), height: rect.height + PAD * 2 }} />
+          <div style={{ ...block, left: rect.right + PAD, top: rect.top - PAD, right: 0, height: rect.height + PAD * 2 }} />
+          <div
+            style={{
+              position: 'fixed', zIndex: 81, pointerEvents: 'none',
+              left: rect.left - PAD, top: rect.top - PAD,
+              width: rect.width + PAD * 2, height: rect.height + PAD * 2,
+              border: `2px solid ${C.accentHi}`, borderRadius: 12,
+              boxShadow: `0 0 26px ${C.accent}99`,
+              transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          />
+        </>
+      ) : (
+        <div style={{ ...block, inset: 0 }} />
       )}
 
       <div
@@ -176,8 +202,8 @@ export default function DemoTour() {
           background: C.surface,
           border: `1px solid ${C.borderHi}`,
           borderRadius: 18,
-          padding: '24px 26px 22px',
-          boxShadow: '0 28px 90px rgba(0,0,0,0.6)',
+          padding: '24px 26px 20px',
+          boxShadow: '0 28px 90px rgba(0,0,0,0.65)',
         }}
       >
         <button
@@ -197,33 +223,39 @@ export default function DemoTour() {
         </button>
 
         <p style={{ fontSize: 11, fontWeight: 700, color: C.accentHi, letterSpacing: '0.12em', marginBottom: 10 }}>
-          {s.badge}
+          {current.badge}
         </p>
-        <h3 style={{ fontSize: rect ? 20 : 26, fontWeight: 800, color: C.text, letterSpacing: '-0.02em', lineHeight: 1.35, marginBottom: 12, paddingRight: 30 }}>
-          {s.title}
+        <h3
+          style={{
+            fontSize: rect ? 20 : 27, fontWeight: 800, color: C.text,
+            letterSpacing: '-0.025em', lineHeight: 1.4, marginBottom: 12,
+            paddingRight: 30, whiteSpace: 'pre-line',
+          }}
+        >
+          {current.title}
         </h3>
-        <p style={{ fontSize: 14, color: C.textMid, lineHeight: 1.7, marginBottom: s.wow ? 14 : 20 }}>
-          {s.body}
+        <p style={{ fontSize: 14, color: C.textMid, lineHeight: 1.75, marginBottom: current.watch ? 14 : 20 }}>
+          {current.body}
         </p>
 
-        {s.wow && (
+        {current.watch && (
           <p
             style={{
-              fontSize: 13.5, color: C.text, lineHeight: 1.7,
+              fontSize: 13.5, color: C.text, lineHeight: 1.75,
               background: `${C.accent}18`, border: `1px solid ${C.accent}44`,
               borderRadius: 10, padding: '12px 14px', marginBottom: 20,
             }}
           >
-            {s.wow}
+            {current.watch}
           </p>
         )}
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {step > 0 && (
             <button
               onClick={() => setStep(step - 1)}
               style={{
-                padding: '11px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                padding: '12px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
                 background: 'transparent', border: `1px solid ${C.border}`, color: C.textMid,
                 cursor: 'pointer', fontFamily: 'inherit',
               }}
@@ -239,12 +271,12 @@ export default function DemoTour() {
               cursor: 'pointer', fontFamily: 'inherit',
             }}
           >
-            {s.cta}
+            {current.cta}
           </button>
         </div>
 
-        <p style={{ fontSize: 11.5, color: C.textDim, textAlign: 'center', marginTop: 12, lineHeight: 1.6 }}>
-          오른쪽 위 X를 누르면 안내가 완전히 사라집니다
+        <p style={{ fontSize: 11.5, color: C.textDim, textAlign: 'center', marginTop: 12 }}>
+          오른쪽 위 X를 누르면 안내가 사라집니다
         </p>
       </div>
     </>

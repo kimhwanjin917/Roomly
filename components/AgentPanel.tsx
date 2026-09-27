@@ -135,6 +135,7 @@ export default function AgentPanel({
       onClick={onClose}
     >
       <div
+        data-tour="panel"
         style={{ background: C.surface, border: `1px solid ${C.border}`, width: '100%', maxWidth: 560, borderRadius: '20px 20px 0 0', overflow: 'hidden', boxShadow: '0 -24px 80px rgba(0,0,0,0.6)' }}
         className="sm:rounded-2xl"
         onClick={e => e.stopPropagation()}
@@ -187,7 +188,7 @@ export default function AgentPanel({
           </button>
         </div>
 
-        <div style={{ maxHeight: 360, overflowY: 'auto', padding: '8px 20px 16px' }}>
+        <div data-tour="log" style={{ maxHeight: 360, overflowY: 'auto', padding: '8px 20px 16px' }}>
           {logs.length === 0 ? (
             <p style={{ textAlign: 'center', color: C.textDim, fontSize: 13, padding: '40px 0', lineHeight: 1.6 }}>
               아직 활동 기록이 없습니다.<br />
